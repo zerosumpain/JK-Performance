@@ -6,6 +6,7 @@ The contract between `server/` and the iPhone app. Change both sides together.
 - JSON in and out, **camelCase**. Dates are `"YYYY-MM-DD"` (the client's local day). Instants are ISO 8601 UTC
   (`"2026-11-20T11:00:00.000Z"`). Ids are opaque strings.
 - Auth: `Authorization: Bearer <token>` on every `/api/*` call except `/api/auth/*`, `/api/plans` and `/health`.
+- Ranges: `from`/`to` are dates, both inclusive.
 - Errors: non-2xx with `{"error": "human readable"}`. 401 = sign in again. 403 = role or membership doesn't allow it.
   404 = not found or not yours (never leaks existence).
 - Roles: `client` | `coach`. A coach can act on any client by passing `clientId` where noted. A client never passes
@@ -61,7 +62,7 @@ the client logs sets against its items. A client may also create their own (alwa
 | PUT | `/api/workouts/:id` | `WorkoutInput` (replaces items; logged sets on kept item ids survive) | `Workout` |
 | DELETE | `/api/workouts/:id` | – | `{ok:true}` |
 | POST | `/api/workouts/:id/publish` (coach) | – | `Workout` |
-| PUT | `/api/workouts/:id/items/:itemId/sets/:number` | `{load, reps, rpe?}` | `Workout` |
+| PUT | `/api/workouts/:id/items/:itemId/sets/:number` | `{load, reps, rpe?}` (`rpe` a number 1–10) | `Workout` |
 | DELETE | `/api/workouts/:id/items/:itemId/sets/:number` | – | `Workout` |
 | POST | `/api/workouts/:id/complete` | `{note?}` | `Workout` |
 
@@ -71,7 +72,7 @@ the client logs sets against its items. A client may also create their own (alwa
  "items":[{"id":"optional-existing-id","exerciseId":"ex_…","sets":3,"reps":"10 / leg","load":"2×20 kg","rpe":"7–8","note":"…"}]}
 // Workout
 {"id":"w_…","clientId":"u_…","date":"2026-11-20","title":"…","startsAt":"11:00","location":"…","notes":"…",
- "published":true,"publishedAt":"…","editedAt":"…","editedBy":"coach","completedAt":null,"createdBy":"u_…",
+ "published":true,"publishedAt":"…","editedAt":"…","editedBy":"coach","completedAt":null,"completionNote":null,"createdBy":"u_…",
  "items":[{"id":"i_…","order":0,"exercise":Exercise,"sets":3,"reps":"10 / leg","load":"2×20 kg","rpe":"7–8","note":"…",
            "logged":[{"number":1,"load":"2×20","reps":10,"rpe":null,"at":"…"}],
            "previous":"2×18 × 10"}]}       // last time this exercise was logged, best set; null if never
@@ -88,12 +89,13 @@ the client logs sets against its items. A client may also create their own (alwa
 | POST | `/api/programs/:id/assign` | `{clientId, startDate}` | `{created: n}` (draft workouts; coach publishes) |
 
 `ProgramInput`: `{name, detail, daysPerWeek, weeks, workouts:[{dayOffset, title, items:[WorkoutInput item]}]}`.
+`Program` = the same plus `{id, clientCount, updatedAt}`, and each item also carries `exercise` (an `Exercise`).
 
 ## Habits & nutrition
 
 | GET | `/api/habits?date=&clientId=` | – | `{date, habits:[Habit], streak, nutrition:Nutrition}` |
 |---|---|---|---|
-| POST | `/api/habits` (coach) | `{clientId, name, kind, target, unit, icon}` | `Habit` |
+| POST | `/api/habits` (coach) | `{clientId, name, kind, target, unit, icon, healthKind?}` | `Habit` |
 | DELETE | `/api/habits/:id` (coach) | – | `{ok:true}` |
 | PUT | `/api/habits/:id/days/:date` | `{value?, done?}` | `Habit` |
 | PUT | `/api/nutrition/targets` (coach) | `{clientId, kcal, protein, carbs, fat}` | `Nutrition` |
@@ -108,6 +110,8 @@ the client logs sets against its items. A client may also create their own (alwa
 {"date":"…","targets":{"kcal":2500,"protein":170,"carbs":260,"fat":80},
  "totals":{"kcal":1720,"protein":128,"carbs":180,"fat":52},"entries":[{"id","name","kcal","protein","carbs","fat","at"}]}
 ```
+`icon` is an SF Symbol name. `healthKind` (`steps` | `sleep` | null) makes the habit fill from Apple Health: it's done once the
+value reaches `target`, whatever the kind. So "Sleep 7h+" is kind `check`, target 7, unit `h`. A plain `check` habit has target 1.
 `streak` = consecutive days, ending yesterday or today, with every habit done.
 
 ## Weekly check-ins
@@ -123,7 +127,7 @@ the client logs sets against its items. A client may also create their own (alwa
 
 | GET | `/api/threads` (coach) | – | `{threads:[{client:{id,name}, last:Message, unread}]}` |
 |---|---|---|---|
-| GET | `/api/messages?clientId=&after=` | – | `{messages:[Message]}` (oldest first; marks read) |
+| GET | `/api/messages?clientId=&after=` | – | `{messages:[Message]}` (oldest first; marks read). `after` = the last message's `at` (ISO instant, exclusive) |
 | POST | `/api/messages` | `{text, clientId?, workoutId?}` | `Message` |
 
 `Message`: `{id, clientId, fromId, fromRole, text, workoutId, at, readAt}`. A client's thread is always with the coach.

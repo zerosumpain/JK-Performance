@@ -243,7 +243,10 @@ function completeWorkout(_req, ctx) {
 function programOut(db, p) {
   const body = JSON.parse(p.body);
   const clientCount = db.prepare('SELECT COUNT(DISTINCT client_id) n FROM workouts WHERE program_id=?').get(p.id).n;
-  return { id: p.id, name: p.name, detail: p.detail, daysPerWeek: p.days_per_week, weeks: p.weeks, workouts: body.workouts, clientCount, updatedAt: p.updated_at };
+  // Items are stored by exercise id; the reply carries the exercise itself, as a workout's items do.
+  const byId = db.prepare('SELECT * FROM exercises WHERE id=?');
+  const workouts = body.workouts.map(w => ({ ...w, items: w.items.map(i => { const e = byId.get(i.exerciseId); return { ...i, exercise: e ? exerciseOut(e) : null }; }) }));
+  return { id: p.id, name: p.name, detail: p.detail, daysPerWeek: p.days_per_week, weeks: p.weeks, workouts, clientCount, updatedAt: p.updated_at };
 }
 
 function programFields(db, b) {

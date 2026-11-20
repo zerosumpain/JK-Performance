@@ -55,7 +55,8 @@ export function seedDemo(db, today = londonDay()) {
     };
     for (let week = 4; week >= 1; week--) {
       const bump = (4 - week) * 2.5;
-      const progressed = lower.map(([n, s, r, l]) => [n, s, r, l.replace(/^(\d+)/, m => String(Number(m) - 10 + bump))]);
+      // Only plain "100 kg" loads progress; "2×20 kg" and "BW" stay as written.
+      const progressed = lower.map(([n, s, r, l]) => [n, s, r, /^\d+ kg$/.test(l) ? `${Number.parseInt(l, 10) - 10 + bump} kg` : l]);
       workout(addDays(today, -7 * week - 2), 'Lower Body Strength', progressed, { done: true });
       workout(addDays(today, -7 * week), 'Upper Body Hypertrophy', upper, { done: week !== 2 });
     }
