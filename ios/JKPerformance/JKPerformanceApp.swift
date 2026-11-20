@@ -2,36 +2,73 @@ import SwiftUI
 
 @main
 struct JKPerformanceApp: App {
+    @State private var session = AppSession()
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(session)
                 .preferredColorScheme(.dark)
                 .tint(.white)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, session.phase == .signedIn, session.me?.isCoach == false else { return }
+            HealthSync.shared.syncIfDue()
         }
     }
 }
 
-/// One app, two audiences: a client trains, a coach runs the business.
-/// Chosen on the welcome screen; "Sign out" under Account / Guides returns there.
-enum AppRole: String {
-    case signedOut
-    case client
-    case coach
-}
-
+/// One app, two audiences: a client trains, a coach runs the business. The
+/// server decides which (`me.role`); sign-up is open and coaches are made
+/// server-side.
 struct RootView: View {
-    @AppStorage("jk.role") private var role: AppRole = .signedOut
+    @Environment(AppSession.self) private var session
 
     var body: some View {
-        switch role {
-        case .signedOut: WelcomeView()
-        case .client: ClientTabs()
-        case .coach: CoachTabs()
+        Group {
+            switch session.phase {
+            case .signedOut:
+                WelcomeView()
+            case .restoring:
+                RestoringView()
+            case .signedIn:
+                if session.isCoach { CoachTabs() } else { ClientTabs() }
+            }
         }
+        .task { await session.restore() }
+    }
+}
+
+private struct RestoringView: View {
+    @Environment(AppSession.self) private var session
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("JK")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(JK.text)
+                .frame(width: 76, height: 76)
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(JK.secondary, lineWidth: 1))
+            if let error = session.restoreError {
+                Text(error).font(.caption).foregroundStyle(JK.secondary).multilineTextAlignment(.center)
+                HStack(spacing: 10) {
+                    Button("Try again") { Task { await session.restore() } }.buttonStyle(ChromeButtonStyle())
+                    Button("Sign out") { session.clear() }.buttonStyle(GhostButtonStyle())
+                }
+                .padding(.horizontal, 24)
+            } else {
+                ProgressView().tint(JK.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(JK.bg.ignoresSafeArea())
     }
 }
 
 struct ClientTabs: View {
+    @Environment(AppSession.self) private var session
+
     var body: some View {
         TabView {
             ClientHomeView()
@@ -40,8 +77,12 @@ struct ClientTabs: View {
                 .tabItem { Label("Plan", systemImage: "dumbbell") }
             MyCalendarView()
                 .tabItem { Label("Calendar", systemImage: "calendar") }
-            MessagesView(otherName: Mock.coachName, otherInitials: "JK", subtitle: "Usually replies within an hour")
-                .tabItem { Label("Messages", systemImage: "bubble.left") }
+            NavigationStack {
+                MessagesThreadView(clientId: nil,
+                                   otherName: session.me?.coach?.name ?? "Your coach",
+                                   subtitle: "Usually replies within an hour")
+            }
+            .tabItem { Label("Messages", systemImage: "bubble.left") }
             AccountView()
                 .tabItem { Label("Account", systemImage: "person") }
         }
@@ -57,7 +98,7 @@ struct CoachTabs: View {
                 .tabItem { Label("Clients", systemImage: "person.2") }
             ScheduleView()
                 .tabItem { Label("Schedule", systemImage: "calendar") }
-            MessagesView(otherName: "Sam Carter", otherInitials: "SC", subtitle: "Elite plan")
+            CoachThreadsView()
                 .tabItem { Label("Messages", systemImage: "bubble.left") }
             GuidesView()
                 .tabItem { Label("Guides", systemImage: "book") }
