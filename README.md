@@ -10,7 +10,22 @@ xcodegen generate --spec ios/project.yml
 
 ## Status
 
-Skeleton only. Screens will be scaffolded from the JK Performance Coach artefacts.
+All 24 screens from the JK Performance Coach designs are scaffolded in SwiftUI on **mock data**
+(`ios/JKPerformance/Model/Mock.swift`). Nothing talks to a server yet; sign-in, payments (StoreKit),
+HealthKit and messaging are placeholders.
+
+- **Welcome** — choose *I'm a client* / *I'm a coach*; "Sign out" (Account / Guides) returns here.
+- **Client tabs** — Home (Morning, Sam → Daily habits, Progress, Challenges, Weekly check-in, Membership),
+  Plan (Workout plan → logger, Exercise library), Calendar (month → Book a session), Messages, Account
+  (Membership, Health & devices).
+- **Coach tabs** — Today (→ Business), Clients (→ client detail, Programs), Schedule (week grid),
+  Messages, Guides.
+
+Design reference: `docs/coach/` (`screens-v1.webp` is the first sheet; the second, 24-screen sheet still
+needs adding). Code layout: `Design/Theme.swift` (tokens, cards, chrome button, chips, segmented),
+`Client/`, `Coach/`, `Model/`.
+
+Only `swiftc -parse` has been run (Linux, on porkserv); it has **not** been compiled with Xcode yet.
 
 ## CI / TestFlight
 
