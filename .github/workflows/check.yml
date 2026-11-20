@@ -1,0 +1,43 @@
+name: Check app
+# macOS runners bill at 10x, so this runs only when the app's sources change,
+# on pull requests and on main. Debug for the simulator, then Release (what
+# TestFlight archives), both unsigned.
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/check.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/check.yml']
+  workflow_dispatch:
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          SDK_MAJOR=$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)
+          test "$SDK_MAJOR" -ge 26
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec ios/project.yml
+      - name: Build Debug (simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build -project ios/JKPerformance.xcodeproj -scheme JKPerformance -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee build.log
+      - name: Build Release (simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build -project ios/JKPerformance.xcodeproj -scheme JKPerformance -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee release-build.log
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: build-logs
+          path: '*.log'
+          retention-days: 7
