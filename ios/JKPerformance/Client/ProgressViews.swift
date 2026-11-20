@@ -1,93 +1,355 @@
 import Charts
+import PhotosUI
 import SwiftUI
 
 // MARK: - Progress
 
 /// Named ProgressScreen because SwiftUI already owns `ProgressView`.
 struct ProgressScreen: View {
-    enum Span: String, CaseIterable { case threeMonths = "3M", sixMonths = "6M", all = "All" }
+    enum Span: String, CaseIterable {
+        case threeMonths = "3M", sixMonths = "6M", all = "All"
+        var query: String { self == .threeMonths ? "3m" : self == .sixMonths ? "6m" : "all" }
+    }
+
     @State private var range: Span = .threeMonths
+    @State private var progress: ProgressData?
+    @State private var photos: [Photo]?
+    @State private var error: String?
+    @State private var actionError: String?
+    @State private var measuring = false
+    @State private var picked: PhotosPickerItem?
+    @State private var uploading = false
+
+    private var api: APIClient { APIClient.shared }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                ScreenHeader(eyebrow: "Since 3 Mar 2026", title: "Progress") {
+                ScreenHeader(eyebrow: progress?.since.map { "Since \(Fmt.dayMonth($0))" } ?? "Progress", title: "Progress") {
                     Segmented(options: Span.allCases, selection: $range) { $0.rawValue }
                         .frame(width: 130)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .top) {
-                        Eyebrow(text: "Body weight")
-                        Spacer()
-                        DeltaBadge(text: "−4.1 kg")
-                    }
-                    (Text("78.4").font(.largeTitle.weight(.semibold)) + Text(" kg").font(.caption).foregroundColor(JK.tertiary))
-                        .foregroundStyle(JK.text)
-                    Chart(Mock.bodyWeight) { p in
-                        AreaMark(x: .value("Day", p.day), y: .value("kg", p.kg))
-                            .foregroundStyle(LinearGradient(colors: [JK.text.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Day", p.day), y: .value("kg", p.kg))
-                            .foregroundStyle(JK.text)
-                    }
-                    .chartYScale(domain: 76...84)
-                    .chartXAxis(.hidden)
-                    .chartYAxis(.hidden)
-                    .frame(height: 90)
-                }
-                .jkCard()
-
-                HStack(spacing: 8) {
-                    StatTile(label: "Body fat", value: "16.2%", delta: "−2.4")
-                    StatTile(label: "Waist", value: "82 cm", delta: "−5")
-                    StatTile(label: "Resting HR", value: "54", delta: "−6")
-                }
-
-                Eyebrow(text: "Personal records", trailing: "All lifts")
-                VStack(spacing: 0) {
-                    ForEach(Mock.records) { pr in
-                        HStack {
-                            Image(systemName: "trophy").foregroundStyle(JK.secondary)
-                            Text(pr.lift).font(.subheadline.weight(.medium))
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 0) {
-                                Text("\(pr.kg) kg").font(.subheadline.weight(.semibold))
-                                Text("+\(pr.gain) kg").font(.caption2).foregroundStyle(JK.tertiary)
+                Loadable(value: progress, error: error, retry: load) { p in
+                    weightCard(p)
+                    if !p.stats.isEmpty {
+                        HStack(spacing: 8) {
+                            ForEach(p.stats, id: \.kind) { s in
+                                StatTile(label: Self.label(s.kind), value: Self.value(s), delta: s.delta.map { Fmt.delta($0) })
                             }
                         }
-                        .foregroundStyle(JK.text)
-                        .padding(12)
+                    }
+                    Button { measuring = true } label: { Label("Add measurement", systemImage: "plus") }
+                        .buttonStyle(GhostButtonStyle())
+
+                    Eyebrow(text: "Personal records", trailing: "Best logged load")
+                    if p.records.isEmpty {
+                        EmptyCard(systemName: "trophy", title: "No records yet", detail: "Log sets in your workouts to see them here.")
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(p.records, id: \.exercise) { pr in
+                                HStack {
+                                    Image(systemName: "trophy").foregroundStyle(JK.secondary)
+                                    Text(pr.exercise).font(.subheadline.weight(.medium))
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 0) {
+                                        Text("\(Fmt.number(pr.kg)) kg").font(.subheadline.weight(.semibold))
+                                        if let gain = pr.gain {
+                                            Text("\(Fmt.delta(gain)) kg").font(.caption2).foregroundStyle(JK.tertiary)
+                                        }
+                                    }
+                                }
+                                .foregroundStyle(JK.text)
+                                .padding(12)
+                            }
+                        }
+                        .jkCard(padding: 2)
                     }
                 }
-                .jkCard(padding: 2)
 
                 HStack {
                     Eyebrow(text: "Progress photos")
                     Spacer()
                     Label("Private to you and Coach", systemImage: "lock").font(.caption2).foregroundStyle(JK.tertiary)
                 }
-                HStack(spacing: 8) {
-                    ForEach(Mock.progressPhotoDates, id: \.self) { date in
-                        ZStack(alignment: .topLeading) {
-                            RoundedRectangle(cornerRadius: 10).fill(JK.cardRaised)
-                            Image(systemName: "figure.stand").font(.system(size: 40)).foregroundStyle(JK.tertiary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                            Text(date).font(.system(size: 9)).foregroundStyle(JK.secondary).padding(6)
-                        }
-                        .frame(height: 90)
-                    }
-                    Button {} label: {
-                        Image(systemName: "camera")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
-                    }
-                    .foregroundStyle(JK.secondary)
-                    .frame(height: 90)
-                }
+                photoRow
             }
             .padding(16)
         }
         .jkScreen()
+        .jkRefreshable { await load() }
+        .task(id: range) { await load() }
+        .task { await loadPhotos() }
+        .onChange(of: picked) { _, item in
+            guard let item else { return }
+            Task { await upload(item) }
+        }
+        .sheet(isPresented: $measuring) {
+            MeasurementSheet { input in
+                let _: ProgressData = try await api.send("POST", "/api/measurements", body: input)
+                await load()
+            }
+            .presentationDetents([.medium])
+        }
+        .errorAlert($actionError)
+    }
+
+    private func load() async {
+        do {
+            progress = try await api.get("/api/progress", query: ["range": range.query])
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
+        }
+    }
+
+    private func loadPhotos() async {
+        do {
+            let reply: PhotosResponse = try await api.get("/api/photos")
+            photos = reply.photos.sorted { $0.date < $1.date }
+        } catch {
+            if !error.isCancellation { photos = photos ?? [] }
+        }
+    }
+
+    private func upload(_ item: PhotosPickerItem) async {
+        uploading = true
+        defer {
+            uploading = false
+            picked = nil
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data),
+                  let jpeg = image.jpegForUpload() else {
+                actionError = "Couldn't read that photo."
+                return
+            }
+            let photo: Photo = try await api.upload("/api/photos", data: jpeg, contentType: "image/jpeg",
+                                                    query: ["date": Day.today])
+            photos = (photos ?? []) + [photo]
+        } catch {
+            actionError = error.readable
+        }
+    }
+
+    private func delete(_ photo: Photo) async {
+        do {
+            let _: OK = try await api.send("DELETE", "/api/photos/\(seg(photo.id))")
+            photos?.removeAll { $0.id == photo.id }
+        } catch {
+            actionError = error.readable
+        }
+    }
+
+    private var photoRow: some View {
+        HStack(spacing: 8) {
+            ForEach((photos ?? []).suffix(3)) { photo in
+                AuthedPhoto(photo: photo)
+                    .frame(height: 90)
+                    .contextMenu {
+                        Button(role: .destructive) { Task { await delete(photo) } } label: {
+                            Label("Delete photo", systemImage: "trash")
+                        }
+                    }
+            }
+            PhotosPicker(selection: $picked, matching: .images) {
+                Group {
+                    if uploading { ProgressView().tint(JK.secondary) } else { Image(systemName: "camera") }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+            }
+            .foregroundStyle(JK.secondary)
+            .frame(height: 90)
+            .disabled(uploading)
+        }
+    }
+
+    @ViewBuilder
+    private func weightCard(_ p: ProgressData) -> some View {
+        let points = (p.weight?.series ?? []).compactMap { pt in Day.date(pt.date).map { ($0, pt.value) } }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                Eyebrow(text: "Body weight")
+                Spacer()
+                if let delta = p.weight?.delta { DeltaBadge(text: "\(Fmt.delta(delta)) kg") }
+            }
+            (Text(p.weight?.latest.map { Fmt.number($0) } ?? "–").font(.largeTitle.weight(.semibold))
+                + Text(" kg").font(.caption).foregroundColor(JK.tertiary))
+                .foregroundStyle(JK.text)
+            if points.count >= 2 {
+                let values = points.map(\.1)
+                let low = (values.min() ?? 0) - 1, high = (values.max() ?? 0) + 1
+                Chart(points, id: \.0) { pt in
+                    AreaMark(x: .value("Day", pt.0), yStart: .value("kg", low), yEnd: .value("kg", pt.1))
+                        .foregroundStyle(LinearGradient(colors: [JK.text.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
+                    LineMark(x: .value("Day", pt.0), y: .value("kg", pt.1))
+                        .foregroundStyle(JK.text)
+                }
+                .chartYScale(domain: low...high)
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .frame(height: 90)
+            } else {
+                Text("Add two weigh-ins (or turn on Apple Health) to see the trend.")
+                    .font(.caption2).foregroundStyle(JK.tertiary)
+            }
+        }
+        .jkCard()
+    }
+
+    static func label(_ kind: String) -> String {
+        switch kind {
+        case "bodyFat": return "Body fat"
+        case "waist": return "Waist"
+        case "restingHr": return "Resting HR"
+        case "weight": return "Weight"
+        default: return kind
+        }
+    }
+
+    static func unit(_ kind: String) -> String {
+        switch kind {
+        case "bodyFat": return "%"
+        case "waist": return " cm"
+        case "weight": return " kg"
+        default: return ""
+        }
+    }
+
+    private static func value(_ s: StatBlock) -> String {
+        guard let latest = s.latest else { return "–" }
+        return Fmt.number(latest) + unit(s.kind)
+    }
+}
+
+extension UIImage {
+    /// JPEG at most 2048 px on the long side, under the 8 MB upload limit.
+    func jpegForUpload() -> Data? {
+        let longest = max(size.width, size.height)
+        let scale = longest > 2048 ? 2048 / longest : 1
+        let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: target))
+        }
+        var quality: CGFloat = 0.8
+        var data = resized.jpegData(compressionQuality: quality)
+        while let d = data, d.count > 8_000_000, quality > 0.3 {
+            quality -= 0.15
+            data = resized.jpegData(compressionQuality: quality)
+        }
+        return data
+    }
+}
+
+/// A progress photo fetched through APIClient (AsyncImage sends no token).
+struct AuthedPhoto: View {
+    let photo: Photo
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    private static let cache = NSCache<NSString, UIImage>()
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 10).fill(JK.cardRaised)
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                Image(systemName: failed ? "exclamationmark.triangle" : "figure.stand")
+                    .font(.system(size: failed ? 18 : 40))
+                    .foregroundStyle(JK.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: failed ? .center : .bottom)
+            }
+            Text(Fmt.dayMonth(photo.date))
+                .font(.system(size: 9))
+                .foregroundStyle(JK.secondary)
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Color.black.opacity(0.5), in: Capsule())
+                .padding(6)
+        }
+        .task(id: photo.id) {
+            if let hit = Self.cache.object(forKey: photo.id as NSString) {
+                image = hit
+                return
+            }
+            do {
+                let data = try await APIClient.shared.data("/api/photos/\(seg(photo.id))")
+                if let decoded = UIImage(data: data) {
+                    Self.cache.setObject(decoded, forKey: photo.id as NSString)
+                    image = decoded
+                } else {
+                    failed = true
+                }
+            } catch {
+                if !error.isCancellation { failed = true }
+            }
+        }
+    }
+}
+
+private struct MeasurementSheet: View {
+    let save: (MeasurementInput) async throws -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var kind = "weight"
+    @State private var value = ""
+    @State private var date = Date()
+    @State private var saving = false
+    @State private var error: String?
+
+    private let kinds = ["weight", "bodyFat", "waist", "restingHr"]
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Segmented(options: kinds, selection: $kind) { ProgressScreen.label($0) }
+                JKField(label: "\(ProgressScreen.label(kind)) (\(unitName))", text: $value, prompt: "0", keyboard: .decimalPad)
+                DatePicker("Date", selection: $date, in: ...Date(), displayedComponents: .date)
+                    .font(.subheadline)
+                    .foregroundStyle(JK.text)
+                if let error { ErrorBanner(message: error) }
+                Button {
+                    Task { await submit() }
+                } label: {
+                    if saving { ProgressView().tint(.black) } else { Text("Save") }
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .disabled(parseNumber(value) == nil || saving)
+                Spacer()
+            }
+            .padding(16)
+            .jkScreen()
+            .navigationTitle("Add measurement")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private var unitName: String {
+        switch kind {
+        case "bodyFat": return "%"
+        case "waist": return "cm"
+        case "restingHr": return "bpm"
+        default: return "kg"
+        }
+    }
+
+    private func submit() async {
+        guard let number = parseNumber(value) else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            try await save(MeasurementInput(date: Day.string(date), kind: kind, value: number))
+            dismiss()
+        } catch {
+            self.error = error.readable
+        }
     }
 }
 
@@ -112,6 +374,7 @@ struct StatTile: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 10)).foregroundStyle(JK.tertiary)
             Text(value).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                .lineLimit(1).minimumScaleFactor(0.6)
             if let delta {
                 Text(delta).font(.system(size: 10)).foregroundStyle(JK.tertiary)
             }
@@ -123,50 +386,109 @@ struct StatTile: View {
 // MARK: - Challenges
 
 struct ChallengesView: View {
+    @State private var challenges: [Challenge]?
+    @State private var error: String?
+    @State private var actionError: String?
+    @State private var joining: String?
+
+    private var api: APIClient { APIClient.shared }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 ScreenHeader(eyebrow: "Community", title: "Challenges")
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("12 days left")
-                        .font(.caption2)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(JK.cardRaised, in: Capsule())
-                        .foregroundStyle(JK.secondary)
-                    Spacer().frame(height: 50)
-                    Text("November 100 km").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("Run, walk or row. 24 members taking part.").font(.caption).foregroundStyle(JK.secondary)
-                    HStack {
-                        ThinBar(fraction: 0.64, height: 4)
-                        Text("64 km").font(.caption.weight(.semibold)).foregroundStyle(JK.text)
+                Loadable(value: challenges, error: error, retry: load) { list in
+                    if list.isEmpty {
+                        EmptyCard(systemName: "trophy", title: "No challenges running",
+                                  detail: "Your coach will post the next one here.")
                     }
-                }
-                .jkCard()
-
-                Eyebrow(text: "Leaderboard", trailing: "This week")
-                VStack(spacing: 0) {
-                    ForEach(Mock.leaderboard) { row in
-                        HStack(spacing: 12) {
-                            Text("\(row.rank)").font(.subheadline.weight(.semibold)).foregroundStyle(row.isYou ? JK.tertiary : JK.text).frame(width: 18)
-                            Avatar(initials: row.initials, size: 26)
-                            Text(row.name).font(.subheadline.weight(.medium))
-                            Spacer()
-                            Text("\(row.km) km").font(.subheadline.weight(.semibold))
+                    ForEach(list) { c in
+                        challengeCard(c)
+                        if c.isJoined, !c.leaderboard.isEmpty {
+                            Eyebrow(text: "Leaderboard", trailing: c.title)
+                            VStack(spacing: 0) {
+                                ForEach(c.leaderboard) { row in
+                                    HStack(spacing: 12) {
+                                        Text("\(row.rank)").font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(row.isMe == true ? JK.tertiary : JK.text).frame(width: 18)
+                                        Avatar(initials: row.initials ?? Fmt.initials(row.name), size: 26)
+                                        Text(row.isMe == true ? "You" : row.name).font(.subheadline.weight(.medium))
+                                        Spacer()
+                                        Text("\(Fmt.number(row.value)) km").font(.subheadline.weight(.semibold))
+                                    }
+                                    .foregroundStyle(JK.text)
+                                    .padding(12)
+                                }
+                            }
+                            .jkCard(padding: 2)
+                            HStack(spacing: 10) {
+                                BadgeTile(systemName: "trophy", text: "\(c.badges ?? 0) badges")
+                                BadgeTile(systemName: "flame", text: "\(c.streak ?? 0)-day streak")
+                            }
                         }
-                        .foregroundStyle(JK.text)
-                        .padding(12)
                     }
-                }
-                .jkCard(padding: 2)
-
-                HStack(spacing: 10) {
-                    BadgeTile(systemName: "trophy", text: "3 badges")
-                    BadgeTile(systemName: "flame", text: "12-day streak")
+                    Text("Distance comes from Apple Health (walking, running and rowing). Turn it on under Account › Health & devices.")
+                        .font(.caption2).foregroundStyle(JK.tertiary)
                 }
             }
             .padding(16)
         }
         .jkScreen()
+        .jkRefreshable { await load() }
+        .task { await load() }
+        .errorAlert($actionError)
+    }
+
+    private func challengeCard(_ c: Challenge) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let days = c.daysLeft {
+                Text(days == 1 ? "1 day left" : "\(days) days left")
+                    .font(.caption2)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(JK.cardRaised, in: Capsule())
+                    .foregroundStyle(JK.secondary)
+            }
+            Spacer().frame(height: 30)
+            Text(c.title).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+            Text([c.detail, c.members.map { "\($0) members taking part." }].compactMap { $0 }.joined(separator: " "))
+                .font(.caption).foregroundStyle(JK.secondary)
+            if c.isJoined {
+                HStack {
+                    ThinBar(fraction: c.target > 0 ? c.myValue / c.target : 0, height: 4)
+                    Text("\(Fmt.number(c.myValue)) / \(Fmt.number(c.target)) km").font(.caption.weight(.semibold)).foregroundStyle(JK.text)
+                }
+            } else {
+                Button {
+                    Task { await join(c) }
+                } label: {
+                    if joining == c.id { ProgressView().tint(.black) } else { Text("Join challenge") }
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .disabled(joining != nil)
+            }
+        }
+        .jkCard()
+    }
+
+    private func load() async {
+        do {
+            let reply: ChallengesResponse = try await api.get("/api/challenges")
+            challenges = reply.challenges
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
+        }
+    }
+
+    private func join(_ c: Challenge) async {
+        joining = c.id
+        defer { joining = nil }
+        do {
+            let fresh: Challenge = try await api.send("POST", "/api/challenges/\(seg(c.id))/join")
+            challenges = challenges?.map { $0.id == fresh.id ? fresh : $0 }
+        } catch {
+            actionError = error.readable
+        }
     }
 }
 
@@ -187,52 +509,113 @@ private struct BadgeTile: View {
 
 struct WeeklyCheckInView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var energy = 4
+    @Environment(AppSession.self) private var session
+    @State private var energy = 3
     @State private var sleep = 3
-    @State private var pain = "Knee"
-    @State private var note = "Left knee tight after split squats, fine by Thursday."
+    @State private var pain: Set<String> = []
+    @State private var note = ""
+    @State private var history: CheckInsResponse?
+    @State private var loadError: String?
+    @State private var saving = false
+    @State private var error: String?
+    @State private var sent = false
+
+    private let painOptions = ["Knee", "Back", "Shoulder", "Hip", "Other"]
+    private var coachName: String { session.me?.coach?.name ?? "Your coach" }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("How did this week feel, \(Mock.clientName)?").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("Coach JK reviews these every Sunday evening.").font(.caption).foregroundStyle(JK.secondary)
+                    Text("How did this week feel, \(session.me?.firstName ?? "")?").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("\(coachName) reviews these every week.").font(.caption).foregroundStyle(JK.secondary)
                 }
+                if let loadError { ErrorBanner(message: loadError) }
                 RatingCard(title: "Energy levels", hint: "1 = drained, 5 = excellent", value: $energy)
                 RatingCard(title: "Sleep quality", hint: nil, value: $sleep)
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Any pain or niggles?").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
-                            ForEach(["None", "Knee", "Back", "Shoulder", "Other"], id: \.self) { p in
-                                Chip(label: p, selected: pain == p) { pain = p }
+                            Chip(label: "None", selected: pain.isEmpty) { pain = [] }
+                            ForEach(painOptions, id: \.self) { p in
+                                Chip(label: p, selected: pain.contains(p)) {
+                                    if pain.contains(p) { pain.remove(p) } else { pain.insert(p) }
+                                }
                             }
                         }
                     }
-                    TextField("Tell Coach JK more", text: $note, axis: .vertical)
+                    TextField("Tell \(coachName) more", text: $note, axis: .vertical)
                         .lineLimit(2...5)
                         .font(.footnote)
                         .padding(10)
                         .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .jkCard()
-                HStack {
-                    Label("Add weekly photos", systemImage: "camera").font(.subheadline.weight(.medium))
-                    Spacer()
-                    Text("Optional").font(.caption2).foregroundStyle(JK.tertiary)
+                NavigationLink { ProgressScreen() } label: {
+                    HStack {
+                        Label("Add weekly photos", systemImage: "camera").font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("Optional").font(.caption2).foregroundStyle(JK.tertiary)
+                    }
+                    .foregroundStyle(JK.text)
+                    .jkCard()
                 }
-                .foregroundStyle(JK.text)
-                .jkCard()
-                Button("Next") { dismiss() }.buttonStyle(ChromeButtonStyle())
+                if let error { ErrorBanner(message: error) }
+                Button {
+                    Task { await submit() }
+                } label: {
+                    if saving { ProgressView().tint(.black) } else { Text(sent ? "Sent ✓" : (current == nil ? "Send check-in" : "Update check-in")) }
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .disabled(saving)
+
+                if let last = history?.checkins.first(where: { $0.reply?.isEmpty == false }) {
+                    Eyebrow(text: "Latest reply · week of \(Fmt.dayMonth(last.week))")
+                    Text(last.reply ?? "").font(.footnote).foregroundStyle(JK.text).jkCard()
+                }
             }
             .padding(16)
         }
         .jkScreen()
         .navigationTitle("Weekly check-in")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { Text("2 of 4").font(.caption2).foregroundStyle(JK.tertiary) }
+        .task { await load() }
+    }
+
+    private var current: CheckIn? {
+        guard let history, let due = history.dueWeek else { return nil }
+        return history.checkins.first { $0.week == due }
+    }
+
+    private func load() async {
+        do {
+            let reply: CheckInsResponse = try await APIClient.shared.get("/api/checkins")
+            history = reply
+            loadError = nil
+            if let c = current {
+                energy = c.energy
+                sleep = c.sleep
+                pain = Set(c.pain)
+                note = c.note ?? ""
+            }
+        } catch {
+            if !error.isCancellation { loadError = error.readable }
+        }
+    }
+
+    private func submit() async {
+        saving = true
+        defer { saving = false }
+        do {
+            let _: CheckIn = try await APIClient.shared.send("POST", "/api/checkins", body: CheckInInput(
+                energy: energy, sleep: sleep, pain: painOptions.filter { pain.contains($0) }, note: note))
+            error = nil
+            sent = true
+            try? await Task.sleep(for: .milliseconds(600))
+            dismiss()
+        } catch {
+            self.error = error.readable
         }
     }
 }
