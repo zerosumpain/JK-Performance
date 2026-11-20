@@ -28,3 +28,5 @@ targets:
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Portrait-only is refused at upload unless the app opts out of iPad multitasking.
+        UIRequiresFullScreen: true
