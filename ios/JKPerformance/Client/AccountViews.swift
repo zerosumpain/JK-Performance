@@ -33,6 +33,16 @@ struct AccountView: View {
                     if let email = session.me?.email {
                         Text(email).font(.caption).foregroundStyle(JK.tertiary)
                     }
+                    if session.canReturnToCoach {
+                        Button {
+                            Task { await session.returnToCoach() }
+                        } label: {
+                            Label("Back to coach", systemImage: "arrow.uturn.backward")
+                        }
+                        .buttonStyle(ChromeButtonStyle())
+                        Text("You're looking round as the demo client. Nothing here is a real client's data.")
+                            .font(.caption2).foregroundStyle(JK.tertiary)
+                    }
                     VStack(spacing: 8) {
                         AccountLink(title: "Membership", detail: membershipDetail, systemName: "creditcard") { MembershipView() }
                         AccountLink(title: "Health & devices", detail: HealthSync.shared.optedIn ? "Apple Health on" : "Apple Health off",

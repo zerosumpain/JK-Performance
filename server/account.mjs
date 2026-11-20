@@ -10,7 +10,7 @@ export function meOut(db, user) {
   const coach = user.coach_id ? db.prepare('SELECT id, name FROM users WHERE id=?').get(user.coach_id) : null;
   const plan = planById(user.plan);
   return {
-    id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.created_at,
+    id: user.id, name: user.name, email: user.email, role: user.role, isDemo: !!user.is_demo, createdAt: user.created_at,
     membership: user.role === 'client'
       ? { plan: plan.id, planName: plan.name, since: user.plan_since, renewsOn: plan.id === 'none' ? null : monthBounds(londonDay()).next, ...credits(db, user) }
       : null,
@@ -31,6 +31,18 @@ function signInCode(_req, ctx) {
   if (!which) fail(401, 'That code is not valid');
   const user = ctx.db.prepare('SELECT * FROM users WHERE apple_sub=?').get(which);
   if (!user) fail(503, 'The demo account is not set up');
+  return { token: issueSession(ctx.db, user.id), me: meOut(ctx.db, user) };
+}
+
+/**
+ * A coach previewing the client side: a session as the demo client "Sam Carter"
+ * (demo world only, so no real client's data is reachable this way). Needs the
+ * demo world to exist, which DEMO_CODE turns on.
+ */
+function demoClient(_req, ctx) {
+  if (ctx.user.role !== 'coach') fail(403, 'Coaches only');
+  const user = ctx.db.prepare("SELECT * FROM users WHERE apple_sub='demo-client'").get();
+  if (!user) fail(404, 'The demo client is not set up on this server');
   return { token: issueSession(ctx.db, user.id), me: meOut(ctx.db, user) };
 }
 
@@ -118,6 +130,7 @@ export function accountRoutes(r) {
   r.add('POST', '/api/auth/apple', signInApple, { public: true });
   r.add('POST', '/api/auth/code', signInCode, { public: true });
   r.add('POST', '/api/auth/logout', logout, { public: true });
+  r.add('POST', '/api/auth/demo-client', demoClient);
   r.add('GET', '/api/plans', plans, { public: true });
   r.add('GET', '/api/me', getMe);
   r.add('PATCH', '/api/me', patchMe);

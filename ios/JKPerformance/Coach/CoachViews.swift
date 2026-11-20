@@ -774,6 +774,7 @@ struct AssignProgramSheet: View {
 // MARK: - Hints & guides (coach tab root)
 
 struct GuidesView: View {
+    @State private var switchError: String?
     @Environment(AppSession.self) private var session
     @State private var query = ""
     @State private var filter = "All"
@@ -836,9 +837,18 @@ struct GuidesView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    Button {
+                        Task {
+                            do { try await session.switchToDemoClient() } catch { switchError = error.readable }
+                        }
+                    } label: {
+                        Label("View the app as a client (demo: Sam Carter)", systemImage: "arrow.left.arrow.right")
+                    }
+                    .buttonStyle(ChromeButtonStyle())
+                    .padding(.top, 20)
+                    if let switchError { ErrorBanner(message: switchError) }
                     Button("Sign out") { Task { await session.signOut() } }
                         .buttonStyle(GhostButtonStyle())
-                        .padding(.top, 20)
                 }
                 .padding(16)
             }

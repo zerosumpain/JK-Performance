@@ -17,11 +17,13 @@ struct Me: Codable, Equatable {
     var name: String
     var email: String?
     var role: String
+    var isDemo: Bool?
     var createdAt: Date?
     var membership: Membership?
     var coach: PersonRef?
 
     var isCoach: Bool { role == "coach" }
+    var demo: Bool { isDemo == true }
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
 }
 

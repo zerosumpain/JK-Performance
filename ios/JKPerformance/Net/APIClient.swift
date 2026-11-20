@@ -49,9 +49,9 @@ extension Error {
 /// The bearer token lives in the Keychain, never in UserDefaults.
 enum Keychain {
     private static let service = "com.jkperformance.app.session"
-    private static let account = "token"
+    private static let tokenAccount = "token"
 
-    static func read() -> String? {
+    static func read(account: String = tokenAccount) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -64,7 +64,7 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func save(_ token: String?) {
+    static func save(_ token: String?, account: String = tokenAccount) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

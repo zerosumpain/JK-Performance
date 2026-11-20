@@ -31,6 +31,8 @@ function postSamples(_req, ctx) {
   const samples = ctx.body.samples;
   if (!Array.isArray(samples) || samples.length > 2000) fail(400, 'samples must be a list of up to 2000');
   const user = ctx.user;
+  // A demo account is shared and fake: never store a real phone's health in it.
+  if (user.is_demo) return { stored: 0, ignored: true };
   const upsert = ctx.db.prepare(`INSERT INTO health_samples (user_id, id, kind, date, start, end, value, received_at) VALUES (?,?,?,?,?,?,?,?)
     ON CONFLICT(user_id, id) DO UPDATE SET kind=excluded.kind, date=excluded.date, start=excluded.start, end=excluded.end, value=excluded.value, received_at=excluded.received_at`);
   const weight = ctx.db.prepare('INSERT INTO measurements (user_id, date, kind, value) VALUES (?,?,\'weight\',?) ON CONFLICT(user_id, date, kind) DO UPDATE SET value=excluded.value');

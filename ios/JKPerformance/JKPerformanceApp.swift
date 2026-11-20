@@ -13,7 +13,7 @@ struct JKPerformanceApp: App {
                 .tint(.white)
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, session.phase == .signedIn, session.me?.isCoach == false else { return }
+            guard phase == .active, session.phase == .signedIn, session.me?.isCoach == false, session.me?.demo == false else { return }
             HealthSync.shared.syncIfDue()
         }
     }

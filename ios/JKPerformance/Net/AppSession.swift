@@ -79,7 +79,35 @@ final class AppSession {
         me = session.me
         restoreError = nil
         phase = .signedIn
-        if !session.me.isCoach { HealthSync.shared.syncIfDue(force: true) }
+        // Never sync this phone's Apple Health into a shared demo account.
+        if !session.me.isCoach && !session.me.demo { HealthSync.shared.syncIfDue(force: true) }
+    }
+
+    // MARK: Coach previewing the client side
+
+    /// The coach's own session, kept while they look round as the demo client.
+    private static let coachSlot = "coachToken"
+
+    /// True while a coach is in the demo client with their own session kept aside.
+    var canReturnToCoach: Bool { me?.demo == true && Keychain.read(account: Self.coachSlot) != nil }
+
+    /// Coach → the demo client "Sam Carter", keeping the coach session to come back to.
+    func switchToDemoClient() async throws {
+        guard let coachToken = api.token, isCoach else { return }
+        let session: Session = try await api.send("POST", "/api/auth/demo-client")
+        Keychain.save(coachToken, account: Self.coachSlot)
+        adopt(session)
+    }
+
+    /// Demo client → back to the coach session kept aside, without signing in again.
+    func returnToCoach() async {
+        guard let coachToken = Keychain.read(account: Self.coachSlot) else { return }
+        let _: OK? = try? await api.send("POST", "/api/auth/logout")
+        Keychain.save(nil, account: Self.coachSlot)
+        api.setToken(coachToken)
+        me = nil
+        phase = .restoring
+        await restore()
     }
 
     func signOut() async {
@@ -95,6 +123,7 @@ final class AppSession {
 
     func clear() {
         api.setToken(nil)
+        Keychain.save(nil, account: Self.coachSlot)
         me = nil
         restoreError = nil
         phase = .signedOut

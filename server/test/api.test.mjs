@@ -7,6 +7,7 @@ import { after, before, describe, test } from 'node:test';
 import { createApp } from '../app.mjs';
 import { seedCatalogue } from '../catalogue.mjs';
 import { openStore } from '../store.mjs';
+import { seedDemo } from '../demo.mjs';
 import { addDays, londonDay, londonToUtc } from '../time.mjs';
 
 // A stand-in for Apple: our own RSA key, served as Apple's JWKS.
@@ -287,5 +288,22 @@ describe('Export and deletion', () => {
       assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE ${col}=?`).get(id).n, 0, table);
     }
     assert.equal(db.prepare('SELECT COUNT(*) n FROM class_attendees WHERE user_id=?').get(id).n, 0);
+  });
+});
+
+describe('Coach preview as the demo client', () => {
+  test('a coach can switch to the demo client; a client cannot; demo health is never stored', async () => {
+    seedDemo(db);
+    const c2 = await signIn('apple-coach', 'coach@example.com');
+    const demo = await ok('POST', '/api/auth/demo-client', { token: c2.token });
+    assert.equal(demo.me.name, 'Sam Carter');
+    assert.equal(demo.me.isDemo, true);
+    assert.equal(c2.me.isDemo, false);
+    assert.equal((await call('POST', '/api/auth/demo-client', { token: kim.token })).status, 403);
+    // The coach's own session still works after switching.
+    assert.equal((await ok('GET', '/api/me', { token: c2.token })).role, 'coach');
+    const r = await ok('POST', '/api/health/samples', { token: demo.token, body: { samples: [{ id: 'steps-x', kind: 'steps', start: new Date().toISOString(), end: new Date().toISOString(), value: 5 }] } });
+    assert.equal(r.stored, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM health_samples WHERE id='steps-x'").get().n, 0);
   });
 });
