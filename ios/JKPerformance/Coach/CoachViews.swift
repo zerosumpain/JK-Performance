@@ -6,12 +6,20 @@ import SwiftUI
 struct CoachTodayView: View {
     @State private var today: CoachToday?
     @State private var error: String?
+    @State private var showAccount = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(eyebrow: "Coach · \(Fmt.shortDay(Date()))", title: "Today") {
+                        Button { showAccount = true } label: {
+                            Image(systemName: "person.crop.circle")
+                                .font(.title3)
+                                .frame(width: 30, height: 30)
+                        }
+                        .foregroundStyle(JK.text)
+                        .accessibilityLabel("Account")
                         NavigationLink { BusinessView() } label: {
                             Text("JK")
                                 .font(.caption.weight(.bold))
@@ -54,6 +62,7 @@ struct CoachTodayView: View {
             .jkScreen()
             .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showAccount) { CoachAccountView() }
             .task { await load() }
         }
     }
@@ -885,5 +894,66 @@ struct GuidesView: View {
         } catch {
             if !error.isCancellation { self.error = error.readable }
         }
+    }
+}
+
+
+// MARK: - Coach account
+
+/// The coach's own account: who is signed in, privacy, and signing out (to
+/// switch to another account, such as the demo client with "I have a code").
+struct CoachAccountView: View {
+    @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmSignOut = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 12) {
+                        Avatar(initials: initialsOf(session.me?.name ?? "Coach"), size: 48)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(session.me?.name ?? "Coach").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                            Text(session.me?.email ?? "Coach account").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                    }
+                    Text("Signed in as the coach. Clients who sign up are assigned to you.")
+                        .font(.footnote).foregroundStyle(JK.secondary)
+                    Link(destination: APIClient.shared.privacyURL) {
+                        HStack(spacing: 12) {
+                            IconTile(systemName: "hand.raised")
+                            Text("Privacy policy").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Spacer()
+                            Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                        .jkCard(padding: 12)
+                    }
+                    Button("Sign out") { confirmSignOut = true }
+                        .buttonStyle(ChromeButtonStyle())
+                        .padding(.top, 12)
+                    Text("To try the client side, sign out and choose \"I have a code\" on the welcome screen.")
+                        .font(.caption2).foregroundStyle(JK.tertiary)
+                }
+                .padding(16)
+            }
+            .jkScreen()
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+            .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) {
+                    dismiss()
+                    Task { await session.signOut() }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+    }
+
+    private func initialsOf(_ name: String) -> String {
+        name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
     }
 }
