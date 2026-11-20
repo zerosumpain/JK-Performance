@@ -470,6 +470,8 @@ struct WorkoutLoggerView: View {
     @State private var error: String?
     @State private var rest = 90
     @State private var resting = false
+    /// Optional RPE for the next logged set, 1–10.
+    @State private var rpe: Int?
 
     init(workout: Workout, itemId: String, onChange: @escaping (Workout) -> Void) {
         _workout = State(initialValue: workout)
@@ -494,6 +496,7 @@ struct WorkoutLoggerView: View {
                     demo(item)
                     setTable(item)
                     restTimer
+                    rpeRow
                     if let error { ErrorBanner(message: error) }
                     HStack(spacing: 10) {
                         if index + 1 < ordered.count {
@@ -567,7 +570,7 @@ struct WorkoutLoggerView: View {
         do {
             let fresh: Workout = try await APIClient.shared.send(
                 "PUT", "/api/workouts/\(seg(workout.id))/items/\(seg(item.id))/sets/\(n)",
-                body: SetInput(load: load, reps: count, rpe: nil))
+                body: SetInput(load: load, reps: count, rpe: rpe.map(Double.init)))
             apply(fresh)
             rest = 90
             resting = true
@@ -690,6 +693,18 @@ struct WorkoutLoggerView: View {
             }
         }
         .jkCard(padding: 0)
+    }
+
+    private var rpeRow: some View {
+        HStack(spacing: 10) {
+            Text("RPE").font(.system(size: 9, weight: .semibold)).foregroundStyle(JK.tertiary)
+            Text(rpe.map { "\($0)" } ?? "–").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text).frame(minWidth: 20)
+            Text("optional, for the next set").font(.caption2).foregroundStyle(JK.tertiary)
+            Spacer()
+            Button("−") { rpe = rpe.map { $0 <= 1 ? nil : $0 - 1 } ?? nil }.buttonStyle(SmallPillStyle()).disabled(rpe == nil)
+            Button("+") { rpe = min(10, (rpe ?? 6) + (rpe == nil ? 0 : 1)) }.buttonStyle(SmallPillStyle())
+        }
+        .jkCard(padding: 10)
     }
 
     private var restTimer: some View {

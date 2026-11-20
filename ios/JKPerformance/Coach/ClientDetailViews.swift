@@ -461,6 +461,7 @@ private struct AddHabitSheet: View {
     @State private var target = "1"
     @State private var unit = ""
     @State private var icon = "checkmark.circle"
+    @State private var healthKind = "none"
     @State private var saving = false
     @State private var error: String?
 
@@ -472,7 +473,7 @@ private struct AddHabitSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     JKField(label: "Name", text: $name, prompt: "Water")
                     Segmented(options: ["check", "count"], selection: $kind) { $0 == "check" ? "Tick off" : "Count to a target" }
-                    if kind == "count" {
+                    if kind == "count" || healthKind != "none" {
                         HStack(spacing: 8) {
                             JKField(label: "Target", text: $target, prompt: "3", keyboard: .decimalPad)
                             JKField(label: "Unit", text: $unit, prompt: "L")
@@ -488,7 +489,14 @@ private struct AddHabitSheet: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    Text("Habits named Steps or Sleep fill from the client's Apple Health.").font(.caption2).foregroundStyle(JK.tertiary)
+                    Eyebrow(text: "Fill from Apple Health")
+                    Segmented(options: ["none", "steps", "sleep"], selection: $healthKind) {
+                        $0 == "none" ? "None" : $0 == "steps" ? "Steps" : "Sleep"
+                    }
+                    if healthKind != "none" {
+                        Text("Filled from the client's Apple Health and done once the value reaches the target.")
+                            .font(.caption2).foregroundStyle(JK.tertiary)
+                    }
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await save() }
@@ -504,15 +512,29 @@ private struct AddHabitSheet: View {
             .navigationTitle("New habit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .onChange(of: healthKind) { _, hk in
+                switch hk {
+                case "sleep":
+                    kind = "check"; target = "7"; unit = "h"; icon = "moon"
+                    if name.isEmpty { name = "Sleep 7h+" }
+                case "steps":
+                    kind = "count"; target = "10000"; unit = "steps"; icon = "shoeprints.fill"
+                    if name.isEmpty { name = "Steps" }
+                default: break
+                }
+            }
         }
     }
 
     private func save() async {
         saving = true
         defer { saving = false }
+        // A health habit keeps its target whatever the kind ("Sleep 7h+" is check, 7 h).
+        let fromHealth = healthKind != "none"
         let input = HabitInput(clientId: clientId, name: name.trimmingCharacters(in: .whitespaces), kind: kind,
-                               target: kind == "count" ? (parseNumber(target) ?? 1) : 1,
-                               unit: kind == "count" ? unit : "", icon: icon)
+                               target: (kind == "count" || fromHealth) ? (parseNumber(target) ?? 1) : 1,
+                               unit: (kind == "count" || fromHealth) ? unit : "", icon: icon,
+                               healthKind: fromHealth ? healthKind : nil)
         do {
             let _: Habit = try await APIClient.shared.send("POST", "/api/habits", body: input)
             await onSaved()

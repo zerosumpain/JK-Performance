@@ -89,8 +89,8 @@ struct LoggedSet: Codable, Hashable {
     let number: Int
     let load: String
     let reps: Int
-    /// The contract shows `null` only; accept a number or a string.
-    var rpe: LooseString?
+    /// 1–10, or null when not given.
+    var rpe: Double?
     var at: Date?
 }
 
@@ -157,11 +157,35 @@ struct WorkoutItemInput: Codable, Hashable {
     var load: String
     var rpe: String?
     var note: String?
-    /// Not part of the contract body: the name to show while editing. Never encoded.
+    /// Not part of the request body: the name to show while editing. Read
+    /// from `exercise` on a Program item; never encoded.
     var exerciseName: String = ""
     var localId = UUID()
 
-    enum CodingKeys: String, CodingKey { case id, exerciseId, sets, reps, load, rpe, note }
+    enum CodingKeys: String, CodingKey { case id, exerciseId, exercise, sets, reps, load, rpe, note }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+        exerciseId = try c.decode(String.self, forKey: .exerciseId)
+        sets = try c.decode(Int.self, forKey: .sets)
+        reps = try c.decode(String.self, forKey: .reps)
+        load = try c.decodeIfPresent(String.self, forKey: .load) ?? ""
+        rpe = try c.decodeIfPresent(String.self, forKey: .rpe)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        exerciseName = (try? c.decodeIfPresent(Exercise.self, forKey: .exercise))?.name ?? exerciseId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encode(exerciseId, forKey: .exerciseId)
+        try c.encode(sets, forKey: .sets)
+        try c.encode(reps, forKey: .reps)
+        try c.encode(load, forKey: .load)
+        try c.encodeIfPresent(rpe, forKey: .rpe)
+        try c.encodeIfPresent(note, forKey: .note)
+    }
 
     init(id: String? = nil, exerciseId: String, exerciseName: String, sets: Int = 3, reps: String = "10",
          load: String = "", rpe: String? = nil, note: String? = nil) {
@@ -194,7 +218,8 @@ struct WorkoutInput: Codable {
 struct SetInput: Codable {
     var load: String
     var reps: Int
-    var rpe: String?
+    /// 1–10; omitted when not given.
+    var rpe: Double?
 }
 
 struct NoteInput: Codable { var note: String? }
@@ -212,8 +237,8 @@ struct ProgramWorkout: Codable, Hashable, Identifiable {
     enum CodingKeys: String, CodingKey { case dayOffset, title, items }
 }
 
-/// The contract defines `ProgramInput` and says a listed `Program` adds
-/// `clientCount`; it is decoded as ProgramInput + `id` + `clientCount`.
+/// ProgramInput plus `id`, `clientCount` and `updatedAt`; each item also
+/// carries its `exercise`.
 struct Program: Codable, Identifiable, Hashable {
     let id: String
     var name: String
@@ -222,6 +247,7 @@ struct Program: Codable, Identifiable, Hashable {
     var weeks: Int
     var workouts: [ProgramWorkout]
     var clientCount: Int?
+    var updatedAt: Date?
 }
 
 struct ProgramInput: Codable {
@@ -262,6 +288,8 @@ struct HabitInput: Codable {
     var target: Double
     var unit: String
     var icon: String
+    /// "steps" | "sleep" fills the habit from Apple Health; nil omits it.
+    var healthKind: String?
 }
 
 struct HabitDayInput: Codable {
@@ -666,27 +694,6 @@ struct GuidesResponse: Decodable {
 }
 
 // MARK: - Loose values
-
-/// A string the contract does not pin down; numbers are rendered as text.
-struct LooseString: Codable, Hashable {
-    let value: String
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let s = try? c.decode(String.self) {
-            value = s
-        } else if let d = try? c.decode(Double.self) {
-            value = Fmt.number(d)
-        } else {
-            value = ""
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        try c.encode(value)
-    }
-}
 
 /// A bool or a number.
 struct LooseValue: Codable, Hashable {

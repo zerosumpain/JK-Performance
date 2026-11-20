@@ -96,10 +96,21 @@ struct MessagesThreadView: View {
         Day.same(date, Date()) ? "Today \(Fmt.time(date))" : "\(Fmt.shortDay(date)) \(Fmt.time(date))"
     }
 
+    /// First load fetches the thread; each poll asks only for messages after
+    /// the last one's instant (exclusive) and appends them.
     private func load() async {
+        let last = messages?.last?.at
         do {
-            let reply: MessagesResponse = try await api.get("/api/messages", query: ["clientId": clientId])
-            if reply.messages != messages { messages = reply.messages }
+            let reply: MessagesResponse = try await api.get("/api/messages", query: [
+                "clientId": clientId, "after": last.map { ISO.fractional.string(from: $0) },
+            ])
+            if let current = messages {
+                let known = Set(current.map(\.id))
+                let fresh = reply.messages.filter { !known.contains($0.id) }
+                if !fresh.isEmpty { messages = current + fresh }
+            } else {
+                messages = reply.messages
+            }
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }

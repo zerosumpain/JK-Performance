@@ -504,19 +504,10 @@ struct ProgramDraft: Identifiable {
     }
 }
 
-/// Program items carry only `exerciseId`; names come from the library, or
-/// from the readable id ("ex_back-squat" → "Back Squat").
-func exerciseName(for id: String, in library: [String: String]) -> String {
-    if let name = library[id] { return name }
-    let slug = id.hasPrefix("ex_") ? String(id.dropFirst(3)) : id
-    return slug.split(separator: "-").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
-}
-
 struct ProgramEditorSheet: View {
     @State var draft: ProgramDraft
     let onSaved: () async -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var library: [String: String] = [:]
     @State private var picking: UUID?
     @State private var saving = false
     @State private var error: String?
@@ -543,7 +534,7 @@ struct ProgramEditorSheet: View {
                                 Stepper("Day \(w.dayOffset + 1)", value: $w.dayOffset, in: 0...(draft.weeks * 7 - 1))
                                     .font(.caption).frame(width: 150)
                             }
-                            ItemsEditor(items: $w.items, library: library)
+                            ItemsEditor(items: $w.items)
                             HStack {
                                 Button { picking = w.localId } label: { Label("Add exercise", systemImage: "plus") }
                                     .buttonStyle(SmallPillStyle())
@@ -584,7 +575,6 @@ struct ProgramEditorSheet: View {
             .sheet(isPresented: Binding(get: { picking != nil }, set: { if !$0 { picking = nil } })) {
                 ExercisePickerSheet { exercise in
                     guard let target = picking, let i = draft.workouts.firstIndex(where: { $0.localId == target }) else { return }
-                    library[exercise.id] = exercise.name
                     draft.workouts[i].items.append(WorkoutItemInput(exerciseId: exercise.id, exerciseName: exercise.name))
                 }
             }
@@ -592,17 +582,6 @@ struct ProgramEditorSheet: View {
                 Button("Delete", role: .destructive) { Task { await delete() } }
             } message: {
                 Text("Workouts already assigned to clients stay.")
-            }
-            .task { await loadLibrary() }
-        }
-    }
-
-    private func loadLibrary() async {
-        guard let reply: ExercisesResponse = try? await APIClient.shared.get("/api/exercises") else { return }
-        for e in reply.exercises { library[e.id] = e.name }
-        for wi in draft.workouts.indices {
-            for ii in draft.workouts[wi].items.indices where draft.workouts[wi].items[ii].exerciseName.isEmpty {
-                draft.workouts[wi].items[ii].exerciseName = exerciseName(for: draft.workouts[wi].items[ii].exerciseId, in: library)
             }
         }
     }
@@ -639,7 +618,6 @@ struct ProgramEditorSheet: View {
 /// delete. Shared by the program editor and the client plan editor.
 struct ItemsEditor: View {
     @Binding var items: [WorkoutItemInput]
-    var library: [String: String] = [:]
 
     var body: some View {
         if items.isEmpty {
@@ -648,7 +626,7 @@ struct ItemsEditor: View {
         ForEach(Array(items.enumerated()), id: \.element.localId) { index, item in
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text(item.exerciseName.isEmpty ? exerciseName(for: item.exerciseId, in: library) : item.exerciseName)
+                    Text(item.exerciseName.isEmpty ? item.exerciseId : item.exerciseName)
                         .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
                     if item.id == nil {
                         Text("New")
