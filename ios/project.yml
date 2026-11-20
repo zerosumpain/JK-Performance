@@ -1,0 +1,28 @@
+# JK Performance — iPhone app. Generate with: xcodegen generate --spec ios/project.yml
+name: JKPerformance
+options:
+  bundleIdPrefix: com.jkperformance
+  deploymentTarget:
+    iOS: '17.0'
+settings:
+  base:
+    # Matches the App Store Connect record "JK Performance" (created 2026-11-20).
+    PRODUCT_BUNDLE_IDENTIFIER: com.jkperformance.app
+    SWIFT_VERSION: '5.0'
+    TARGETED_DEVICE_FAMILY: '1'
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: '1'
+    CODE_SIGN_STYLE: Automatic
+targets:
+  JKPerformance:
+    type: application
+    platform: iOS
+    sources:
+      - JKPerformance
+    info:
+      path: JKPerformance/Info.plist
+      properties:
+        CFBundleDisplayName: JK Performance
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
