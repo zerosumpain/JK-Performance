@@ -32,7 +32,7 @@ The contract between `server/` and the iPhone app. Change both sides together.
 {"token":"…","me":Me}
 // Me
 {"id":"u_…","name":"Sam Carter","email":"…","role":"client","createdAt":"…",
- "membership":{"plan":"elite","renewsOn":"2026-12-01","creditsLeft":3,"creditsTotal":4,"creditsResetOn":"2026-12-01"},
+ "membership":{"plan":"elite","planName":"Elite","since":"…","renewsOn":"2026-12-01","creditsLeft":3,"creditsTotal":4,"creditsResetOn":"2026-12-01"},  // null for a coach
  "coach":{"id":"u_…","name":"Coach JK"}}       // null for a coach
 // Plan
 {"id":"elite","name":"Elite","detail":"Weekly 1:1 sessions, nutrition, priority messaging",
@@ -46,7 +46,7 @@ Plans: `none` (free, info only), `foundation`, `performance`, `elite`.
 |---|---|---|---|
 | POST | `/api/exercises` (coach) | `{name, equipment, pattern, category, videoUrl?}` | `Exercise` |
 
-`Exercise`: `{id, name, equipment, pattern, category, videoUrl}`. Categories: `Legs Push Pull Core Mobility Conditioning`.
+`Exercise`: `{id, name, equipment, pattern, category, videoUrl}`. ~60 seeded; ids like `ex_back-squat`. Categories: `Legs Push Pull Core Mobility Conditioning`.
 
 ## Workouts (plan → completion)
 
@@ -102,8 +102,8 @@ the client logs sets against its items. A client may also create their own (alwa
 
 ```jsonc
 // Habit — kind "check" (target 1) or "count" (e.g. 3 L water, 10000 steps)
-{"id":"h_…","name":"Water","kind":"count","target":3,"unit":"L","icon":"drop","value":2.1,"done":false,
- "source":"manual"}   // "health" when filled from Apple Health (steps, sleep)
+{"id":"h_…","name":"Water","kind":"count","target":3,"unit":"L","icon":"drop","healthKind":null,"value":2.1,"done":false,
+ "source":"manual"}   // healthKind "steps"|"sleep" fills value from Apple Health (sleep in hours)   // "health" when filled from Apple Health (steps, sleep)
 // Nutrition (for the date)
 {"date":"…","targets":{"kcal":2500,"protein":170,"carbs":260,"fat":80},
  "totals":{"kcal":1720,"protein":128,"carbs":180,"fat":52},"entries":[{"id","name","kcal","protein","carbs","fat","at"}]}
@@ -114,7 +114,7 @@ the client logs sets against its items. A client may also create their own (alwa
 
 | GET | `/api/checkins?clientId=` | – | `{checkins:[CheckIn], dueWeek:"2026-11-16"}` |
 |---|---|---|---|
-| POST | `/api/checkins` | `{energy, sleep, pain:["Knee"], note}` | `CheckIn` (one per ISO week; re-posting updates it) |
+| POST | `/api/checkins` | `{energy, sleep, pain:["Knee"], note}` | `CheckIn` (one per week; re-posting updates it. From Friday it's this week's, before that last week's = `dueWeek`) |
 | POST | `/api/checkins/:id/review` (coach) | `{reply}` | `CheckIn` |
 
 `CheckIn`: `{id, clientId, week, energy, sleep, pain, note, submittedAt, reviewedAt, reply}`. `week` = Monday's date.
@@ -137,7 +137,7 @@ and cancelling 24 h or more ahead refunds it. A group class is coach-created wit
 | GET | `/api/availability` (coach) | – | `{rules:[Rule]}` |
 |---|---|---|---|
 | PUT | `/api/availability` (coach) | `{rules:[Rule]}` | `{rules:[Rule]}` |
-| GET | `/api/slots?from=&to=&kind=` | – | `{slots:[{start,end,kind,open}]}` |
+| GET | `/api/slots?from=&to=&kind=` | – | `{slots:[{start,end,kind,location,open}]}` |
 | GET | `/api/bookings?from=&to=&clientId=` | – | `{bookings:[Booking]}` (coach: all clients unless filtered) |
 | POST | `/api/bookings` | `{start, kind, clientId?}` | `Booking` |
 | DELETE | `/api/bookings/:id` | – | `{ok:true, refunded:true}` |
@@ -149,7 +149,8 @@ and cancelling 24 h or more ahead refunds it. A group class is coach-created wit
 {"weekday":3,"start":"07:00","end":"19:00","kind":"inperson","slotMinutes":60,"location":"Studio 2"}
 // Booking
 {"id":"b_…","kind":"inperson|video|group","start":"…","end":"…","location":"Studio 2","title":"1:1 with Coach JK",
- "client":{"id","name"},"attendees":[{"id","name"}],"capacity":null,"usesCredit":true,"cancellable":true}
+ "client":{"id","name"},"attendees":[{"id","name"}],"attendeeCount":0,"capacity":null,"usesCredit":true,
+ "joined":true,"cancellable":true,"refundable":true}   // a client sees every group class of their coach; joined says if they're in it
 ```
 Times are Europe/London. The server stores UTC and returns ISO instants.
 
@@ -174,7 +175,7 @@ Times are Europe/London. The server stores UTC and returns ISO instants.
 
 | POST | `/api/health/samples` | `{samples:[{id, kind, start, end, value}]}` (idempotent on id) | `{stored:n}` |
 |---|---|---|---|
-| GET | `/api/health/summary?date=&clientId=` | – | `{date, steps, sleepMinutes, restingHr, activeKcal, weight}` |
+| GET | `/api/health/summary?date=&clientId=` | – | `{date, steps, sleepMinutes, restingHr, activeKcal, weight, distanceKm}` |
 | GET | `/api/health/devices` | – | `{appleHealth:bool, lastSampleAt}` |
 
 Kinds: `steps` (count), `sleep` (minutes asleep), `restingHr` (bpm), `activeKcal`, `weight` (kg, also written as a
@@ -187,26 +188,32 @@ measurement), `distance` (km, walk/run/row; feeds challenges). The Steps and "Sl
 | POST | `/api/challenges` (coach) | `{title, detail, metric:"distance", target, start, end}` | `Challenge` |
 | POST | `/api/challenges/:id/join` | – | `Challenge` |
 
-`Challenge`: `{id, title, detail, target, start, end, daysLeft, members, mine, leaderboard:[{rank, id, name, initials, value, isMe}], badges, streak}`.
+`Challenge`: `{id, title, detail, metric, target, start, end, daysLeft, members, joined, mine, leaderboard:[{rank, id, name, initials, value, isMe}], badges, streak}`. A client's leaderboard is the top 3 plus themselves.
 
 ## Coach
 
-| GET | `/api/coach/today?date=` | – | `{sessions:[Booking], activeClients, unread, tip}` |
+| GET | `/api/coach/today?date=` | – | `{date, sessions:[Booking], activeClients, totalClients, unread, tip:Guide}` |
 |---|---|---|---|
 | GET | `/api/coach/clients` | – | `{clients:[ClientSummary]}` |
 | GET | `/api/coach/clients/:id` | – | `{client:ClientSummary, health, nextWorkout:Workout?}` |
 | GET | `/api/coach/business?period=week|month` | – | `Business` |
-| GET | `/api/guides` | – | `{featured:Guide, tips:[Guide]}` |
+| GET | `/api/guides` | – | `{featured:Guide, tips:[Guide]}` — `Guide`: `{id, title, minutes, tags, body}` |
 
 ```jsonc
-// ClientSummary
+// ClientSummary (adherence null when nothing was due)
 {"id","name","initials","plan","since","adherence":86,"lastWorkoutAt":"…","checkinDue":false,
- "flags":["no-workout-9d"],"unread":1}
+ "flags":["no-workout-9d","no-workout-yet","checkin-overdue"],"unread":1}
 // Business
 {"mrrPence":248600,"mrrDeltaPct":12,"series":[{"date","pence"}],"active":18,"new":2,"churned":1,"adherence":86,
- "attention":[{"client":{id,name,initials},"reason":"No workout logged in 9 days","kind":"inactive|checkin|payment"}]}
+ "attention":[{"client":{id,name,initials},"reason":"No workout logged in 9 days","kind":"inactive|checkin|payment"}],
+ "plans":[{"id":"elite","name":"Elite","members":3}]}   // mrrDeltaPct and adherence may be null
 ```
 Adherence = completed ÷ published workouts dated in the last 28 days, as a percentage.
+
+## Demo accounts
+
+`DEMO_CODE` signs in as the demo client "Sam Carter", and `DEMO_COACH_CODE` (local only) as the demo coach. Both live in a
+separate demo world with five other clients and a few weeks of history. Demo accounts never appear in a real coach's lists.
 
 ## Pages (HTML)
 
