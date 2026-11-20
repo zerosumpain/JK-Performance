@@ -7,7 +7,7 @@ export function loadConfig(env = process.env) {
     return v;
   };
   const config = {
-    port: Number(env.PORT ?? 5660),
+    port: Number(env.PORT ?? 5670),
     host: env.HOST ?? '0.0.0.0',
     dataDir: env.DATA_DIR ?? './data',
     appleAudience: env.APPLE_AUDIENCE ?? 'com.jkperformance.app',

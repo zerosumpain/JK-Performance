@@ -2,7 +2,7 @@
 
 The contract between `server/` and the iPhone app. Change both sides together.
 
-- Base URL: `https://jk.strangeramblings.com` (prod). Local preview: `http://100.83.68.108:5661`.
+- Base URL: `https://jk.strangeramblings.com` (prod). Local preview: `http://100.83.68.108:5671`.
 - JSON in and out, **camelCase**. Dates are `"YYYY-MM-DD"` (the client's local day). Instants are ISO 8601 UTC
   (`"2026-11-20T11:00:00.000Z"`). Ids are opaque strings.
 - Auth: `Authorization: Bearer <token>` on every `/api/*` call except `/api/auth/*`, `/api/plans` and `/health`.
