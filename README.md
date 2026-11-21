@@ -1,6 +1,6 @@
 # JK Performance
 
-iPhone app. App Store Connect record: **JK Performance**, bundle ID `com.jkperformance.app`.
+iPhone app, Android app (`android/`, Kotlin + Jetpack Compose, the same screens), and their API (`server/`). App Store Connect record: **JK Performance**, bundle ID `com.jkperformance.app`.
 
 SwiftUI, iOS 17, iPhone only, XcodeGen:
 
@@ -49,3 +49,28 @@ Environment `testflight` holds:
 | `DISTRIBUTION_P12_BASE64`, `DISTRIBUTION_P12_PASSWORD` | secrets | the same Apple Distribution certificate as SR-AppleApp |
 
 App icon: `python3 scripts/app-icon.py` (placeholder silver JK mark).
+
+## Android
+
+`android/` is a native Kotlin + Jetpack Compose port of the iPhone app: same screens, names and behaviour
+(SwiftUI view `ClientDetailView` → composable `ClientDetailView`). Package and application id
+`com.jkperformance.app`, minSdk 28.
+
+- Build on porkserv (no SDK on the host): `scripts/android-build.sh` (assembleDebug) in Docker, image from
+  `android/docker/Dockerfile` (`docker build -t jk-android-build:1 android/docker`). Point a debug build at the
+  local preview with `scripts/android-build.sh assembleDebug -PapiBase=http://100.83.68.108:5671`.
+- Navigation: `design/Nav.kt` is SwiftUI's NavigationStack/NavigationLink (`Modifier.navLink { Screen() }`).
+- Sign-in: Google (Credential Manager) and Sign in with Apple on the web (Custom Tab → `/api/auth/apple/web`
+  → `jkperformance://auth`), plus the demo code. Health: Health Connect in place of Apple Health.
+- CI: `android.yml` compiles PRs; each merge to main that changes `android/` builds a signed release APK
+  (artifact `jk-performance-apk`). `scripts/android-publish.sh` on porkserv copies the newest one to the
+  private download page `/android/<ANDROID_DOWNLOAD_TOKEN>`.
+
+| Secret | What |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` | the release keystore (porkserv `~/android-signing/`, mode 600). Losing it means users must reinstall |
+| `GOOGLE_SERVICES_JSON` | Firebase's `google-services.json`; without it builds have push off |
+
+Server env for Android: `GOOGLE_CLIENT_IDS` (the Google OAuth *web* client id the app asks for ID tokens),
+`APPLE_SERVICES_ID` (Services ID with return URL `https://jk.strangeramblings.com/api/auth/apple/callback`),
+`FCM_SERVICE_ACCOUNT_FILE`, `ANDROID_DOWNLOAD_TOKEN`.
