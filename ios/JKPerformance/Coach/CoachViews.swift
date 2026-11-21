@@ -30,31 +30,47 @@ struct CoachTodayView: View {
                         .accessibilityLabel("Business")
                     }
                     Loadable(value: today, error: error, retry: load) { t in
-                        HStack(spacing: 8) {
-                            StatTile(label: "Sessions", value: "\(t.sessions.count)")
-                            StatTile(label: "Active clients", value: t.totalClients.map { "\(t.activeClients)/\($0)" } ?? "\(t.activeClients)")
-                            StatTile(label: "Unread", value: "\(t.unread)")
+                        let sorted = t.sessions.sorted { $0.start < $1.start }
+                        let next = sorted.first { $0.end > Date() }?.id
+                        Eyebrow(text: "Sessions", trailing: sorted.isEmpty ? nil : "\(sorted.filter { $0.end > Date() }.count) to go")
+                        if sorted.isEmpty {
+                            Text("Nothing booked today.").font(.caption).foregroundStyle(JK.tertiary)
                         }
-
-                        Eyebrow(text: "Client obligations", trailing: "Today")
-                        if t.sessions.isEmpty {
-                            EmptyCard(systemName: "calendar", title: "No sessions today")
-                        }
-                        let next = t.sessions.sorted { $0.start < $1.start }.first { $0.end > Date() }?.id
-                        ForEach(t.sessions.sorted { $0.start < $1.start }) { s in
+                        ForEach(sorted) { s in
                             SessionRow(session: s, isNext: s.id == next)
                         }
 
-                        if let tip = t.tip {
-                            HStack(alignment: .top, spacing: 12) {
-                                IconTile(systemName: "lightbulb", size: 32)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(tip.title).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-                                    Text(tip.body).font(.caption2).foregroundStyle(JK.tertiary)
+                        Eyebrow(text: "To do")
+                        VStack(spacing: 0) {
+                            if let due = t.feedbackDue, !due.clients.isEmpty {
+                                NavigationLink { FeedbackDueView(due: due) } label: {
+                                    TodoRow(systemName: "text.bubble", title: "Feedback to write · \(due.clients.count)",
+                                            detail: "Week of \(Fmt.dayMonth(due.week))", link: true)
                                 }
+                                Divider().overlay(JK.stroke)
                             }
-                            .jkCard()
+                            if let n = t.checkinsToReview, n > 0 {
+                                TodoRow(systemName: "square.and.pencil", title: n == 1 ? "1 check-in to reply to" : "\(n) check-ins to reply to",
+                                        detail: "Client › Feedback", link: false)
+                                Divider().overlay(JK.stroke)
+                            }
+                            if t.unread > 0 {
+                                TodoRow(systemName: "bubble.left", title: t.unread == 1 ? "1 unread message" : "\(t.unread) unread messages",
+                                        detail: "Messages tab", link: false)
+                                Divider().overlay(JK.stroke)
+                            }
+                            ForEach(t.attention ?? [], id: \.self) { item in
+                                NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name) } label: {
+                                    TodoRow(systemName: item.kind == "checkin" ? "calendar.badge.exclamationmark" : "figure.walk",
+                                            title: item.client.name, detail: item.reason, link: true)
+                                }
+                                Divider().overlay(JK.stroke)
+                            }
+                            if (t.feedbackDue?.clients.isEmpty ?? true) && (t.checkinsToReview ?? 0) == 0 && t.unread == 0 && (t.attention ?? []).isEmpty {
+                                TodoRow(systemName: "checkmark", title: "All caught up", detail: "\(t.activeClients) active clients", link: false)
+                            }
                         }
+                        .jkCard(padding: 2)
                     }
                 }
                 .padding(16)
@@ -74,6 +90,53 @@ struct CoachTodayView: View {
         } catch {
             if !error.isCancellation { self.error = error.readable }
         }
+    }
+}
+
+private struct TodoRow: View {
+    let systemName: String
+    let title: String
+    let detail: String
+    let link: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(systemName: systemName, size: 32)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+            }
+            Spacer()
+            if link { Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary) }
+        }
+        .padding(10)
+    }
+}
+
+/// Clients whose feedback for the week isn't published yet.
+private struct FeedbackDueView: View {
+    let due: FeedbackDue
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                ScreenHeader(eyebrow: "Week of \(Fmt.dayMonth(due.week))", title: "Feedback to write")
+                ForEach(due.clients) { c in
+                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name, initialTab: .feedback) } label: {
+                        HStack(spacing: 12) {
+                            Avatar(initials: c.displayInitials, size: 32)
+                            Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                        .jkCard(padding: 12)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .jkScreen()
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -948,6 +1011,7 @@ struct CoachAccountView: View {
                         .jkCard(padding: 12)
                     }
                     CalendarSubscribeCard()
+                    WebSessionsRow()
                     Button("Sign out") { confirmSignOut = true }
                         .buttonStyle(ChromeButtonStyle())
                         .padding(.top, 12)
@@ -974,5 +1038,47 @@ struct CoachAccountView: View {
 
     private func initialsOf(_ name: String) -> String {
         name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+    }
+}
+
+/// Browsers signed in to the coach desk, and a button to sign them all out.
+private struct WebSessionsRow: View {
+    struct Sessions: Decodable { let count: Int; var latestSignIn: Date? }
+    @State private var sessions: Sessions?
+    @State private var busy = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(systemName: "desktopcomputer")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Coach desk on the web").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+            }
+            Spacer()
+            if (sessions?.count ?? 0) > 0 {
+                Button("Sign out all") { Task { await endAll() } }
+                    .font(.caption.weight(.semibold))
+                    .disabled(busy)
+            }
+        }
+        .jkCard(padding: 12)
+        .task { sessions = try? await APIClient.shared.get("/api/auth/web-sessions") }
+    }
+
+    private var detail: String {
+        guard let s = sessions else { return " " }
+        if s.count == 0 { return "Not signed in on any browser" }
+        let browsers = s.count == 1 ? "1 browser" : "\(s.count) browsers"
+        return browsers + (s.latestSignIn.map { " · last sign-in \(Fmt.relative($0))" } ?? "")
+    }
+
+    private func endAll() async {
+        busy = true
+        defer { busy = false }
+        struct Ended: Decodable { let ended: Int }
+        do {
+            let _: Ended = try await APIClient.shared.send("DELETE", "/api/auth/web-sessions")
+            sessions = Sessions(count: 0, latestSignIn: nil)
+        } catch {}
     }
 }

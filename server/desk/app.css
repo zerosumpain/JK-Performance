@@ -67,4 +67,17 @@ th{color:var(--muted);font-weight:500}
   .items .item .note{grid-column:1 / -1}
   .grid4,.grid2{grid-template-columns:1fr 1fr}
 }
+.link{background:none;border:none;padding:0;color:var(--text);text-decoration:underline;cursor:pointer}
+.restored{color:var(--muted);margin:4px 0}
+.thread{max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.bubble{max-width:78%;padding:8px 11px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.them{align-self:flex-start;background:var(--raised);border-bottom-left-radius:4px}
+.bubble.me{align-self:flex-end;background:var(--silver);color:#000;border-bottom-right-radius:4px}
+.bubble .when{font-size:10px;opacity:.6;margin-top:2px;text-align:right}
+.day-sep{align-self:center;font-size:11px;color:var(--faint);margin:8px 0 2px}
+.compose{min-height:70px;margin-top:6px}
+.narrow-only{display:none}
+.day-card dl{display:grid;grid-template-columns:1fr auto;gap:2px 12px;margin:6px 0 0;font-size:13px}
+.day-card dt{color:var(--muted)}.day-card dd{margin:0;text-align:right}
+@media (max-width:760px){.wide-only{display:none}.narrow-only{display:block}}
 .mt{margin-top:12px}.m0{margin:0}.mt-s{margin:6px 0 0}.side-eyebrow{margin:6px 10px}

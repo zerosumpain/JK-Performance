@@ -103,6 +103,26 @@ const fmtWhen = iso => {
   return d.toLocaleString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
+/** The London calendar day and clock time of an instant. */
+const londonParts = iso => {
+  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso));
+  const f = Object.fromEntries(p.map(x => [x.type, x.value]));
+  return { day: `${f.year}-${f.month}-${f.day}`, time: `${f.hour}:${f.minute}` };
+};
+
+// MARK: - Drafts kept in this browser (unsaved feedback survives a reload or sign-out)
+
+const draftKey = (clientId, week) => `jk.desk.draft.${clientId}.${week}`;
+function readDraft(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+}
+function writeDraft(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage off: nothing kept */ }
+}
+function clearDraft(key) {
+  try { localStorage.removeItem(key); } catch { /* storage off */ }
+}
+
 const PLAN_NAMES = { none: 'No plan', foundation: 'Foundation', performance: 'Performance', elite: 'Elite' };
 function flagText(f) {
   if (f === 'no-workout-yet') return 'No workout yet';
@@ -217,7 +237,7 @@ function renderClientList() {
       c.checkinDue && !(c.flags || []).includes('checkin-overdue') ? h('span', { class: 'chip' }, 'Check-in due') : null) : null)));
 }
 
-const TABS = [['feedback', 'Feedback'], ['plan', 'Plan'], ['checkins', 'Check-ins'], ['health', 'Health']];
+const TABS = [['feedback', 'Feedback'], ['plan', 'Plan'], ['messages', 'Messages'], ['checkins', 'Check-ins'], ['health', 'Health']];
 
 function renderClient() {
   const c = state.client;
@@ -233,7 +253,7 @@ function renderClient() {
     body);
   const seq = ++viewSeq;
   const fresh = () => seq === viewSeq;
-  ({ feedback: feedbackTab, plan: planTab, checkins: checkinsTab, health: healthTab })[state.tab](body, fresh);
+  ({ feedback: feedbackTab, plan: planTab, messages: messagesTab, checkins: checkinsTab, health: healthTab })[state.tab](body, fresh);
 }
 
 // MARK: - Feedback
@@ -266,15 +286,41 @@ async function feedbackTab(body, fresh) {
     if (s.activities) figures.push(stat(`${s.activities.count} · ${s.activities.minutes} min`, s.activities.types.length ? s.activities.types.join(', ') : 'Activities'));
   }
 
-  const summary = h('textarea', { id: 'summary', value: report.summary, placeholder: 'Training, consistency, how they felt…' });
-  const wins = h('textarea', { id: 'wins', value: report.wins, placeholder: 'Records, streaks, things done well' });
-  const focus = h('textarea', { id: 'focus', value: report.focus, placeholder: 'One to three things for the week ahead' });
+  // Unsaved text from this browser wins over the server's, with a way back.
+  const key = draftKey(c.id, state.week);
+  const server = { summary: report.summary, wins: report.wins, focus: report.focus };
+  const stored = readDraft(key);
+  const differs = v => !!v && ['summary', 'wins', 'focus'].some(k => (v[k] ?? '') !== server[k]);
+  const start = differs(stored) ? { summary: stored.summary ?? '', wins: stored.wins ?? '', focus: stored.focus ?? '' } : server;
+  if (stored && !differs(stored)) clearDraft(key);
+  const summary = h('textarea', { id: 'summary', value: start.summary, placeholder: 'Training, consistency, how they felt…' });
+  const wins = h('textarea', { id: 'wins', value: start.wins, placeholder: 'Records, streaks, things done well' });
+  const focus = h('textarea', { id: 'focus', value: start.focus, placeholder: 'One to three things for the week ahead' });
+  const restoredNote = h('p', { class: 'small restored' });
+  const showRestored = on => fill(restoredNote, on ? ['Restored unsaved text from this browser · ', h('button', {
+    class: 'link', onclick: () => {
+      summary.value = server.summary; wins.value = server.wins; focus.value = server.focus;
+      clearDraft(key); showRestored(false);
+    },
+  }, 'Discard')] : null);
+  showRestored(start !== server);
+  let draftTimer = null;
+  const keep = () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      const now = { summary: summary.value, wins: wins.value, focus: focus.value };
+      if (differs(now)) writeDraft(key, now); else { clearDraft(key); showRestored(false); }
+    }, 400);
+  };
+  for (const box of [summary, wins, focus]) box.addEventListener('input', keep);
   const status = h('div');
   const published = report.status === 'published';
   const save = async st => {
     fill(status, h('p', { class: 'muted small' }, 'Saving…'));
     try {
       await api('PUT', '/api/reports', { clientId: c.id, week: state.week, summary: summary.value, wins: wins.value, focus: focus.value, status: st });
+      clearTimeout(draftTimer);
+      clearDraft(key);
       if (!fresh()) return;
       await feedbackTab(body, fresh);
       const line = body.querySelector('#saved');
@@ -306,6 +352,7 @@ async function feedbackTab(body, fresh) {
         h('span', { class: 'chip' + (w.published ? ' on' : '') }, w.published ? 'Published' : 'Draft'))))
       : h('p', { class: 'small faint' }, 'Nothing planned yet. Add it on the Plan tab.'),
     h('div', { class: 'eyebrow' }, 'Your feedback'),
+    restoredNote,
     h('label', { for: 'summary' }, 'How the week went'), summary,
     h('label', { for: 'wins' }, 'Wins'), wins,
     h('label', { for: 'focus' }, 'Focus for next week'), focus,
@@ -525,21 +572,103 @@ async function healthTab(body, fresh) {
   if (!fresh()) return;
   if (!data.shared) {
     fill(body, h('div', { class: 'card' }, h('p', { class: 'm0' },
-      `${c.name} hasn't shared Apple Health with you. They can turn it on in the app: Account › Health & devices.`)));
+      `${c.name} hasn't shared Apple Health with you. They can turn it on in the app: Account › Apple Health.`)));
     return;
   }
   const cols = [['Steps', d => fmtNum(d.steps)], ['Sleep', d => fmtMinutes(d.sleepMinutes)], ['Resting HR', d => (d.restingHr === null ? '—' : Math.round(d.restingHr))],
     ['Active kcal', d => fmtNum(d.activeKcal)], ['Distance', d => (d.distanceKm === null ? '—' : `${d.distanceKm} km`)]];
   fill(body, 
     data.sharedSince ? h('p', { class: 'small faint' }, `Shared since ${fmtWhen(data.sharedSince)}`) : null,
-    h('div', { class: 'card scroll' }, h('table', null,
+    h('div', { class: 'card scroll wide-only' }, h('table', null,
       h('thead', null, h('tr', null, h('th', null, 'Day'), cols.map(([k]) => h('th', null, k)))),
       h('tbody', null, data.days.map(d => h('tr', null, h('td', null, fmtDay(d.date)), cols.map(([, f]) => h('td', null, String(f(d))))))))),
+    h('div', { class: 'narrow-only' }, data.days.slice().reverse().map(d => h('div', { class: 'card day-card' },
+      h('b', null, fmtDay(d.date)),
+      h('dl', null, cols.map(([k, f]) => [h('dt', null, k), h('dd', null, String(f(d)))]))))),
     h('div', { class: 'eyebrow' }, 'Activities · last 7 days'),
     data.activities.length ? h('ul', { class: 'list card' }, data.activities.map(a => h('li', { class: 'spread' },
       h('div', null, h('b', null, a.type), h('div', { class: 'small muted' }, [fmtWhen(a.start), a.source].filter(Boolean).join(' · '))),
       h('div', { class: 'small' }, [`${a.minutes} min`, a.distanceKm ? `${a.distanceKm} km` : null, a.kcal ? `${a.kcal} kcal` : null, a.avgHr ? `${a.avgHr} bpm` : null].filter(Boolean).join(' · ')))))
       : h('p', { class: 'muted' }, 'No activities recorded this week.'));
+}
+
+// MARK: - Messages
+
+const POLL_MS = 15_000;
+
+/** Unread clears on the server when the thread is read; keep the client list in step. */
+function markRead(c) {
+  const row = state.clients.find(x => x.id === c.id);
+  if (row && row.unread) { row.unread = 0; renderClientList(); }
+}
+
+async function messagesTab(body, fresh) {
+  const c = state.client;
+  fill(body, loading());
+  let msgs;
+  try {
+    msgs = (await api('GET', `/api/messages?${q({ clientId: c.id })}`)).messages;
+  } catch (err) {
+    if (fresh()) fill(body, errorLine(err));
+    return;
+  }
+  if (!fresh()) return;
+  markRead(c);
+
+  const thread = h('div', { class: 'thread card', role: 'log', 'aria-live': 'polite' });
+  const input = h('textarea', { class: 'compose', maxlength: '4000', placeholder: `Message ${c.name} (Ctrl+Enter to send)`, 'aria-label': `Message ${c.name}` });
+  const sendBtn = h('button', { class: 'btn primary', onclick: () => send() }, 'Send');
+  const status = h('div');
+
+  const draw = () => {
+    let lastDay = null;
+    const out = [];
+    for (const m of msgs) {
+      const { day, time } = londonParts(m.at);
+      if (day !== lastDay) { out.push(h('div', { class: 'day-sep' }, fmtDay(day))); lastDay = day; }
+      out.push(h('div', { class: 'bubble ' + (m.fromRole === 'coach' ? 'me' : 'them') },
+        h('div', { class: 'text' }, m.text),
+        h('div', { class: 'when' }, m.fromRole === 'coach' && m.readAt ? `${time} · Read` : time)));
+    }
+    fill(thread, out.length ? out : h('p', { class: 'muted m0' }, 'No messages yet.'));
+    thread.scrollTop = thread.scrollHeight;
+  };
+
+  async function send() {
+    const text = input.value.trim();
+    if (!text) return;
+    sendBtn.disabled = true;
+    fill(status);
+    try {
+      const m = await api('POST', '/api/messages', { clientId: c.id, text });
+      if (!msgs.some(x => x.id === m.id)) msgs.push(m);
+      input.value = '';
+      if (fresh()) draw();
+    } catch (err) {
+      fill(status, errorLine(err));
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+  });
+
+  fill(body, thread, input, h('div', { class: 'row mt' }, sendBtn), status);
+  draw();
+
+  // New messages while the tab is open. Leaving the tab (or the client) stops it.
+  const timer = setInterval(async () => {
+    if (!fresh()) { clearInterval(timer); return; }
+    const last = msgs.at(-1)?.at;
+    try {
+      const r = await api('GET', `/api/messages?${q({ clientId: c.id, after: last })}`);
+      if (!fresh()) { clearInterval(timer); return; }
+      const seen = new Set(msgs.map(m => m.id));
+      const added = r.messages.filter(m => !seen.has(m.id));
+      if (added.length) { msgs.push(...added); draw(); markRead(c); }
+    } catch { /* try again next tick; a 401 already went to sign-in */ }
+  }, POLL_MS);
 }
 
 // MARK: - Boot

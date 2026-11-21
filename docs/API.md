@@ -23,6 +23,7 @@ The contract between `server/` and the iPhone app. Change both sides together.
 | POST | `/api/auth/logout` | – | `{ok:true}` |
 | POST | `/api/auth/demo-client` (coach) | – | `Session` as the demo client (preview the client side) |
 | POST | `/api/auth/link-code` (coach) | – | `{code:"ABCD-EFGH", expiresAt, url}`: one use, 10 minutes, for the web desk |
+| GET / DELETE | `/api/auth/web-sessions` | – | `{count, latestSignIn}` / `{count:0, ended}`: the caller's desk browsers, or sign them all out |
 | POST | `/api/auth/link` | `{code}` (any case, dash optional) | `Session` with a 30-day web session; 401 bad/used/expired, 429 after 30 failures in 10 min |
 | GET | `/api/me` | – | `Me` |
 | PATCH | `/api/me` | `{name?}` | `Me` |
@@ -212,7 +213,7 @@ Health-filled habit values, the Health line in a client's detail) only while `sh
 
 ## Coach
 
-| GET | `/api/coach/today?date=` | – | `{date, sessions:[Booking], activeClients, totalClients, unread, tip:Guide}` |
+| GET | `/api/coach/today?date=` | – | `{date, sessions:[Booking], activeClients, totalClients, unread, tip:Guide, feedbackDue:{week, clients:[PersonRef]}, checkinsToReview, attention:[AttentionItem ≤5]}` |
 |---|---|---|---|
 | GET | `/api/coach/clients` | – | `{clients:[ClientSummary]}` |
 | GET | `/api/coach/clients/:id` | – | `{client:ClientSummary, health, nextWorkout:Workout?}` |

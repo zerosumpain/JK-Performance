@@ -46,6 +46,7 @@ struct AccountView: View {
                     VStack(spacing: 8) {
                         AccountLink(title: "Membership", detail: membershipDetail, systemName: "creditcard") { MembershipView() }
                         AccountLink(title: "Apple Health", detail: healthDetail, systemName: "heart") { HealthDevicesView() }
+                        remindersRow
                     }
 
                     Eyebrow(text: "Your data")
@@ -87,6 +88,30 @@ struct AccountView: View {
                 Text("This permanently erases your account and everything stored about you, photos included. It can't be undone.")
             }
         }
+    }
+
+    private var remindersRow: some View {
+        HStack(spacing: 12) {
+            IconTile(systemName: "bell")
+            Toggle(isOn: Binding(get: { Reminders.shared.enabled }, set: { on in
+                Task {
+                    if on {
+                        if !(await Reminders.shared.enable()) {
+                            error = "Notifications are off for JK Performance. Turn them on in Settings › Notifications."
+                        }
+                    } else {
+                        Reminders.shared.disable()
+                    }
+                }
+            })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reminders").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("An hour before sessions · check-in on Fridays").font(.caption2).foregroundStyle(JK.tertiary)
+                }
+            }
+            .tint(.green)
+        }
+        .jkCard(padding: 12)
     }
 
     private var healthDetail: String {

@@ -318,6 +318,18 @@ describe('Weekly feedback', () => {
   });
 });
 
+describe('Web desk sessions', () => {
+  test('a coach sees and ends their browser sessions; the phone stays signed in', async () => {
+    const { code } = await ok('POST', '/api/auth/link-code', { token: coach.token });
+    const web = await ok('POST', '/api/auth/link', { body: { code } });
+    assert.equal((await ok('GET', '/api/auth/web-sessions', { token: coach.token })).count, 1);
+    const r = await ok('DELETE', '/api/auth/web-sessions', { token: coach.token });
+    assert.equal(r.ended, 1);
+    assert.equal((await call('GET', '/api/me', { token: web.token })).status, 401);
+    assert.equal((await call('GET', '/api/me', { token: coach.token })).status, 200);
+  });
+});
+
 describe('Calendar feed', () => {
   test('a private iCalendar feed of sessions, revocable', async () => {
     const start = londonToUtc(addDays(londonDay(), 3), '18:30').toISOString(), end = londonToUtc(addDays(londonDay(), 3), '19:30').toISOString();

@@ -76,6 +76,7 @@ struct ClientHomeView: View {
         do { bookings = try await b.bookings } catch { if !error.isCancellation { failures.append(error.readable) } }
         reports = try? await r
         checkins = try? await c
+        await Reminders.shared.schedule(bookings: bookings ?? [], workouts: week ?? [])
         await session.refreshMe()
         error = failures.first
         loaded = week != nil || habits != nil || bookings != nil

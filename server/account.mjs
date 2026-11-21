@@ -82,6 +82,17 @@ function signInLink(_req, ctx) {
   return { token: issueSession(ctx.db, user.id, 'web'), me: meOut(ctx.db, user) };
 }
 
+/** Browsers signed in to the desk with this account, and a way to end them all. */
+function webSessions(_req, ctx) {
+  const row = ctx.db.prepare("SELECT COUNT(*) n, MAX(created_at) latest FROM sessions WHERE user_id=? AND kind='web' AND expires_at>?").get(ctx.user.id, Date.now());
+  return { count: row.n, latestSignIn: row.latest };
+}
+
+function endWebSessions(_req, ctx) {
+  const ended = ctx.db.prepare("DELETE FROM sessions WHERE user_id=? AND kind='web'").run(ctx.user.id).changes;
+  return { count: 0, ended };
+}
+
 function logout(req, ctx) {
   endSession(ctx.db, req);
   return { ok: true };
@@ -172,6 +183,8 @@ export function accountRoutes(r) {
   r.add('POST', '/api/auth/demo-client', demoClient);
   r.add('POST', '/api/auth/link-code', linkCode);
   r.add('POST', '/api/auth/link', signInLink, { public: true });
+  r.add('GET', '/api/auth/web-sessions', webSessions);
+  r.add('DELETE', '/api/auth/web-sessions', endWebSessions);
   r.add('GET', '/api/plans', plans, { public: true });
   r.add('GET', '/api/me', getMe);
   r.add('PATCH', '/api/me', patchMe);

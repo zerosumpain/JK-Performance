@@ -50,6 +50,9 @@ describe('Coach desk', () => {
     const js = await call('GET', '/desk/app.js');
     assert.equal(js.status, 200);
     assert.match(js.headers.get('content-type'), /javascript/);
+    // The desk has the Messages tab and keeps unsaved feedback per client and week.
+    assert.match(js.body, /\['messages', 'Messages'\]/);
+    assert.match(js.body, /jk\.desk\.draft\./);
     assert.equal((await call('GET', '/desk/app.css')).status, 200);
   });
 

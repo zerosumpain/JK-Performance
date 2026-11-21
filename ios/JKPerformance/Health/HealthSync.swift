@@ -113,6 +113,10 @@ final class HealthSync {
         guard optedIn, available, !syncing else { return }
         syncing = true
         defer { syncing = false }
+        // People who connected before workouts were read: iOS asks once for what's new.
+        if (try? await store.statusForAuthorizationRequest(toShare: [], read: readTypes)) == .shouldRequest {
+            try? await store.requestAuthorization(toShare: [], read: readTypes)
+        }
         do {
             let samples = try await collect()
             var stored = 0

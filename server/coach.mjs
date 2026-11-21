@@ -4,7 +4,7 @@ import { GUIDES, PLANS, planById } from './catalogue.mjs';
 import { dueWeek } from './daily.mjs';
 import { healthDay, healthVisible } from './health.mjs';
 import { day, oneOf } from './http.mjs';
-import { addDays, daysBetween, londonDay, londonToUtc } from './time.mjs';
+import { addDays, daysBetween, londonDay, londonToUtc, mondayOf } from './time.mjs';
 import { workoutOut } from './training.mjs';
 
 const INACTIVE_DAYS = 7;
@@ -51,6 +51,23 @@ function clientDetail(_req, ctx) {
   };
 }
 
+/** Clients who need a nudge: no workout lately, or the check-in overdue. */
+function attentionList(db, clients, today) {
+  const out = [];
+  for (const c of clients) {
+    const s = clientSummary(db, c, today);
+    for (const f of s.flags) {
+      const ref = { id: c.id, name: c.name, initials: s.initials };
+      if (f.startsWith('no-workout')) out.push({ client: ref, kind: 'inactive', reason: f === 'no-workout-yet' ? 'Has not logged a workout yet' : `No workout logged in ${f.match(/\d+/)[0]} days` });
+      if (f === 'checkin-overdue') out.push({ client: ref, kind: 'checkin', reason: 'Weekly check-in overdue' });
+    }
+  }
+  return out;
+}
+
+/** The week a coach would be writing up: last week until Friday, then this one. */
+export const feedbackWeek = (today = londonDay()) => (today >= addDays(mondayOf(today), 4) ? mondayOf(today) : addDays(mondayOf(today), -7));
+
 function today(_req, ctx) {
   requireCoach(ctx);
   const date = day(ctx.query.date, 'date', { optional: true }) ?? londonDay();
@@ -59,10 +76,18 @@ function today(_req, ctx) {
   const all = myClients(ctx.db, ctx.user);
   const unread = ctx.db.prepare("SELECT COUNT(*) n FROM messages m JOIN users u ON u.id = m.client_id WHERE u.coach_id=? AND m.from_role='client' AND m.read_at IS NULL").get(ctx.user.id).n;
   const n = Number(date.replaceAll('-', '')) % GUIDES.tips.length;
+  // The to-do list: whose feedback for the week isn't published, check-ins without a reply.
+  const week = feedbackWeek();
+  const published = new Set(ctx.db.prepare('SELECT client_id FROM reports WHERE week=? AND published_at IS NOT NULL').all(week).map(r => r.client_id));
+  const members = all.filter(c => c.plan !== 'none');
+  const toReview = ctx.db.prepare(`SELECT COUNT(*) n FROM checkins k JOIN users u ON u.id=k.client_id WHERE u.coach_id=? AND k.reviewed_at IS NULL`).get(ctx.user.id).n;
   return {
     date, sessions: sessions.map(b => bookingOut(ctx.db, b, ctx.user)),
-    activeClients: all.filter(c => c.plan !== 'none').length, totalClients: all.length, unread,
+    activeClients: members.length, totalClients: all.length, unread,
     tip: GUIDES.tips[n],
+    feedbackDue: { week, clients: members.filter(c => !published.has(c.id)).map(c => ({ id: c.id, name: c.name, initials: initials(c.name) })) },
+    checkinsToReview: toReview,
+    attention: attentionList(ctx.db, all, londonDay()).slice(0, 5),
   };
 }
 
@@ -98,15 +123,7 @@ function business(_req, ctx) {
   }
   const all = myClients(ctx.db, ctx.user);
   const rates = all.map(c => adherence(ctx.db, c.id, today)).filter(v => v !== null);
-  const attention = [];
-  for (const c of all) {
-    const s = clientSummary(ctx.db, c, today);
-    for (const f of s.flags) {
-      const ref = { id: c.id, name: c.name, initials: s.initials };
-      if (f.startsWith('no-workout')) attention.push({ client: ref, kind: 'inactive', reason: f === 'no-workout-yet' ? 'Has not logged a workout yet' : `No workout logged in ${f.match(/\d+/)[0]} days` });
-      if (f === 'checkin-overdue') attention.push({ client: ref, kind: 'checkin', reason: 'Weekly check-in overdue' });
-    }
-  }
+  const attention = attentionList(ctx.db, all, today);
   return {
     period, mrrPence: now.pence, mrrDeltaPct: then.pence ? Math.round((100 * (now.pence - then.pence)) / then.pence) : null, series,
     active: now.members, new: joined, churned,

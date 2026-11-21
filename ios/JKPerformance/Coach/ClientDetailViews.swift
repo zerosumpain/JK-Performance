@@ -9,7 +9,13 @@ struct ClientDetailView: View {
 
     let clientId: String
     let name: String
-    @State private var tab: Tab = .plan
+    @State private var tab: Tab
+
+    init(clientId: String, name: String, initialTab: Tab = .plan) {
+        self.clientId = clientId
+        self.name = name
+        _tab = State(initialValue: initialTab)
+    }
     @State private var detail: ClientDetail?
     @State private var error: String?
 

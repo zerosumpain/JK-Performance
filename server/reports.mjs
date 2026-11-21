@@ -4,6 +4,7 @@ import { day, fail, oneOf, str } from './http.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, mondayOf } from './time.mjs';
 import { workoutOut } from './training.mjs';
+import { feedbackWeek } from './coach.mjs';
 
 /**
  * Weekly feedback: the coach's written review of one client's week (Monday to
@@ -98,7 +99,7 @@ function list(_req, ctx) {
     reports: rows.map(r => reportOut(ctx.db, ctx.user, r, client)),
     unread: rows.filter(r => r.published_at && !r.read_at).length,
     // The week a coach would naturally be writing up: last week until Friday, then this one.
-    suggestedWeek: londonDay() >= addDays(mondayOf(londonDay()), 4) ? mondayOf(londonDay()) : addDays(mondayOf(londonDay()), -7),
+    suggestedWeek: feedbackWeek(),
   };
 }
 

@@ -10,25 +10,13 @@ struct WelcomeView: View {
     @State private var error: String?
     @State private var showCode = false
     @State private var code = ""
+    @State private var controlsShown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        ZStack {
+        BrandIntro()
         VStack(spacing: 0) {
-            Spacer()
-            VStack(spacing: 18) {
-                Text("JK")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(JK.text)
-                    .frame(width: 76, height: 76)
-                    .background(JK.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(JK.secondary, lineWidth: 1))
-                Text("PERFORMANCE")
-                    .font(.footnote.weight(.semibold))
-                    .tracking(5)
-                    .foregroundStyle(JK.text)
-                Text("Coaching, programming and accountability.")
-                    .font(.footnote)
-                    .foregroundStyle(JK.tertiary)
-            }
             Spacer()
             VStack(spacing: 10) {
                 if let error {
@@ -66,9 +54,16 @@ struct WelcomeView: View {
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
+            .opacity(controlsShown ? 1 : 0)
+            .offset(y: controlsShown ? 0 : 16)
+        }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(JK.bg.ignoresSafeArea())
+        .task {
+            if !reduceMotion { try? await Task.sleep(for: .seconds(BrandIntro.duration)) }
+            withAnimation(.easeOut(duration: 0.45)) { controlsShown = true }
+        }
         .alert("Sign in with a code", isPresented: $showCode) {
             TextField("Code", text: $code)
                 .textInputAutocapitalization(.never)

@@ -645,6 +645,14 @@ struct CoachToday: Decodable {
     var totalClients: Int?
     let unread: Int
     var tip: Guide?
+    var feedbackDue: FeedbackDue?
+    var checkinsToReview: Int?
+    var attention: [AttentionItem]?
+}
+
+struct FeedbackDue: Decodable {
+    let week: String
+    let clients: [PersonRef]
 }
 
 struct ClientSummary: Codable, Identifiable, Hashable {

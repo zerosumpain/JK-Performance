@@ -24,19 +24,38 @@ struct JKPerformanceApp: App {
 /// server-side.
 struct RootView: View {
     @Environment(AppSession.self) private var session
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The opening animation over the app; the Welcome screen plays its own.
+    @State private var intro: Bool
+
+    init() {
+        _intro = State(initialValue: APIClient.shared.token != nil)
+    }
 
     var body: some View {
-        Group {
-            switch session.phase {
-            case .signedOut:
-                WelcomeView()
-            case .restoring:
-                RestoringView()
-            case .signedIn:
-                if session.isCoach { CoachTabs() } else { ClientTabs() }
+        ZStack {
+            Group {
+                switch session.phase {
+                case .signedOut:
+                    WelcomeView()
+                case .restoring:
+                    RestoringView()
+                case .signedIn:
+                    if session.isCoach { CoachTabs() } else { ClientTabs() }
+                }
+            }
+            if intro && session.phase != .signedOut {
+                BrandIntro()
+                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
         .task { await session.restore() }
+        .task {
+            guard intro else { return }
+            try? await Task.sleep(for: .seconds(reduceMotion ? 0.4 : BrandIntro.duration + 0.3))
+            withAnimation(.easeOut(duration: 0.4)) { intro = false }
+        }
     }
 }
 
