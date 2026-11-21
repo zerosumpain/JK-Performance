@@ -167,6 +167,12 @@ final class APIClient {
         try await raw("GET", path, query: query, timeout: 60)
     }
 
+    /// Re-send a write the Outbox kept while offline. The reply isn't needed:
+    /// the screen re-reads the workout.
+    func replay(_ method: String, _ path: String, body: Data?) async throws {
+        _ = try await raw(method, path, body: body, contentType: body == nil ? nil : "application/json", fromOutbox: true)
+    }
+
     private func decode<T: Decodable>(_ type: T.Type, _ data: Data, path: String) throws -> T {
         do {
             return try Self.decoder.decode(T.self, from: data)
@@ -176,7 +182,8 @@ final class APIClient {
     }
 
     private func raw(_ method: String, _ path: String, query: [String: String?] = [:], body: Data? = nil,
-                     contentType: String? = nil, timeout: TimeInterval = 30) async throws -> Data {
+                     contentType: String? = nil, timeout: TimeInterval = 30,
+                     fromOutbox: Bool = false) async throws -> Data {
         guard var parts = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw APIError.config("The server address is not valid.")
         }
@@ -196,7 +203,11 @@ final class APIClient {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No reply from the server.") }
-        if (200..<300).contains(http.statusCode) { return data }
+        if (200..<300).contains(http.statusCode) {
+            // A reply means the network is back: send anything kept offline.
+            if !fromOutbox { Outbox.shared.kick() }
+            return data
+        }
 
         let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
         if http.statusCode == 401, sentToken != nil, !path.hasPrefix("/api/auth/") {

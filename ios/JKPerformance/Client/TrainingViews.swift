@@ -131,6 +131,9 @@ struct WorkoutDetailLoader: View {
     }
 
     private func load() async {
+        if Outbox.shared.hasPending(workoutId: workoutId) { await Outbox.shared.flush() }
+        // Still queued (offline): keep showing what was logged here rather than the server's older copy.
+        if workout != nil, Outbox.shared.hasPending(workoutId: workoutId) { return }
         do {
             workout = try await APIClient.shared.get("/api/workouts/\(seg(workoutId))")
             error = nil
@@ -179,6 +182,7 @@ struct WorkoutBody: View {
             .buttonStyle(.plain)
         }
 
+        OfflineBanner()
         if let error { ErrorBanner(message: error) }
         if let done = workout.completedAt {
             Label("Completed \(Fmt.relative(done))", systemImage: "checkmark.seal")
@@ -200,9 +204,15 @@ struct WorkoutBody: View {
     private func complete() async {
         completing = true
         defer { completing = false }
+        let path = "/api/workouts/\(seg(workout.id))/complete"
         do {
-            workout = try await APIClient.shared.send("POST", "/api/workouts/\(seg(workout.id))/complete", body: NoteInput(note: nil))
+            workout = try await APIClient.shared.send("POST", path, body: NoteInput(note: nil))
             error = nil
+        } catch let failure where Outbox.isOffline(failure) {
+            // Queued after the sets logged offline, so the server sees them first.
+            Outbox.shared.enqueue("POST", path, body: NoteInput(note: nil))
+            workout.completedAt = Date()
+            self.error = nil
         } catch {
             self.error = error.readable
         }
@@ -497,6 +507,7 @@ struct WorkoutLoggerView: View {
                     setTable(item)
                     restTimer
                     rpeRow
+                    OfflineBanner()
                     if let error { ErrorBanner(message: error) }
                     HStack(spacing: 10) {
                         if index + 1 < ordered.count {
@@ -567,11 +578,19 @@ struct WorkoutLoggerView: View {
         }
         busy = n
         defer { busy = nil }
+        let path = setPath(item, n)
+        let input = SetInput(load: load, reps: count, rpe: rpe.map(Double.init))
         do {
-            let fresh: Workout = try await APIClient.shared.send(
-                "PUT", "/api/workouts/\(seg(workout.id))/items/\(seg(item.id))/sets/\(n)",
-                body: SetInput(load: load, reps: count, rpe: rpe.map(Double.init)))
+            let fresh: Workout = try await APIClient.shared.send("PUT", path, body: input)
             apply(fresh)
+            rest = 90
+            resting = true
+        } catch let failure where Outbox.isOffline(failure) {
+            // No signal: keep the set on the phone and show it as logged now.
+            Outbox.shared.enqueue("PUT", path, body: input)
+            var local = workout
+            local.setLogged(itemId: item.id, LoggedSet(number: n, load: load, reps: count, rpe: input.rpe, at: Date()), number: n)
+            apply(local)
             rest = 90
             resting = true
         } catch {
@@ -583,13 +602,22 @@ struct WorkoutLoggerView: View {
         guard let item else { return }
         busy = n
         defer { busy = nil }
+        let path = setPath(item, n)
         do {
-            let fresh: Workout = try await APIClient.shared.send(
-                "DELETE", "/api/workouts/\(seg(workout.id))/items/\(seg(item.id))/sets/\(n)")
+            let fresh: Workout = try await APIClient.shared.send("DELETE", path)
             apply(fresh)
+        } catch let failure where Outbox.isOffline(failure) {
+            Outbox.shared.enqueue("DELETE", path)
+            var local = workout
+            local.setLogged(itemId: item.id, nil, number: n)
+            apply(local)
         } catch {
             self.error = error.readable
         }
+    }
+
+    private func setPath(_ item: WorkoutItem, _ n: Int) -> String {
+        "/api/workouts/\(seg(workout.id))/items/\(seg(item.id))/sets/\(n)"
     }
 
     private func apply(_ fresh: Workout) {
@@ -656,7 +684,16 @@ struct WorkoutLoggerView: View {
             ForEach(Array(1...max(item.sets, 1)), id: \.self) { n in
                 let done = logged(n) != nil
                 HStack {
-                    Text("\(n)").font(.subheadline.weight(.semibold)).frame(width: 34, alignment: .leading)
+                    HStack(spacing: 3) {
+                        Text("\(n)").font(.subheadline.weight(.semibold))
+                        if done && Outbox.shared.isPending("PUT", setPath(item, n)) {
+                            Image(systemName: "icloud.and.arrow.up")
+                                .font(.system(size: 9))
+                                .foregroundStyle(JK.tertiary)
+                                .accessibilityLabel("Waiting to send")
+                        }
+                    }
+                    .frame(width: 34, alignment: .leading)
                     Text(item.previous ?? "–").font(.caption).foregroundStyle(JK.tertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     TextField("kg", text: loadBinding(n, item))
@@ -744,5 +781,45 @@ struct SmallPillStyle: ButtonStyle {
             .background(JK.cardRaised, in: Capsule())
             .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
+// MARK: - Offline
+
+extension Workout {
+    /// Set (or, with nil, clear) one logged set locally, as the server would.
+    mutating func setLogged(itemId: String, _ set: LoggedSet?, number: Int) {
+        guard let i = items.firstIndex(where: { $0.id == itemId }) else { return }
+        items[i].logged.removeAll { $0.number == number }
+        if let set { items[i].logged.append(set) }
+        items[i].logged.sort { $0.number < $1.number }
+    }
+}
+
+/// Quiet note while sets logged offline are waiting to send; and the one
+/// error worth showing if the server later refused one.
+struct OfflineBanner: View {
+    private var outbox: Outbox { Outbox.shared }
+
+    var body: some View {
+        if outbox.pendingCount > 0 {
+            Label(text, systemImage: "icloud.slash")
+                .font(.caption2)
+                .foregroundStyle(JK.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(JK.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+        }
+        if let error = outbox.lastError {
+            ErrorBanner(message: error)
+                .onTapGesture { outbox.lastError = nil }
+        }
+    }
+
+    private var text: String {
+        let sets = outbox.pendingSets
+        if sets == 0 { return "Offline · your changes will send when you're back online" }
+        return "Offline · \(sets) \(sets == 1 ? "set" : "sets") will send when you're back online"
     }
 }

@@ -37,6 +37,7 @@ final class AppSession {
         do {
             let fresh: Me = try await api.get("/api/me")
             me = fresh
+            Outbox.shared.adopt(userId: fresh.id)
             phase = .signedIn
         } catch APIError.unauthorized {
             clear()
@@ -76,6 +77,7 @@ final class AppSession {
 
     private func adopt(_ session: Session) {
         api.setToken(session.token)
+        Outbox.shared.adopt(userId: session.me.id)
         me = session.me
         restoreError = nil
         phase = .signedIn
@@ -111,6 +113,9 @@ final class AppSession {
     }
 
     func signOut() async {
+        // Last chance to send sets logged offline. Anything still queued stays
+        // on the phone for this person and goes when they sign back in.
+        await Outbox.shared.flush()
         let _: OK? = try? await api.send("POST", "/api/auth/logout")
         clear()
     }
