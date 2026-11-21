@@ -2,9 +2,10 @@ import Foundation
 import Observation
 import UserNotifications
 
-/// Reminders scheduled on the phone itself (no server, no push): the weekly
-/// check-in on Friday evening, and an hour before each session or timed
-/// workout in the next fortnight. Rescheduled whenever Home loads.
+/// Reminders scheduled on the phone itself: the weekly check-in on Friday
+/// evening, and an hour before each session or timed workout in the next
+/// fortnight. Rescheduled whenever Home loads. `enabled` is also the switch
+/// for push notifications from the server (see `Push`).
 @Observable
 @MainActor
 final class Reminders {
@@ -20,17 +21,28 @@ final class Reminders {
     init() { enabled = UserDefaults.standard.bool(forKey: Self.key) }
 
     /// Asks iOS once; returns whether reminders are now on.
+    /// Also turns on push from the server (messages, feedback, bookings).
     @discardableResult
-    func enable() async -> Bool {
+    func enable(checkIn: Bool = true) async -> Bool {
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         set(granted)
-        if granted { scheduleCheckIn() }
+        if granted {
+            if checkIn { scheduleCheckIn() }
+            await Push.shared.registerIfAllowed()
+        }
         return granted
+    }
+
+    /// Ask in context (after a first message) if they've never been asked.
+    func offerIfUndecided(checkIn: Bool) async {
+        guard !enabled, await center.notificationSettings().authorizationStatus == .notDetermined else { return }
+        await enable(checkIn: checkIn)
     }
 
     func disable() {
         set(false)
         clearPending()
+        Task { await Push.shared.turnOff() }
     }
 
     func clearPending() {

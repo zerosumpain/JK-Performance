@@ -21,6 +21,13 @@ export function loadConfig(env = process.env) {
     payments: env.PAYMENTS === 'on',
     demoCode: code('DEMO_CODE', env.DEMO_CODE),
     demoCoachCode: code('DEMO_COACH_CODE', env.DEMO_COACH_CODE),
+    // One Apple key (.p8) signs push notifications and Sign in with Apple's
+    // token calls. Without all three, push is off and revocation is skipped.
+    apple: env.APPLE_KEY_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_FILE
+      ? { keyId: env.APPLE_KEY_ID, teamId: env.APPLE_TEAM_ID, keyFile: env.APPLE_KEY_FILE }
+      : null,
+    // Tests swap this for a recorder; see apple.mjs.
+    pushTransport: null,
     logRequests: env.LOG_REQUESTS === '1',
     fetchImpl: fetch,
   };

@@ -1,5 +1,6 @@
 import { clientFor, requireCoach, requireMember } from './access.mjs';
 import { fail, instant, str } from './http.mjs';
+import { notify } from './push.mjs';
 import { newId, nowIso } from './store.mjs';
 
 const messageOut = m => ({ id: m.id, clientId: m.client_id, fromId: m.from_id, fromRole: m.from_role, text: m.text, workoutId: m.workout_id, at: m.at, readAt: m.read_at });
@@ -34,7 +35,10 @@ function send(_req, ctx) {
   const id = newId('m');
   ctx.db.prepare('INSERT INTO messages (id, client_id, from_id, from_role, text, workout_id, at) VALUES (?,?,?,?,?,?,?)')
     .run(id, client.id, ctx.user.id, ctx.user.role, str(ctx.body.text ?? (workoutId ? 'Plan updated' : null), 'text', { max: 4000 }), workoutId, nowIso());
-  return messageOut(ctx.db.prepare('SELECT * FROM messages WHERE id=?').get(id));
+  const m = ctx.db.prepare('SELECT * FROM messages WHERE id=?').get(id);
+  notify(ctx.db, ctx.config, ctx.user.role === 'coach' ? client.id : client.coach_id,
+    { title: ctx.user.name, body: m.text, kind: 'message', id, clientId: client.id });
+  return messageOut(m);
 }
 
 export function messageRoutes(r) {

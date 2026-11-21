@@ -87,6 +87,7 @@ struct WelcomeView: View {
                 error = "Apple didn't return an identity token. Try again."
                 return
             }
+            let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
             let given = credential.fullName?.givenName
             let family = credential.fullName?.familyName
             busy = true
@@ -94,7 +95,7 @@ struct WelcomeView: View {
             Task {
                 defer { busy = false }
                 do {
-                    try await session.signInWithApple(identityToken: token, givenName: given, familyName: family)
+                    try await session.signInWithApple(identityToken: token, authorizationCode: code, givenName: given, familyName: family)
                 } catch {
                     self.error = error.readable
                 }

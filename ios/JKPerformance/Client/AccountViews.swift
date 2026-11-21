@@ -105,8 +105,8 @@ struct AccountView: View {
                 }
             })) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Reminders").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("An hour before sessions · check-in on Fridays").font(.caption2).foregroundStyle(JK.tertiary)
+                    Text("Notifications").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Replies and feedback · an hour before sessions · Friday check-in").font(.caption2).foregroundStyle(JK.tertiary)
                 }
             }
             .tint(.green)

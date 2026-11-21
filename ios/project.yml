@@ -36,11 +36,13 @@ targets:
         NSCalendarsWriteOnlyAccessUsageDescription: 'JK Performance adds the sessions you choose to your calendar.'
         # Required at upload whenever the HealthKit entitlement is present, even though the app only reads.
         NSHealthUpdateUsageDescription: 'JK Performance does not write to Apple Health. It only reads the data listed above, with your permission.'
-    # Sign in with Apple is the account; HealthKit is read-only. Both must be
+    # Sign in with Apple is the account; HealthKit is read-only; push. All must be
     # ticked on the App ID for TestFlight signing to carry them.
     entitlements:
       path: JKPerformance/JKPerformance.entitlements
       properties:
         com.apple.developer.applesignin: [Default]
+        # Push from the server; TestFlight/App Store builds use production APNs.
+        aps-environment: production
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []

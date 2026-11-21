@@ -9,6 +9,7 @@ import { createRouter, readBody, sendJson } from './http.mjs';
 import { messageRoutes } from './messages.mjs';
 import { pageRoutes } from './pages.mjs';
 import { progressRoutes } from './progress.mjs';
+import { pushRoutes } from './push.mjs';
 import { calendarRoutes } from './calendar.mjs';
 import { deskRoutes } from './desk.mjs';
 import { reportRoutes } from './reports.mjs';
@@ -18,7 +19,7 @@ const JSON_LIMIT = 1024 * 1024;
 
 export function createApp(db, config) {
   const router = createRouter();
-  for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes]) add(router);
+  for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes, pushRoutes]) add(router);
 
   return createServer(async (req, res) => {
     const started = Date.now();

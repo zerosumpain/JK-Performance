@@ -1010,6 +1010,7 @@ struct CoachAccountView: View {
                         }
                         .jkCard(padding: 12)
                     }
+                    CoachNotificationsRow()
                     CalendarSubscribeCard()
                     WebSessionsRow()
                     Button("Sign out") { confirmSignOut = true }
@@ -1080,5 +1081,36 @@ private struct WebSessionsRow: View {
             let _: Ended = try await APIClient.shared.send("DELETE", "/api/auth/web-sessions")
             sessions = Sessions(count: 0, latestSignIn: nil)
         } catch {}
+    }
+}
+
+/// Push for the coach: client messages, check-ins, bookings made or cancelled.
+private struct CoachNotificationsRow: View {
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                IconTile(systemName: "bell")
+                Toggle(isOn: Binding(get: { Reminders.shared.enabled }, set: { on in
+                    Task {
+                        if on {
+                            error = await Reminders.shared.enable(checkIn: false)
+                                ? nil : "Notifications are off for JK Performance. Turn them on in Settings › Notifications."
+                        } else {
+                            Reminders.shared.disable()
+                        }
+                    }
+                })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notifications").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        Text("Client messages, check-ins and bookings").font(.caption2).foregroundStyle(JK.tertiary)
+                    }
+                }
+                .tint(.green)
+            }
+            if let error { Text(error).font(.caption2).foregroundStyle(JK.secondary) }
+        }
+        .jkCard(padding: 12)
     }
 }

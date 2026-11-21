@@ -18,16 +18,16 @@ The contract between `server/` and the iPhone app. Change both sides together.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | `/api/auth/apple` | `{identityToken, fullName?: {givenName?, familyName?}}` | `Session` |
+| POST | `/api/auth/apple` | `{identityToken, authorizationCode?, fullName?: {givenName?, familyName?}}` | `Session`. The code is swapped for an Apple refresh token, kept only to revoke on deletion |
 | POST | `/api/auth/code` | `{code}` (App Review demo / local testing; 404 when unset) | `Session` |
-| POST | `/api/auth/logout` | – | `{ok:true}` |
+| POST | `/api/auth/logout` | `{pushToken?}` (that phone's push token is removed too) | `{ok:true}` |
 | POST | `/api/auth/demo-client` (coach) | – | `Session` as the demo client (preview the client side) |
 | POST | `/api/auth/link-code` (coach) | – | `{code:"ABCD-EFGH", expiresAt, url}`: one use, 10 minutes, for the web desk |
 | GET / DELETE | `/api/auth/web-sessions` | – | `{count, latestSignIn}` / `{count:0, ended}`: the caller's desk browsers, or sign them all out |
 | POST | `/api/auth/link` | `{code}` (any case, dash optional) | `Session` with a 30-day web session; 401 bad/used/expired, 429 after 30 failures in 10 min |
 | GET | `/api/me` | – | `Me` |
 | PATCH | `/api/me` | `{name?}` | `Me` |
-| DELETE | `/api/me` | – | `{ok:true}` (erases the account and all its data, photos included) |
+| DELETE | `/api/me` | – | `{ok:true, appleRevoked}` (erases the account and all its data, photos included, then revokes Sign in with Apple) |
 | GET | `/api/me/export` | – | JSON download of everything stored about the caller |
 | POST | `/api/me/membership` | `{plan}` (testing only, while `PAYMENTS=off`) | `Me` |
 | GET | `/api/plans` | – | `{plans:[Plan]}` |
@@ -263,6 +263,20 @@ client and, the first time, posts a message to their thread. Written from the ap
 | GET | `/cal/<token>.ics` (no auth) | – | iCalendar: the person's bookings, joined classes and timed workouts (a coach: all their bookings), 30 days back onwards |
 
 Only the token's hash is stored. Single events are added on the phone with EventKit and need no server call.
+
+## Push notifications
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| PUT | `/api/push/token` | `{token: hex APNs token, env: "production"\|"sandbox"}` | `{ok:true, enabled}` (`enabled` false when the server has no Apple key) |
+| DELETE | `/api/push/token?token=` | – | `{ok:true}`; no `token` removes all of the caller's phones |
+
+Sent (never to demo accounts; never waits on Apple): a message → the other side; first publish of weekly feedback → the client;
+first check-in of the week → the coach; a 1:1 booked or cancelled → the other side. Payload: `aps.alert {title, body}`,
+`kind` (`message`/`report`/`checkin`/`booking`), `id?`, `clientId?`. Apple's 410 / BadDeviceToken drops the token.
+
+Server env: `APPLE_KEY_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_FILE` (the .p8, mounted read-only). Without them push is off and
+deletion skips the Apple revoke.
 
 ## Demo accounts
 

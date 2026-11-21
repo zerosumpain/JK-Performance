@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct JKPerformanceApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var session = AppSession()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -52,6 +53,10 @@ struct RootView: View {
             }
         }
         .task { await session.restore() }
+        .onChange(of: session.phase, initial: true) { _, phase in
+            // Each launch and sign-in: refresh this phone's push token on the server.
+            if phase == .signedIn { Task { await Push.shared.registerIfAllowed() } }
+        }
         .task {
             guard intro else { return }
             try? await Task.sleep(for: .seconds(reduceMotion ? 0.4 : BrandIntro.duration + 0.3))
@@ -90,38 +95,48 @@ struct ClientTabs: View {
     @Environment(AppSession.self) private var session
 
     var body: some View {
-        TabView {
+        TabView(selection: Bindable(TabRouter.shared).client) {
             ClientHomeView()
                 .tabItem { Label("Home", systemImage: "house") }
+                .tag(TabRouter.Client.home)
             WorkoutPlanView()
                 .tabItem { Label("Plan", systemImage: "dumbbell") }
+                .tag(TabRouter.Client.plan)
             MyCalendarView()
                 .tabItem { Label("Calendar", systemImage: "calendar") }
+                .tag(TabRouter.Client.calendar)
             NavigationStack {
                 MessagesThreadView(clientId: nil,
                                    otherName: session.me?.coach?.name ?? "Your coach",
                                    subtitle: "Usually replies within an hour")
             }
             .tabItem { Label("Messages", systemImage: "bubble.left") }
+            .tag(TabRouter.Client.messages)
             AccountView()
                 .tabItem { Label("Account", systemImage: "person") }
+                .tag(TabRouter.Client.account)
         }
     }
 }
 
 struct CoachTabs: View {
     var body: some View {
-        TabView {
+        TabView(selection: Bindable(TabRouter.shared).coach) {
             CoachTodayView()
                 .tabItem { Label("Today", systemImage: "clock") }
+                .tag(TabRouter.Coach.today)
             ClientsView()
                 .tabItem { Label("Clients", systemImage: "person.2") }
+                .tag(TabRouter.Coach.clients)
             ScheduleView()
                 .tabItem { Label("Schedule", systemImage: "calendar") }
+                .tag(TabRouter.Coach.schedule)
             CoachThreadsView()
                 .tabItem { Label("Messages", systemImage: "bubble.left") }
+                .tag(TabRouter.Coach.messages)
             GuidesView()
                 .tabItem { Label("Guides", systemImage: "book") }
+                .tag(TabRouter.Coach.guides)
         }
     }
 }
