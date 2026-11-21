@@ -1,6 +1,7 @@
 import { clientFor, requireCoach, requireMember } from './access.mjs';
 import { healthDay, healthVisible } from './health.mjs';
 import { day, fail, num, oneOf, str } from './http.mjs';
+import { notify } from './push.mjs';
 import { newId, nowIso } from './store.mjs';
 import { addDays, londonDay, mondayOf } from './time.mjs';
 
@@ -166,10 +167,12 @@ function submitCheckin(_req, ctx) {
   const pain = Array.isArray(b.pain) ? b.pain.slice(0, 8).map((p, i) => str(p, `pain[${i}]`, { max: 30 })) : [];
   const week = dueWeek();
   const id = newId('c');
+  const first = !ctx.db.prepare('SELECT 1 FROM checkins WHERE client_id=? AND week=?').get(ctx.user.id, week);
   ctx.db.prepare(`INSERT INTO checkins (id, client_id, week, energy, sleep, pain, note, submitted_at) VALUES (?,?,?,?,?,?,?,?)
     ON CONFLICT(client_id, week) DO UPDATE SET energy=excluded.energy, sleep=excluded.sleep, pain=excluded.pain, note=excluded.note, submitted_at=excluded.submitted_at`).run(
     id, ctx.user.id, week, num(b.energy, 'energy', { min: 1, max: 5, int: true }), num(b.sleep, 'sleep', { min: 1, max: 5, int: true }),
     JSON.stringify(pain), str(b.note ?? '', 'note', { max: 2000, min: 0 }), nowIso());
+  if (first) notify(ctx.db, ctx.config, ctx.user.coach_id, { title: ctx.user.name, body: 'Sent their weekly check-in.', kind: 'checkin', clientId: ctx.user.id });
   return checkinOut(ctx.db.prepare('SELECT * FROM checkins WHERE client_id=? AND week=?').get(ctx.user.id, week));
 }
 

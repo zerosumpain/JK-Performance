@@ -75,6 +75,47 @@ final class HealthSync {
         }
     }
 
+    /// What a read of this phone found, kept on the phone (the demo account).
+    struct Preview {
+        let stepDays: Int
+        let averageSteps: Int?
+        let sleepNights: Int
+        let averageSleepMinutes: Int?
+        let latestWeight: Double?
+        let workouts: [HealthActivity]
+        var isEmpty: Bool { stepDays == 0 && sleepNights == 0 && latestWeight == nil && workouts.isEmpty }
+    }
+
+    /// The demo account is shared (App Review signs in to it too), so nothing
+    /// from a real phone may reach it. This runs the real permission sheet
+    /// and the real read of the last 30 days, and shows the result on the
+    /// phone only: no upload, no opt-in, no background sync.
+    func preview() async -> Preview? {
+        guard available else {
+            lastError = "Apple Health isn't available on this device."
+            return nil
+        }
+        do {
+            try await store.requestAuthorization(toShare: [], read: readTypes)
+            let samples = try await collect()
+            let acts = try await workouts()
+            let steps = samples.filter { $0.kind == "steps" && $0.value > 0 }
+            let sleep = samples.filter { $0.kind == "sleep" && $0.value > 0 }
+            let weight = samples.filter { $0.kind == "weight" }.max { $0.start < $1.start }
+            lastError = nil
+            return Preview(
+                stepDays: steps.count,
+                averageSteps: steps.isEmpty ? nil : Int(steps.map(\.value).reduce(0, +) / Double(steps.count)),
+                sleepNights: sleep.count,
+                averageSleepMinutes: sleep.isEmpty ? nil : Int(sleep.map(\.value).reduce(0, +) / Double(sleep.count)),
+                latestWeight: weight?.value,
+                workouts: acts.sorted { $0.start > $1.start })
+        } catch {
+            lastError = error.readable
+            return nil
+        }
+    }
+
     /// The coach-sharing yes/no. Takes effect on the server at once.
     @discardableResult
     func setSharing(_ share: Bool) async throws -> HealthDevices {

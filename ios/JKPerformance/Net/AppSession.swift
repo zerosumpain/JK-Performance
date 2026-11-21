@@ -37,6 +37,7 @@ final class AppSession {
         do {
             let fresh: Me = try await api.get("/api/me")
             me = fresh
+            Outbox.shared.adopt(userId: fresh.id)
             phase = .signedIn
         } catch APIError.unauthorized {
             clear()
@@ -59,13 +60,16 @@ final class AppSession {
         }
         var identityToken: String
         var fullName: Name?
+        /// Lets the server revoke Sign in with Apple if the account is deleted.
+        var authorizationCode: String?
     }
 
-    func signInWithApple(identityToken: String, givenName: String?, familyName: String?) async throws {
+    func signInWithApple(identityToken: String, authorizationCode: String?, givenName: String?, familyName: String?) async throws {
         let name: AppleBody.Name? = (givenName == nil && familyName == nil)
             ? nil : AppleBody.Name(givenName: givenName, familyName: familyName)
         let session: Session = try await api.send("POST", "/api/auth/apple",
-                                                  body: AppleBody(identityToken: identityToken, fullName: name))
+                                                  body: AppleBody(identityToken: identityToken, fullName: name,
+                                                                  authorizationCode: authorizationCode))
         adopt(session)
     }
 
@@ -76,6 +80,7 @@ final class AppSession {
 
     private func adopt(_ session: Session) {
         api.setToken(session.token)
+        Outbox.shared.adopt(userId: session.me.id)
         me = session.me
         restoreError = nil
         phase = .signedIn
@@ -111,7 +116,11 @@ final class AppSession {
     }
 
     func signOut() async {
-        let _: OK? = try? await api.send("POST", "/api/auth/logout")
+        // Last chance to send sets logged offline. Anything still queued stays
+        // on the phone for this person and goes when they sign back in.
+        await Outbox.shared.flush()
+        // The phone's push token leaves with the session.
+        let _: OK? = try? await api.send("POST", "/api/auth/logout", body: ["pushToken": Push.shared.token])
         clear()
     }
 

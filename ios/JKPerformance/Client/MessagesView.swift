@@ -128,6 +128,8 @@ struct MessagesThreadView: View {
             draft = ""
             sendError = nil
             messages = (messages ?? []) + [sent]
+            // The natural moment to ask: they'll want to know when the reply comes.
+            await Reminders.shared.offerIfUndecided(checkIn: clientId == nil)
         } catch {
             sendError = error.readable
         }

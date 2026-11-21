@@ -124,12 +124,18 @@ export function openStore(path) {
     CREATE TABLE IF NOT EXISTS link_codes (
       hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at INTEGER NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      env TEXT NOT NULL CHECK (env IN ('production','sandbox')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS push_tokens_user ON push_tokens(user_id);
   `);
   // Columns added after the first release. SQLite has no ADD COLUMN IF NOT EXISTS.
   addColumn(db, 'users', 'health_share', 'INTEGER NOT NULL DEFAULT 0');
   addColumn(db, 'users', 'health_share_at', 'TEXT');
   addColumn(db, 'users', 'cal_feed_hash', 'TEXT');
   addColumn(db, 'sessions', 'kind', "TEXT NOT NULL DEFAULT 'app'");
+  // Sign in with Apple refresh token, kept only so deleting the account can revoke it (Apple requires that).
+  addColumn(db, 'users', 'apple_refresh', 'TEXT');
   return db;
 }
 

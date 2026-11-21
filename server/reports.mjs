@@ -1,6 +1,7 @@
 import { clientFor, requireCoach } from './access.mjs';
 import { activitiesBetween, healthDay, healthVisible } from './health.mjs';
 import { day, fail, oneOf, str } from './http.mjs';
+import { notify } from './push.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, mondayOf } from './time.mjs';
 import { workoutOut } from './training.mjs';
@@ -132,7 +133,8 @@ function save(_req, ctx) {
   const summary = text(b.summary, 'summary'), wins = text(b.wins, 'wins'), focus = text(b.focus, 'focus');
   if (status === 'published' && !summary && !wins && !focus) fail(400, 'Write something before publishing');
   const now = nowIso();
-  return tx(ctx.db, () => {
+  let firstPublish = false;
+  const out = tx(ctx.db, () => {
     const prior = ctx.db.prepare('SELECT * FROM reports WHERE client_id=? AND week=?').get(client.id, week);
     const publishedAt = status === 'published' ? prior?.published_at ?? now : null;
     if (prior) {
@@ -144,12 +146,17 @@ function save(_req, ctx) {
     }
     // First publish: a line in the client's messages so they know it's there.
     if (status === 'published' && !prior?.published_at) {
+      firstPublish = true;
       ctx.db.prepare("INSERT INTO messages (id, client_id, from_id, from_role, text, at) VALUES (?,?,?,'coach',?,?)")
         .run(newId('m'), client.id, ctx.user.id, `Your feedback for the week of ${weekLabel(week)} is ready. Home › Feedback.`, now);
     }
     const r = ctx.db.prepare('SELECT * FROM reports WHERE client_id=? AND week=?').get(client.id, week);
     return reportOut(ctx.db, ctx.user, r, client, { full: true });
   });
+  if (firstPublish) {
+    notify(ctx.db, ctx.config, client.id, { title: 'Your weekly feedback', body: `${ctx.user.name} has written up your week of ${weekLabel(week)}.`, kind: 'report', id: out.id, clientId: client.id });
+  }
+  return out;
 }
 
 function remove(_req, ctx) {

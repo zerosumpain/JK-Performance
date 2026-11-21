@@ -105,8 +105,8 @@ struct AccountView: View {
                 }
             })) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Reminders").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("An hour before sessions · check-in on Fridays").font(.caption2).foregroundStyle(JK.tertiary)
+                    Text("Notifications").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Replies and feedback · an hour before sessions · Friday check-in").font(.caption2).foregroundStyle(JK.tertiary)
                 }
             }
             .tint(.green)
@@ -234,7 +234,9 @@ struct HealthDevicesView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var confirmErase = false
+    @State private var preview: HealthSync.Preview?
     private var health: HealthSync { HealthSync.shared }
+    private var isDemo: Bool { session.me?.demo == true }
 
     private var coachName: String { session.me?.coach?.name ?? "your coach" }
     private var sharing: Bool { devices?.sharing ?? session.me?.healthSharing ?? false }
@@ -257,11 +259,7 @@ struct HealthDevicesView: View {
                                         : "Connect once and your steps, sleep and workouts fill themselves in.")
                         .font(.caption).foregroundStyle(JK.secondary)
                 }
-                if session.me?.demo == true {
-                    Text("This is the demo account, so nothing from this phone's Apple Health is sent.")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
-                }
-                if health.optedIn { connected } else { connect }
+                if isDemo { demoTryIt } else if health.optedIn { connected } else { connect }
                 if let error = error ?? health.lastError { ErrorBanner(message: error) }
 
                 Eyebrow(text: "Wearables · through Apple Health")
@@ -312,14 +310,76 @@ struct HealthDevicesView: View {
                 if busy { ProgressView().tint(.black) } else { Text("Connect and share with \(coachName)") }
             }
             .buttonStyle(ChromeButtonStyle())
-            .disabled(busy || !health.available || session.me?.demo == true)
+            .disabled(busy || !health.available)
             Button("Connect, but keep it to myself") { Task { await connect(share: false) } }
                 .buttonStyle(GhostButtonStyle())
-                .disabled(busy || !health.available || session.me?.demo == true)
+                .disabled(busy || !health.available)
             Text("Sharing lets \(coachName) see your daily figures and workouts to tailor your plan. You can change either choice here at any time.")
                 .font(.caption2).foregroundStyle(JK.tertiary)
         }
         .jkCard()
+    }
+
+    // MARK: Demo account: the real flow, kept on this phone
+
+    private var demoTryIt: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("This is the shared demo account, so nothing from this phone's Apple Health is sent. You can still try the real permission screen and see what the app would read.")
+                    .font(.caption).foregroundStyle(JK.secondary)
+                Button {
+                    Task { await tryOnThisPhone() }
+                } label: {
+                    if busy { ProgressView().tint(.black) } else { Text(preview == nil ? "Try it on this phone" : "Read again") }
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .disabled(busy || !health.available)
+                if !health.available {
+                    Text("Apple Health isn't available on this device.").font(.caption2).foregroundStyle(JK.tertiary)
+                }
+            }
+            .jkCard()
+
+            if let preview {
+                Eyebrow(text: "Read from this phone · last 30 days · not sent")
+                if preview.isEmpty {
+                    Text("Nothing could be read. If you said no to some types, change it in Settings › Health › Data Access & Devices › JK Performance.")
+                        .font(.caption).foregroundStyle(JK.tertiary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        previewRow("figure.walk", "Steps", preview.averageSteps.map { "\($0.formatted()) a day · \(preview.stepDays) days" })
+                        previewRow("bed.double", "Sleep", preview.averageSleepMinutes.map { "\(Fmt.duration(Double($0))) a night · \(preview.sleepNights) nights" })
+                        previewRow("scalemass", "Weight", preview.latestWeight.map { String(format: "%.1f kg", $0) })
+                        previewRow("figure.run", "Workouts", preview.workouts.isEmpty ? nil : "\(preview.workouts.count)")
+                    }
+                    .jkCard()
+                    if !preview.workouts.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(preview.workouts.prefix(6)) { a in
+                                ActivityRow(activity: a)
+                                if a.id != preview.workouts.prefix(6).last?.id { Divider().overlay(JK.stroke) }
+                            }
+                        }
+                        .jkCard(padding: 4)
+                    }
+                }
+            }
+        }
+    }
+
+    private func previewRow(_ symbol: String, _ title: String, _ value: String?) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).frame(width: 20).foregroundStyle(JK.secondary)
+            Text(title).font(.subheadline).foregroundStyle(JK.text)
+            Spacer()
+            Text(value ?? "None").font(.subheadline).foregroundStyle(value == nil ? JK.tertiary : JK.text)
+        }
+    }
+
+    private func tryOnThisPhone() async {
+        busy = true
+        defer { busy = false }
+        if let found = await health.preview() { preview = found }
     }
 
     private func readRow(_ symbol: String, _ text: String) -> some View {

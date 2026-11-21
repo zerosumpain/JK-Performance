@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { exchangeAppleCode, revokeApple } from './apple.mjs';
 import { codeMatches, endSession, issueSession, upsertAppleUser, verifyAppleToken } from './auth.mjs';
 import { credits } from './bookings.mjs';
 import { PLANS, planById } from './catalogue.mjs';
@@ -23,6 +24,9 @@ export function meOut(db, user) {
 async function signInApple(_req, ctx) {
   const claims = await verifyAppleToken(ctx.body.identityToken, ctx.config.appleAudience, { fetchImpl: ctx.config.fetchImpl });
   const user = upsertAppleUser(ctx.db, ctx.config, claims, ctx.body.fullName);
+  // Kept only so deleting the account can revoke Sign in with Apple; the newest wins.
+  const refresh = await exchangeAppleCode(ctx.config, ctx.body.authorizationCode);
+  if (refresh) ctx.db.prepare('UPDATE users SET apple_refresh=? WHERE id=?').run(refresh, user.id);
   return { token: issueSession(ctx.db, user.id), me: meOut(ctx.db, user) };
 }
 
@@ -94,6 +98,10 @@ function endWebSessions(_req, ctx) {
 }
 
 function logout(req, ctx) {
+  // The phone's push token goes too, so a signed-out phone hears nothing.
+  if (ctx.user && typeof ctx.body.pushToken === 'string') {
+    ctx.db.prepare('DELETE FROM push_tokens WHERE token=? AND user_id=?').run(ctx.body.pushToken.toLowerCase(), ctx.user.id);
+  }
   endSession(ctx.db, req);
   return { ok: true };
 }
@@ -110,7 +118,7 @@ function patchMe(_req, ctx) {
  * by cascade; photo files are removed first. A coach with clients is refused:
  * deleting them would orphan the clients' plans and history.
  */
-function deleteMe(_req, ctx) {
+async function deleteMe(_req, ctx) {
   const u = ctx.user;
   if (u.role === 'coach' && ctx.db.prepare('SELECT 1 FROM users WHERE coach_id=? LIMIT 1').get(u.id)) {
     fail(409, 'A coach with clients cannot delete their account here; contact support');
@@ -120,7 +128,9 @@ function deleteMe(_req, ctx) {
     ctx.db.prepare('DELETE FROM workouts WHERE created_by=? AND client_id<>?').run(u.id, u.id);
     ctx.db.prepare('DELETE FROM users WHERE id=?').run(u.id);
   });
-  return { ok: true };
+  // The account is gone either way; Apple is told so the app no longer shows as signed in with Apple.
+  const appleRevoked = await revokeApple(ctx.config, u.apple_refresh);
+  return { ok: true, appleRevoked };
 }
 
 /** Everything stored about the caller, as one JSON file (UK GDPR subject access / portability). */
@@ -149,6 +159,7 @@ function exportMe(_req, ctx) {
     healthSamples: all('SELECT kind, date, start, end, value FROM health_samples WHERE user_id=? ORDER BY start', user.id),
     healthActivities: all('SELECT type, date, start, end, minutes, kcal, distance_km, avg_hr, source FROM health_activities WHERE user_id=? ORDER BY start', user.id),
     weeklyFeedback: all('SELECT week, summary, wins, focus, published_at FROM reports WHERE client_id=? AND published_at IS NOT NULL ORDER BY week', user.id),
+    notificationDevices: all('SELECT env, created_at, updated_at FROM push_tokens WHERE user_id=?', user.id),
     challenges: all('SELECT c.title, m.joined_at FROM challenge_members m JOIN challenges c ON c.id=m.challenge_id WHERE m.user_id=?', user.id),
   };
   return raw(200, {

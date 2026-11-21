@@ -1,6 +1,7 @@
 import { clientFor, coachIdOf, requireCoach, requireMember } from './access.mjs';
 import { planById } from './catalogue.mjs';
 import { clock, day, fail, instant, num, oneOf, str } from './http.mjs';
+import { notify } from './push.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, monthBounds, weekday } from './time.mjs';
 
@@ -141,7 +142,7 @@ function createBooking(_req, ctx) {
   if (!slot.open) fail(409, 'That slot has just been taken');
   // The coach booking on a client's behalf still uses the client's credit, so the allowance means one thing.
   const usesCredit = planById(client.plan).credits > 0 || ctx.config.gateServices === false;
-  return tx(ctx.db, () => {
+  const out = tx(ctx.db, () => {
     if (ctx.config.gateServices && credits(ctx.db, client, startDay).creditsLeft < 1) fail(409, 'No session credits left this month');
     const id = newId('b');
     const coach = ctx.db.prepare('SELECT name FROM users WHERE id=?').get(coachId);
@@ -150,6 +151,10 @@ function createBooking(_req, ctx) {
       `${kind === 'video' ? 'Video call' : '1:1'} with ${coach.name}`, usesCredit ? 1 : 0, nowIso());
     return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(id), ctx.user);
   });
+  const what = `${kind === 'video' ? 'Video call' : '1:1'} · ${when(slot.start)}`;
+  if (ctx.user.role === 'coach') notify(ctx.db, ctx.config, client.id, { title: `${ctx.user.name} booked you in`, body: what, kind: 'booking', id: out.id });
+  else notify(ctx.db, ctx.config, coachId, { title: `${client.name} booked a session`, body: what, kind: 'booking', id: out.id, clientId: client.id });
+  return out;
 }
 
 function cancelBooking(_req, ctx) {
@@ -163,8 +168,15 @@ function cancelBooking(_req, ctx) {
   const refunded = isCoach || Date.parse(b.start) - Date.now() >= CANCEL_HOURS * 3_600_000;
   if (refunded) ctx.db.prepare('DELETE FROM bookings WHERE id=?').run(b.id);
   else ctx.db.prepare('UPDATE bookings SET cancelled_at=? WHERE id=?').run(nowIso(), b.id);
+  if (b.client_id) {
+    const other = isCoach ? b.client_id : b.coach_id;
+    notify(ctx.db, ctx.config, other, { title: `${ctx.user.name} cancelled`, body: `${b.title ?? 'Session'} · ${when(b.start)}`, kind: 'booking', clientId: b.client_id });
+  }
   return { ok: true, refunded };
 }
+
+/** "Sat 28 Nov, 09:00" in London time, for a notification. */
+const when = iso => new Date(iso).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 // MARK: - Group classes
 
