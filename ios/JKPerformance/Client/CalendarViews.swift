@@ -11,6 +11,7 @@ struct MyCalendarView: View {
     @State private var loadedMonth = ""
     @State private var error: String?
     @State private var actionError: String?
+    @State private var calendarDraft: CalendarEventDraft?
 
     private let weekdays = ["M", "T", "W", "T", "F", "S", "S"]
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
@@ -95,6 +96,13 @@ struct MyCalendarView: View {
                                 HStack {
                                     Text(event.title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
                                     Spacer()
+                                    if let draft = event.draft {
+                                        Button { calendarDraft = draft } label: {
+                                            Image(systemName: "calendar.badge.plus").font(.caption).foregroundStyle(JK.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Add \(event.title) to Calendar")
+                                    }
                                     Text(event.tag)
                                         .font(.system(size: 9, weight: .semibold))
                                         .padding(.horizontal, 6).padding(.vertical, 2)
@@ -105,6 +113,9 @@ struct MyCalendarView: View {
                             }
                             .jkCard(padding: 12)
                             .contextMenu {
+                                if let draft = event.draft {
+                                    Button { calendarDraft = draft } label: { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
+                                }
                                 if let booking = event.booking {
                                     if booking.isGroup {
                                         if booking.joined == true {
@@ -134,8 +145,9 @@ struct MyCalendarView: View {
                         .padding(.vertical, 12)
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
                 }
-                Text("Press and hold a session to cancel it, or a class to join or leave. Cancelling 24 h or more ahead refunds the credit.")
+                Text("Tap \(Image(systemName: "calendar.badge.plus")) to put a session in your calendar. Press and hold a session to cancel it, or a class to join or leave. Cancelling 24 h or more ahead refunds the credit.")
                     .font(.caption2).foregroundStyle(JK.tertiary)
+                CalendarSubscribeCard()
             }
             .padding(16)
         }
@@ -143,6 +155,7 @@ struct MyCalendarView: View {
         .jkRefreshable { await load(force: true) }
         .task(id: Day.string(month)) { await load(force: false) }
         .errorAlert($actionError)
+        .addToCalendarSheet($calendarDraft)
     }
 
     private struct DayEvent: Identifiable {
@@ -153,6 +166,7 @@ struct MyCalendarView: View {
         let detail: String
         let tag: String
         var booking: Booking?
+        var draft: CalendarEventDraft?
     }
 
     private var dayEvents: [DayEvent] {
@@ -160,12 +174,20 @@ struct MyCalendarView: View {
         let fromBookings = (bookings ?? []).filter { Day.string($0.start) == key }.map { b in
             DayEvent(id: "b" + b.id, sort: Fmt.time(b.start), time: Fmt.time(b.start), title: b.title ?? b.kindLabel,
                      detail: ([b.kindLabel, b.location] + [Self.spaces(b)]).compactMap { $0 }.joined(separator: " · "),
-                     tag: b.isGroup ? (b.joined == true ? "Joined" : "Class") : "Session", booking: b)
+                     tag: b.isGroup ? (b.joined == true ? "Joined" : "Class") : "Session", booking: b,
+                     draft: b.end > Date() && (!b.isGroup || b.joined == true)
+                        ? CalendarEventDraft(title: b.title ?? b.kindLabel, start: b.start, end: b.end, location: b.location,
+                                             notes: "JK Performance · \(b.kindLabel)")
+                        : nil)
         }
         let fromWorkouts = (workouts ?? []).filter { $0.date == key }.map { w in
             DayEvent(id: "w" + w.id, sort: w.startsAt ?? "99", time: w.startsAt ?? "–", title: w.title,
                      detail: w.completedAt != nil ? "Completed" : "\(w.itemCount) exercises",
-                     tag: "Plan")
+                     tag: "Plan",
+                     draft: w.startsAt.flatMap { Day.at(selected, time: $0) }.flatMap { start in
+                         start > Date() ? CalendarEventDraft(title: w.title, start: start, end: start.addingTimeInterval(3600),
+                                                             location: w.location, notes: "Training session in JK Performance") : nil
+                     })
         }
         return (fromBookings + fromWorkouts).sorted { $0.sort < $1.sort }
     }

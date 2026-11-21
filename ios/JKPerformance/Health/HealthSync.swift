@@ -3,8 +3,12 @@ import HealthKit
 import Observation
 
 /// Reads the last 30 days from Apple Health and POSTs daily totals to
-/// /api/health/samples. WHOOP, Oura, Garmin and MyFitnessPal reach the app
+/// /api/health/samples, and workouts (runs, rides, gym sessions) to
+/// /api/health/activities. WHOOP, Oura, Garmin and MyFitnessPal reach the app
 /// through Apple Health, so this is the only device integration.
+///
+/// Connecting stores the data for the client; whether their coach may see it
+/// is a separate yes/no kept on the server (`PUT /api/health/sharing`).
 ///
 /// Sample ids are "<kind>-<YYYY-MM-DD>", so re-sending a day replaces it
 /// server-side (the endpoint is idempotent on id). Runs on foreground at most
@@ -24,6 +28,7 @@ final class HealthSync {
     private(set) var syncing = false
     private(set) var lastError: String?
     private(set) var lastStored: Int?
+    private(set) var lastActivities: Int?
 
     @ObservationIgnored private let store = HKHealthStore()
 
@@ -42,28 +47,54 @@ final class HealthSync {
             HKQuantityType(.bodyMass),
             HKQuantityType(.distanceWalkingRunning),
             HKCategoryType(.sleepAnalysis),
+            HKQuantityType(.heartRate),
+            HKQuantityType(.distanceCycling),
+            HKQuantityType(.distanceSwimming),
+            HKObjectType.workoutType(),
         ]
     }
 
-    /// The Health & devices toggle turning on: ask iOS, remember the opt-in, sync.
-    func enable() async {
+    /// Connect: ask iOS for read access, record the coach-sharing choice on
+    /// the server, remember the opt-in, sync. Returns false if it didn't happen.
+    @discardableResult
+    func connect(shareWithCoach: Bool) async -> Bool {
         guard available else {
             lastError = "Apple Health isn't available on this device."
-            return
+            return false
         }
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
+            try await setSharing(shareWithCoach)
             setOptIn(true)
+            lastError = nil
             await sync()
+            return true
         } catch {
-            lastError = error.localizedDescription
+            lastError = error.readable
+            return false
         }
+    }
+
+    /// The coach-sharing yes/no. Takes effect on the server at once.
+    @discardableResult
+    func setSharing(_ share: Bool) async throws -> HealthDevices {
+        try await APIClient.shared.send("PUT", "/api/health/sharing", body: SharingInput(share: share))
     }
 
     /// Stops sending. iOS keeps the read permission until it's changed in
     /// Settings › Health › Data Access.
     func disable() {
         setOptIn(false)
+    }
+
+    /// Disconnect and erase everything synced so far (samples and workouts);
+    /// sharing goes off with it.
+    func disconnectAndErase() async throws {
+        let _: HealthDevices = try await APIClient.shared.send("DELETE", "/api/health/data")
+        setOptIn(false)
+        lastSync = nil
+        lastStored = nil
+        UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
     }
 
     private func setOptIn(_ value: Bool) {
@@ -91,7 +122,14 @@ final class HealthSync {
                     "POST", "/api/health/samples", body: HealthSamplesInput(samples: chunk))
                 stored += reply.stored
             }
+            let activities = try await workouts()
+            for start in stride(from: 0, to: activities.count, by: 200) {
+                let chunk = Array(activities[start..<min(start + 200, activities.count)])
+                let _: StoredResponse = try await APIClient.shared.send(
+                    "POST", "/api/health/activities", body: HealthActivitiesInput(activities: chunk))
+            }
             lastStored = stored
+            lastActivities = activities.count
             lastError = nil
             lastSync = Date()
             UserDefaults.standard.set(lastSync, forKey: Self.lastSyncKey)
@@ -147,6 +185,69 @@ final class HealthSync {
                                         value: (value * 100).rounded() / 100))
         }
         return samples
+    }
+
+    /// The last 30 days of workouts. Ids are HealthKit's own UUIDs, so a
+    /// re-sync replaces rather than duplicates.
+    private func workouts() async throws -> [HealthActivity] {
+        let end = Date()
+        let start = Day.add(-(Self.days - 1), to: Day.start(end))
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.workout(HKQuery.predicateForSamples(withStart: start, end: end))],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+            limit: 300
+        )
+        let found = try await descriptor.result(for: store)
+        let bpm = HKUnit.count().unitDivided(by: .minute())
+        return found.compactMap { w in
+            let minutes = w.duration / 60
+            guard minutes >= 1 else { return nil }
+            let kcal = w.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie())
+            let distance = [HKQuantityTypeIdentifier.distanceWalkingRunning, .distanceCycling, .distanceSwimming]
+                .lazy.compactMap { w.statistics(for: HKQuantityType($0))?.sumQuantity()?.doubleValue(for: .meterUnit(with: .kilo)) }
+                .first
+            let hr = w.statistics(for: HKQuantityType(.heartRate))?.averageQuantity()?.doubleValue(for: bpm)
+            let twoPlaces = { (v: Double?) in v.map { ($0 * 100).rounded() / 100 } }
+            return HealthActivity(id: w.uuid.uuidString, type: Self.name(w.workoutActivityType), date: nil,
+                                  start: w.startDate, end: w.endDate, minutes: (minutes * 10).rounded() / 10,
+                                  kcal: twoPlaces(kcal), distanceKm: twoPlaces(distance), avgHr: twoPlaces(hr),
+                                  source: String(w.sourceRevision.source.name.prefix(60)))
+        }
+    }
+
+    static func name(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: return "Running"
+        case .walking: return "Walking"
+        case .hiking: return "Hiking"
+        case .cycling: return "Cycling"
+        case .swimming: return "Swimming"
+        case .rowing: return "Rowing"
+        case .elliptical: return "Elliptical"
+        case .stairClimbing, .stairs: return "Stairs"
+        case .traditionalStrengthTraining: return "Strength training"
+        case .functionalStrengthTraining: return "Functional strength"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .crossTraining: return "Cross training"
+        case .mixedCardio: return "Mixed cardio"
+        case .coreTraining: return "Core training"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
+        case .flexibility: return "Flexibility"
+        case .cooldown: return "Cooldown"
+        case .boxing: return "Boxing"
+        case .kickboxing: return "Kickboxing"
+        case .martialArts: return "Martial arts"
+        case .cardioDance, .socialDance: return "Dance"
+        case .soccer: return "Football"
+        case .rugby: return "Rugby"
+        case .tennis: return "Tennis"
+        case .golf: return "Golf"
+        case .basketball: return "Basketball"
+        case .climbing: return "Climbing"
+        case .jumpRope: return "Skipping"
+        default: return "Workout"
+        }
     }
 
     /// Minutes asleep per night, credited to the day the night ends. Sources

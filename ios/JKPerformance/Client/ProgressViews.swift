@@ -67,6 +67,19 @@ struct ProgressScreen: View {
                     }
                 }
 
+                NavigationLink { ChallengesView() } label: {
+                    HStack(spacing: 12) {
+                        IconTile(systemName: "trophy")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Challenges").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Text("Run, walk or row with the group").font(.caption2).foregroundStyle(JK.tertiary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                    }
+                    .jkCard(padding: 12)
+                }
+
                 HStack {
                     Eyebrow(text: "Progress photos")
                     Spacer()

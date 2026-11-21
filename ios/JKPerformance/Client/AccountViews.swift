@@ -45,8 +45,7 @@ struct AccountView: View {
                     }
                     VStack(spacing: 8) {
                         AccountLink(title: "Membership", detail: membershipDetail, systemName: "creditcard") { MembershipView() }
-                        AccountLink(title: "Health & devices", detail: HealthSync.shared.optedIn ? "Apple Health on" : "Apple Health off",
-                                    systemName: "heart") { HealthDevicesView() }
+                        AccountLink(title: "Apple Health", detail: healthDetail, systemName: "heart") { HealthDevicesView() }
                     }
 
                     Eyebrow(text: "Your data")
@@ -88,6 +87,11 @@ struct AccountView: View {
                 Text("This permanently erases your account and everything stored about you, photos included. It can't be undone.")
             }
         }
+    }
+
+    private var healthDetail: String {
+        guard HealthSync.shared.optedIn else { return "Not connected" }
+        return session.me?.healthSharing == true ? "Connected · shared with \(session.me?.coach?.name ?? "your coach")" : "Connected · only you"
     }
 
     private var membershipDetail: String {
@@ -195,104 +199,244 @@ struct AccountLink<Destination: View>: View {
 
 // MARK: - Health & devices
 
+/// Connect Apple Health, and say yes or no to the coach seeing it. Two
+/// separate choices: connecting fills habits and progress for the client;
+/// sharing lets the coach see daily figures and workouts too.
 struct HealthDevicesView: View {
+    @Environment(AppSession.self) private var session
     @State private var devices: HealthDevices?
-    @State private var toggling = false
+    @State private var activities: [HealthActivity] = []
+    @State private var busy = false
+    @State private var error: String?
+    @State private var confirmErase = false
     private var health: HealthSync { HealthSync.shared }
 
-    /// Third-party wearables and apps reach JK Performance only through Apple
-    /// Health, so these rows explain rather than pretend to connect.
+    private var coachName: String { session.me?.coach?.name ?? "your coach" }
+    private var sharing: Bool { devices?.sharing ?? session.me?.healthSharing ?? false }
+
+    /// Third-party wearables reach JK Performance only through Apple Health,
+    /// so these rows explain rather than pretend to connect.
     private let wearables: [(name: String, detail: String, systemName: String)] = [
-        ("Apple Watch", "Writes steps, sleep, heart rate and workouts to Apple Health", "applewatch"),
-        ("WHOOP", "Turn on Apple Health sharing in the WHOOP app", "bolt.heart"),
-        ("Oura", "Turn on Apple Health in the Oura app's settings", "circle.circle"),
-        ("Garmin", "Garmin Connect › Settings › Connected apps › Apple Health", "figure.run"),
-        ("MyFitnessPal", "Shares weight and steps through Apple Health; log food here", "fork.knife"),
+        ("Apple Watch", "Writes everything here on its own", "applewatch"),
+        ("WHOOP", "WHOOP app › Apple Health › on", "bolt.heart"),
+        ("Oura", "Oura app › Settings › Apple Health", "circle.circle"),
+        ("Garmin", "Garmin Connect › Connected apps › Apple Health", "figure.run"),
     ]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Health & devices").font(.title.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("Share activity, sleep and heart rate with your coach automatically.")
+                    Text("Apple Health").font(.title.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(health.optedIn ? "Connected. Your habits and progress fill themselves in."
+                                        : "Connect once and your steps, sleep and workouts fill themselves in.")
                         .font(.caption).foregroundStyle(JK.secondary)
                 }
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(.red)
-                        .frame(width: 40, height: 40)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 10))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Apple Health").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                        Text("Steps, sleep, resting HR, active energy, weight, distance").font(.caption2).foregroundStyle(JK.tertiary)
-                    }
-                    Spacer()
-                    if toggling || health.syncing {
-                        ProgressView().controlSize(.small)
-                    }
-                    Toggle("", isOn: Binding(get: { health.optedIn }, set: { on in
-                        Task {
-                            toggling = true
-                            if on { await health.enable() } else { health.disable() }
-                            toggling = false
-                            await loadDevices()
-                        }
-                    }))
-                    .labelsHidden()
-                    .disabled(toggling || !health.available)
+                if session.me?.demo == true {
+                    Text("This is the demo account, so nothing from this phone's Apple Health is sent.")
+                        .font(.caption2).foregroundStyle(JK.tertiary)
                 }
-                .jkCard()
-                if let error = health.lastError { ErrorBanner(message: error) }
+                if health.optedIn { connected } else { connect }
+                if let error = error ?? health.lastError { ErrorBanner(message: error) }
 
-                Eyebrow(text: "Wearables & apps · via Apple Health")
+                Eyebrow(text: "Wearables · through Apple Health")
                 VStack(spacing: 0) {
                     ForEach(wearables, id: \.name) { device in
                         HStack(spacing: 12) {
-                            IconTile(systemName: device.systemName, size: 34)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(device.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            IconTile(systemName: device.systemName, size: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(device.name).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
                                 Text(device.detail).font(.caption2).foregroundStyle(JK.tertiary)
                             }
                             Spacer()
-                            Image(systemName: "arrow.triangle.merge").font(.caption).foregroundStyle(JK.tertiary)
                         }
-                        .padding(12)
+                        .padding(10)
                     }
                 }
                 .jkCard(padding: 2)
-
-                Text(statusLine)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(JK.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [3])))
-                if health.optedIn {
-                    Button("Sync now") { Task { await health.sync(); await loadDevices() } }
-                        .buttonStyle(GhostButtonStyle())
-                        .disabled(health.syncing)
-                    Text("To stop iOS sharing entirely, open Settings › Health › Data Access & Devices › JK Performance.")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
-                }
             }
             .padding(16)
         }
         .jkScreen()
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadDevices() }
+        .task { await load() }
+        .confirmationDialog("Disconnect Apple Health?", isPresented: $confirmErase, titleVisibility: .visible) {
+            Button("Disconnect and delete synced data", role: .destructive) { Task { await erase() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Stops syncing and deletes every day and workout sent so far, for you and \(coachName). Your Apple Health itself isn't touched.")
+        }
     }
 
-    private var statusLine: String {
-        var parts: [String] = []
-        if let last = health.lastSync { parts.append("last sync \(Fmt.relative(last))") }
-        if let stored = health.lastStored { parts.append("\(stored) days sent") }
-        if let server = devices?.lastSampleAt { parts.append("coach sees data to \(Fmt.dayMonth(server))") }
-        return parts.isEmpty ? "HealthKit read-only · nothing synced yet" : "HealthKit read-only · " + parts.joined(separator: " · ")
+    // MARK: Not connected yet
+
+    private var connect: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                readRow("figure.walk", "Steps, distance and active energy")
+                readRow("bed.double", "Sleep")
+                readRow("heart", "Resting and workout heart rate")
+                readRow("scalemass", "Body weight")
+                readRow("figure.run", "Workouts: runs, rides, gym sessions and classes")
+            }
+            Text("Read only: the app never writes to Apple Health.")
+                .font(.caption2).foregroundStyle(JK.tertiary)
+            Button {
+                Task { await connect(share: true) }
+            } label: {
+                if busy { ProgressView().tint(.black) } else { Text("Connect and share with \(coachName)") }
+            }
+            .buttonStyle(ChromeButtonStyle())
+            .disabled(busy || !health.available || session.me?.demo == true)
+            Button("Connect, but keep it to myself") { Task { await connect(share: false) } }
+                .buttonStyle(GhostButtonStyle())
+                .disabled(busy || !health.available || session.me?.demo == true)
+            Text("Sharing lets \(coachName) see your daily figures and workouts to tailor your plan. You can change either choice here at any time.")
+                .font(.caption2).foregroundStyle(JK.tertiary)
+        }
+        .jkCard()
     }
 
-    private func loadDevices() async {
+    private func readRow(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).frame(width: 20).foregroundStyle(JK.secondary)
+            Text(text).font(.subheadline).foregroundStyle(JK.text)
+        }
+    }
+
+    // MARK: Connected
+
+    private var connected: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(isOn: Binding(get: { sharing }, set: { on in Task { await share(on) } })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Share with \(coachName)").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        Text(sharing ? "Sees your daily figures and workouts" + (devices?.sharingSince.map { " · since \(Fmt.dayMonth($0))" } ?? "")
+                                     : "Only you see your Apple Health")
+                            .font(.caption2).foregroundStyle(JK.tertiary)
+                    }
+                }
+                .tint(.green)
+                .disabled(busy)
+                Divider().overlay(JK.stroke)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Last synced").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text(health.lastSync.map { Fmt.relative($0) } ?? "Not yet").font(.subheadline).foregroundStyle(JK.text)
+                    }
+                    Spacer()
+                    Button {
+                        Task { await health.sync(); await load() }
+                    } label: {
+                        if health.syncing { ProgressView().controlSize(.small) } else { Text("Sync now") }
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                    .frame(width: 110)
+                    .disabled(health.syncing)
+                }
+            }
+            .jkCard()
+
+            Eyebrow(text: "Recent workouts", trailing: activities.isEmpty ? nil : "\(devices?.activityCount ?? activities.count) synced")
+            if activities.isEmpty {
+                Text("No workouts in the last four weeks. Anything your Watch, WHOOP or Garmin records shows up here.")
+                    .font(.caption).foregroundStyle(JK.tertiary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(activities.prefix(6)) { a in
+                        ActivityRow(activity: a)
+                        if a.id != activities.prefix(6).last?.id { Divider().overlay(JK.stroke) }
+                    }
+                }
+                .jkCard(padding: 4)
+            }
+
+            Button("Disconnect Apple Health") { confirmErase = true }
+                .buttonStyle(GhostButtonStyle())
+                .disabled(busy)
+            Text("To stop iOS sharing entirely: Settings › Health › Data Access & Devices › JK Performance.")
+                .font(.caption2).foregroundStyle(JK.tertiary)
+        }
+    }
+
+    // MARK: Actions
+
+    private func load() async {
         devices = try? await APIClient.shared.get("/api/health/devices")
+        if health.optedIn, let r: ActivitiesResponse = try? await APIClient.shared.get("/api/health/activities") {
+            activities = r.activities
+        }
+    }
+
+    private func connect(share: Bool) async {
+        busy = true
+        defer { busy = false }
+        if await health.connect(shareWithCoach: share) {
+            error = nil
+            await session.refreshMe()
+            await load()
+        }
+    }
+
+    private func share(_ on: Bool) async {
+        busy = true
+        defer { busy = false }
+        do {
+            devices = try await health.setSharing(on)
+            error = nil
+            await session.refreshMe()
+        } catch {
+            self.error = error.readable
+        }
+    }
+
+    private func erase() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await health.disconnectAndErase()
+            activities = []
+            error = nil
+            await session.refreshMe()
+            await load()
+        } catch {
+            self.error = error.readable
+        }
+    }
+}
+
+/// One Apple Health workout: icon, type, when, and the figures.
+struct ActivityRow: View {
+    let activity: HealthActivity
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(systemName: Self.symbol(activity.type), size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(activity.type).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text("\(Fmt.weekday(activity.start)) \(Fmt.dayMonth(activity.start)) · \(Fmt.time(activity.start))")
+                    .font(.caption2).foregroundStyle(JK.tertiary)
+            }
+            Spacer()
+            Text(activity.detail).font(.caption2).foregroundStyle(JK.secondary).multilineTextAlignment(.trailing)
+        }
+        .padding(10)
+    }
+
+    static func symbol(_ type: String) -> String {
+        switch type {
+        case "Running": return "figure.run"
+        case "Walking", "Hiking": return "figure.walk"
+        case "Cycling": return "figure.outdoor.cycle"
+        case "Swimming": return "figure.pool.swim"
+        case "Rowing": return "figure.rower"
+        case "Yoga", "Pilates", "Flexibility", "Cooldown": return "figure.mind.and.body"
+        case "Strength training", "Functional strength", "Core training", "Cross training": return "dumbbell"
+        case "HIIT", "Mixed cardio": return "bolt.heart"
+        case "Boxing", "Kickboxing", "Martial arts": return "figure.boxing"
+        default: return "figure.mixed.cardio"
+        }
     }
 }
 

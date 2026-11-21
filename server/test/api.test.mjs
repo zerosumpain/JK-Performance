@@ -8,7 +8,7 @@ import { createApp } from '../app.mjs';
 import { seedCatalogue } from '../catalogue.mjs';
 import { openStore } from '../store.mjs';
 import { seedDemo } from '../demo.mjs';
-import { addDays, londonDay, londonToUtc } from '../time.mjs';
+import { addDays, londonDay, londonToUtc, mondayOf } from '../time.mjs';
 
 // A stand-in for Apple: our own RSA key, served as Apple's JWKS.
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -21,7 +21,7 @@ function appleToken(claims, { kid = 'test-kid', key = privateKey } = {}) {
 }
 
 let server, base, db, dataDir;
-const config = { dataDir: '', appleAudience: 'com.jkperformance.app', coachEmails: ['coach@example.com'], primaryCoachEmail: null, supportEmail: 's@example.com', gateServices: false, payments: false, demoCode: null, demoCoachCode: null, fetchImpl };
+const config = { dataDir: '', appleAudience: 'com.jkperformance.app', coachEmails: ['coach@example.com'], primaryCoachEmail: null, supportEmail: 's@example.com', publicUrl: 'https://jk.example.com', gateServices: false, payments: false, demoCode: null, demoCoachCode: null, fetchImpl };
 
 async function call(method, path, { token, body, raw, headers = {} } = {}) {
   const res = await fetch(base + path, {
@@ -199,6 +199,7 @@ describe('Bookings and credits', () => {
 describe('Habits, health, check-ins, messages', () => {
   test('steps fill from Apple Health; ticking a habit counts', async () => {
     const today = londonDay();
+    await ok('PUT', '/api/health/sharing', { token: sam.token, body: { share: true } });
     await ok('POST', '/api/health/samples', { token: sam.token, body: { samples: [
       { id: `steps-${today}`, kind: 'steps', start: londonToUtc(today).toISOString(), end: new Date().toISOString(), value: 12000 },
       { id: `weight-${today}`, kind: 'weight', start: new Date().toISOString(), end: new Date().toISOString(), value: 78.4 },
@@ -237,6 +238,106 @@ describe('Habits, health, check-ins, messages', () => {
     await ok('POST', '/api/messages', { token: coach.token, body: { clientId: sam.me.id, text: '👍' } });
     const m = await ok('GET', '/api/messages', { token: sam.token });
     assert.equal(m.messages.at(-1).text, '👍');
+  });
+});
+
+describe('Apple Health consent and activities', () => {
+  const today = londonDay();
+  const run = { id: 'hk-run-1', type: 'Running', start: londonToUtc(today, '07:00').toISOString(), end: londonToUtc(today, '07:40').toISOString(), minutes: 40, kcal: 420, distanceKm: 7.2, avgHr: 151, source: 'Apple Watch' };
+  test('the coach sees health and activities only while the client shares', async () => {
+    await ok('POST', '/api/health/activities', { token: sam.token, body: { activities: [run, { ...run }] } });
+    let w = await ok('GET', `/api/health/week?clientId=${sam.me.id}`, { token: coach.token });
+    assert.equal(w.shared, true);
+    assert.equal(w.activities.length, 1);
+    assert.equal(w.activities[0].distanceKm, 7.2);
+    assert.equal(w.days.length, 7);
+    await ok('PUT', '/api/health/sharing', { token: sam.token, body: { share: false } });
+    w = await ok('GET', `/api/health/week?clientId=${sam.me.id}`, { token: coach.token });
+    assert.deepEqual(w, { shared: false, days: [], activities: [] });
+    assert.equal((await call('GET', `/api/health/activities?clientId=${sam.me.id}`, { token: coach.token })).status, 403);
+    const detail = await ok('GET', `/api/coach/clients/${sam.me.id}`, { token: coach.token });
+    assert.equal(detail.healthShared, false);
+    assert.equal(detail.health, null);
+    // Steps-backed habits show no Health value to the coach; the client still sees theirs.
+    const coachHabits = await ok('GET', `/api/habits?clientId=${sam.me.id}`, { token: coach.token });
+    assert.notEqual(coachHabits.habits.find(x => x.name === 'Steps').source, 'health');
+    const own = await ok('GET', '/api/habits', { token: sam.token });
+    assert.equal(own.habits.find(x => x.name === 'Steps').source, 'health');
+    assert.equal((await ok('GET', '/api/health/activities', { token: sam.token })).activities.length, 1);
+    assert.equal((await ok('GET', '/api/me', { token: sam.token })).healthSharing, false);
+    // Another coach never sees it, sharing or not.
+    await ok('PUT', '/api/health/sharing', { token: sam.token, body: { share: true } });
+    assert.equal((await call('GET', `/api/health/week?clientId=${sam.me.id}`, { token: kim.token })).status, 404);
+    assert.equal((await call('PUT', '/api/health/sharing', { token: coach.token, body: { share: true } })).status, 403);
+  });
+  test('erasing Health data removes samples and activities and stops sharing', async () => {
+    const temp = await signIn('apple-erase', 'erase@example.com');
+    await ok('PUT', '/api/health/sharing', { token: temp.token, body: { share: true } });
+    await ok('POST', '/api/health/activities', { token: temp.token, body: { activities: [run] } });
+    await ok('POST', '/api/health/samples', { token: temp.token, body: { samples: [{ id: 'steps-a', kind: 'steps', start: run.start, end: run.end, value: 10 }] } });
+    const d = await ok('DELETE', '/api/health/data', { token: temp.token });
+    assert.equal(d.sharing, false);
+    assert.equal(d.activityCount, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM health_samples WHERE user_id=?').get(temp.me.id).n, 0);
+  });
+});
+
+describe('Weekly feedback', () => {
+  const week = mondayOf(londonDay());
+  let report;
+  test('a draft is the coach\'s; publishing shows it to the client with the figures and a message', async () => {
+    const blank = await ok('GET', `/api/reports/week/${week}?clientId=${sam.me.id}`, { token: coach.token });
+    assert.equal(blank.id, null);
+    assert.equal(typeof blank.stats.workoutsPlanned, 'number');
+    assert.equal((await call('GET', `/api/reports/week/${addDays(week, 1)}?clientId=${sam.me.id}`, { token: coach.token })).status, 400);
+    report = await ok('PUT', '/api/reports', { token: coach.token, body: { clientId: sam.me.id, week, summary: 'Solid week.', wins: 'Squat PB', focus: 'Sleep' } });
+    assert.equal(report.status, 'draft');
+    assert.equal((await ok('GET', '/api/reports', { token: sam.token })).reports.length, 0);
+    assert.equal((await call('GET', `/api/reports/${report.id}`, { token: sam.token })).status, 404);
+    assert.equal((await call('PUT', '/api/reports', { token: sam.token, body: { clientId: sam.me.id, week, summary: 'x' } })).status, 403);
+    report = await ok('PUT', '/api/reports', { token: coach.token, body: { clientId: sam.me.id, week, summary: 'Solid week.', wins: 'Squat PB', focus: 'Sleep', status: 'published' } });
+    assert.equal(report.status, 'published');
+    const mine = await ok('GET', '/api/reports', { token: sam.token });
+    assert.equal(mine.reports.length, 1);
+    assert.equal(mine.unread, 1);
+    const full = await ok('GET', `/api/reports/${report.id}`, { token: sam.token });
+    assert.equal(full.wins, 'Squat PB');
+    assert.ok(full.stats.healthShared);
+    assert.ok(Array.isArray(full.plan.workouts));
+    assert.equal((await ok('GET', '/api/reports', { token: sam.token })).unread, 0);
+    const msgs = await ok('GET', '/api/messages', { token: sam.token });
+    assert.ok(msgs.messages.some(m => m.text.includes('feedback')));
+    // Editing a published report doesn't post a second message.
+    await ok('PUT', '/api/reports', { token: coach.token, body: { clientId: sam.me.id, week, summary: 'Solid week!', status: 'published' } });
+    const again = await ok('GET', '/api/messages', { token: sam.token });
+    assert.equal(again.messages.filter(m => m.text.includes('feedback')).length, 1);
+  });
+  test('nobody else can read or write it', async () => {
+    assert.equal((await call('GET', `/api/reports/${report.id}`, { token: kim.token })).status, 404);
+    assert.equal((await call('PUT', '/api/reports', { token: kim.token, body: { clientId: sam.me.id, week, summary: 'x' } })).status, 403);
+  });
+});
+
+describe('Calendar feed', () => {
+  test('a private iCalendar feed of sessions, revocable', async () => {
+    const start = londonToUtc(addDays(londonDay(), 3), '18:30').toISOString(), end = londonToUtc(addDays(londonDay(), 3), '19:30').toISOString();
+    const c = await ok('POST', '/api/classes', { token: coach.token, body: { title: 'Track, intervals; hard', start, end, capacity: 5, location: 'Park' } });
+    await ok('POST', `/api/classes/${c.id}/join`, { token: sam.token });
+    assert.equal((await ok('GET', '/api/calendar/feed', { token: sam.token })).active, false);
+    const f = await ok('POST', '/api/calendar/feed', { token: sam.token });
+    assert.ok(f.webcal.startsWith('webcal://'));
+    const path = new URL(f.url).pathname;
+    const ics = await call('GET', path);
+    assert.equal(ics.status, 200);
+    const text = ics.body.toString('utf8');
+    assert.match(text, /^BEGIN:VCALENDAR\r\n/);
+    assert.match(text, /SUMMARY:Track\\, intervals\\; hard/);
+    assert.match(text, /DTSTART:\d{8}T\d{6}Z/);
+    assert.ok(text.split('\r\n').every(line => Buffer.byteLength(line) <= 75));
+    const again = await ok('POST', '/api/calendar/feed', { token: sam.token });
+    assert.equal((await call('GET', path)).status, 404);
+    await ok('DELETE', '/api/calendar/feed', { token: sam.token });
+    assert.equal((await call('GET', new URL(again.url).pathname)).status, 404);
   });
 });
 
@@ -284,7 +385,7 @@ describe('Export and deletion', () => {
     assert.equal(photos(), 0);
     assert.equal((await call('GET', '/api/me', { token: sam.token })).status, 401);
     const id = sam.me.id;
-    for (const [table, col] of [['workouts', 'client_id'], ['habits', 'client_id'], ['messages', 'client_id'], ['bookings', 'client_id'], ['measurements', 'user_id'], ['health_samples', 'user_id'], ['photos', 'user_id'], ['checkins', 'client_id'], ['sessions', 'user_id'], ['membership_events', 'user_id']]) {
+    for (const [table, col] of [['workouts', 'client_id'], ['habits', 'client_id'], ['messages', 'client_id'], ['bookings', 'client_id'], ['measurements', 'user_id'], ['health_samples', 'user_id'], ['photos', 'user_id'], ['checkins', 'client_id'], ['sessions', 'user_id'], ['membership_events', 'user_id'], ['health_activities', 'user_id'], ['reports', 'client_id']]) {
       assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE ${col}=?`).get(id).n, 0, table);
     }
     assert.equal(db.prepare('SELECT COUNT(*) n FROM class_attendees WHERE user_id=?').get(id).n, 0);

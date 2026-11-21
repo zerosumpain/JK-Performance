@@ -2,7 +2,7 @@ import { clientFor, initials, requireCoach } from './access.mjs';
 import { bookingOut } from './bookings.mjs';
 import { GUIDES, PLANS, planById } from './catalogue.mjs';
 import { dueWeek } from './daily.mjs';
-import { healthDay } from './health.mjs';
+import { healthDay, healthVisible } from './health.mjs';
 import { day, oneOf } from './http.mjs';
 import { addDays, daysBetween, londonDay, londonToUtc } from './time.mjs';
 import { workoutOut } from './training.mjs';
@@ -44,7 +44,11 @@ function clientDetail(_req, ctx) {
   const c = clientFor(ctx, ctx.params.id);
   const today = londonDay();
   const next = ctx.db.prepare('SELECT * FROM workouts WHERE client_id=? AND date>=? ORDER BY date, starts_at LIMIT 1').get(c.id, today);
-  return { client: clientSummary(ctx.db, c, today), health: healthDay(ctx.db, c.id, today), nextWorkout: next ? workoutOut(ctx.db, next) : null };
+  const shared = healthVisible(ctx.user, c);
+  return {
+    client: clientSummary(ctx.db, c, today), healthShared: shared, health: shared ? healthDay(ctx.db, c.id, today) : null,
+    nextWorkout: next ? workoutOut(ctx.db, next) : null,
+  };
 }
 
 function today(_req, ctx) {

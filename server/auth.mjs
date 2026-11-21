@@ -4,6 +4,7 @@ import { fail } from './http.mjs';
 import { hash, newId, nowIso, secret, tx } from './store.mjs';
 
 const SESSION_DAYS = 180;
+const WEB_SESSION_DAYS = 30;
 const APPLE_ISSUER = 'https://appleid.apple.com';
 const APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys';
 
@@ -94,22 +95,26 @@ export function upsertAppleUser(db, config, claims, fullName) {
 
 // MARK: - Sessions
 
-export function issueSession(db, userId) {
+/** A session token. `web` sessions (the coach desk in a browser) last 30 days, the app's 180. */
+export function issueSession(db, userId, kind = 'app') {
   const token = secret();
-  db.prepare('INSERT INTO sessions (hash, user_id, expires_at, created_at) VALUES (?,?,?,?)')
-    .run(hash(token), userId, Date.now() + SESSION_DAYS * 86_400_000, nowIso());
+  db.prepare('INSERT INTO sessions (hash, user_id, expires_at, created_at, kind) VALUES (?,?,?,?,?)')
+    .run(hash(token), userId, Date.now() + sessionDays(kind) * 86_400_000, nowIso(), kind);
   return token;
 }
+
+const sessionDays = kind => (kind === 'web' ? WEB_SESSION_DAYS : SESSION_DAYS);
 
 /** The signed-in user for a request, sliding the session's expiry; null when absent or expired. */
 export function sessionUser(db, req) {
   const header = req.headers.authorization ?? '';
   const m = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(header);
   if (!m) return null;
-  const row = db.prepare('SELECT s.hash, s.expires_at, u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.hash = ?').get(hash(m[1]));
+  const row = db.prepare('SELECT s.hash, s.expires_at, s.kind session_kind, u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.hash = ?').get(hash(m[1]));
   if (!row || row.expires_at < Date.now()) return null;
-  if (row.expires_at - Date.now() < (SESSION_DAYS - 1) * 86_400_000) {
-    db.prepare('UPDATE sessions SET expires_at=? WHERE hash=?').run(Date.now() + SESSION_DAYS * 86_400_000, row.hash);
+  const days = sessionDays(row.session_kind);
+  if (row.expires_at - Date.now() < (days - 1) * 86_400_000) {
+    db.prepare('UPDATE sessions SET expires_at=? WHERE hash=?').run(Date.now() + days * 86_400_000, row.hash);
   }
   return row;
 }

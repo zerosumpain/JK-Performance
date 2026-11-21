@@ -30,7 +30,7 @@ const home = () => html('Coaching', `
 <div class="card"><b>For the coach</b><p>Programmes, each client's plan and adherence, the schedule, check-ins and the numbers of the business.</p></div>`);
 
 const privacy = c => html('Privacy', `
-<p class="eyebrow">Last updated 20 November 2026</p><h1>Privacy</h1>
+<p class="eyebrow">Last updated 21 November 2026</p><h1>Privacy</h1>
 <p>This explains what the JK Performance app stores about you, why, who can see it, and how to get it or delete it.</p>
 <h2>Who we are</h2>
 <p>JK Performance is a coaching service. The app's data is held on a server we run in the United Kingdom, reached through Cloudflare's network. Encrypted backups are kept on a second machine we run and with our backup storage provider. Contact: <a href="mailto:${c.supportEmail}">${c.supportEmail}</a>.</p>
@@ -39,12 +39,12 @@ const privacy = c => html('Privacy', `
 <li><b>Account:</b> your name and the email Apple shares when you Sign in with Apple (which may be a private relay address), and a random identifier from Apple. We never see your Apple password.</li>
 <li><b>Training:</b> the plans your coach writes, the sets you log, your habits, food entries, weekly check-ins (including any pain or injury you mention), bookings and messages.</li>
 <li><b>Progress:</b> body measurements you enter and progress photos you upload.</li>
-<li><b>Apple Health (only if you turn it on):</b> daily steps, sleep, resting heart rate, active energy, body weight and walking/running distance. Wearables like WHOOP, Oura and Garmin reach us only through Apple Health.</li>
+<li><b>Apple Health (only if you connect it):</b> daily steps, sleep, resting heart rate, active energy, body weight and distance, and your workouts (type, time, duration, energy, distance and average heart rate). Wearables like WHOOP, Oura and Garmin reach us only through Apple Health.</li>
 </ul>
 <h2>Why, and the legal basis</h2>
 <p>To provide the coaching you signed up for (contract). Health information, including injuries and Apple Health data, is special category data: we process it only with your explicit consent, which you give by entering it or by turning on Apple Health, and can withdraw at any time in the app.</p>
 <h2>Who can see it</h2>
-<p>You and your coach. Progress photos are private to you and your coach. Other members see only your first name, initial and distance on a challenge leaderboard you choose to join. We do not sell data, show adverts, or use third-party analytics or trackers in the app. Apple Health data is never used for advertising or shared with anyone else.</p>
+<p>You and your coach, with one exception: your Apple Health data is seen by your coach only if you choose to share it (Account › Apple Health), and stops being visible to them the moment you turn sharing off. You can also disconnect Apple Health there, which deletes everything synced from it. Progress photos are private to you and your coach. If you subscribe your calendar to the app's feed, that private link shows your sessions to whoever holds it; you can stop it in the app. Other members see only your first name, initial and distance on a challenge leaderboard you choose to join. We do not sell data, show adverts, or use third-party analytics or trackers in the app. Apple Health data is never used for advertising or shared with anyone else.</p>
 <h2>How long we keep it</h2>
 <p>For as long as you have an account. When you delete your account, everything is erased from the live system immediately; encrypted backups age out within 90 days.</p>
 <h2>Your rights</h2>

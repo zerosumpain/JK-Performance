@@ -1,5 +1,5 @@
 import { clientFor, requireCoach, requireMember } from './access.mjs';
-import { healthDay } from './health.mjs';
+import { healthDay, healthVisible } from './health.mjs';
 import { day, fail, num, oneOf, str } from './http.mjs';
 import { newId, nowIso } from './store.mjs';
 import { addDays, londonDay, mondayOf } from './time.mjs';
@@ -28,11 +28,11 @@ const habitOut = (h, d) => ({ id: h.id, name: h.name, kind: h.kind, target: h.ta
 const habitsOf = (db, clientId) => db.prepare('SELECT * FROM habits WHERE client_id=? ORDER BY position, created_at').all(clientId);
 
 /** Consecutive days, ending today (if complete) or yesterday, with every habit done. */
-export function habitStreak(db, clientId, today = londonDay()) {
+export function habitStreak(db, clientId, today = londonDay(), { useHealth = true } = {}) {
   const habits = habitsOf(db, clientId);
   if (!habits.length) return 0;
   const complete = date => {
-    const health = healthDay(db, clientId, date);
+    const health = useHealth ? healthDay(db, clientId, date) : null;
     return habits.every(h => habitDay(db, h, date, health).done);
   };
   let date = complete(today) ? today : addDays(today, -1);
@@ -57,11 +57,13 @@ function listHabits(_req, ctx) {
   requireMember(ctx);
   const client = clientFor(ctx, ctx.query.clientId);
   const date = day(ctx.query.date, 'date', { optional: true }) ?? londonDay();
-  const health = healthDay(ctx.db, client.id, date);
+  // A coach sees Apple Health figures only with the client's consent.
+  const useHealth = healthVisible(ctx.user, client);
+  const health = useHealth ? healthDay(ctx.db, client.id, date) : null;
   return {
     date,
     habits: habitsOf(ctx.db, client.id).map(h => habitOut(h, habitDay(ctx.db, h, date, health))),
-    streak: habitStreak(ctx.db, client.id),
+    streak: habitStreak(ctx.db, client.id, londonDay(), { useHealth }),
     nutrition: nutritionOut(ctx.db, client.id, date),
   };
 }
@@ -78,7 +80,7 @@ function createHabit(_req, ctx) {
     str(b.icon ?? 'checkmark', 'icon', { max: 40 }), b.healthKind ? oneOf(b.healthKind, 'healthKind', ['steps', 'sleep']) : null,
     position, nowIso());
   const h = ctx.db.prepare('SELECT * FROM habits WHERE id=?').get(id);
-  return habitOut(h, habitDay(ctx.db, h, londonDay(), healthDay(ctx.db, client.id, londonDay())));
+  return habitOut(h, habitDay(ctx.db, h, londonDay(), healthVisible(ctx.user, client) ? healthDay(ctx.db, client.id, londonDay()) : null));
 }
 
 function ownHabit(ctx) {
@@ -104,7 +106,8 @@ function setHabitDay(_req, ctx) {
   const prior = ctx.db.prepare('SELECT value, done FROM habit_days WHERE habit_id=? AND date=?').get(h.id, date);
   ctx.db.prepare('INSERT INTO habit_days (habit_id, date, value, done) VALUES (?,?,?,?) ON CONFLICT(habit_id, date) DO UPDATE SET value=excluded.value, done=excluded.done')
     .run(h.id, date, value ?? prior?.value ?? null, done === null ? (prior?.done ?? 0) : done ? 1 : 0);
-  return habitOut(h, habitDay(ctx.db, h, date, healthDay(ctx.db, h.client_id, date)));
+  const owner = ctx.db.prepare('SELECT * FROM users WHERE id=?').get(h.client_id);
+  return habitOut(h, habitDay(ctx.db, h, date, healthVisible(ctx.user, owner) ? healthDay(ctx.db, h.client_id, date) : null));
 }
 
 // MARK: - Nutrition

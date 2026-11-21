@@ -21,6 +21,8 @@ struct Me: Codable, Equatable {
     var createdAt: Date?
     var membership: Membership?
     var coach: PersonRef?
+    /// Clients: whether they've said yes to their coach seeing Apple Health.
+    var healthSharing: Bool?
 
     var isCoach: Bool { role == "coach" }
     var demo: Bool { isDemo == true }
@@ -557,6 +559,45 @@ struct HealthSummary: Codable, Hashable {
 struct HealthDevices: Codable {
     var appleHealth: Bool
     var lastSampleAt: Date?
+    var activityCount: Int?
+    var lastActivityAt: Date?
+    var sharing: Bool?
+    var sharingSince: Date?
+}
+
+struct SharingInput: Codable { var share: Bool }
+
+/// An Apple Health workout: a run, a ride, a gym session.
+struct HealthActivity: Codable, Identifiable, Hashable {
+    let id: String
+    let type: String
+    var date: String?
+    let start: Date
+    let end: Date
+    let minutes: Double
+    var kcal: Double?
+    var distanceKm: Double?
+    var avgHr: Double?
+    var source: String?
+
+    var detail: String {
+        var parts = [Fmt.duration(minutes)]
+        if let km = distanceKm, km > 0 { parts.append("\(Fmt.number(km)) km") }
+        if let kcal, kcal > 0 { parts.append("\(Fmt.number(kcal, digits: 0)) kcal") }
+        if let hr = avgHr, hr > 0 { parts.append("\(Fmt.number(hr, digits: 0)) bpm") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+struct HealthActivitiesInput: Codable { let activities: [HealthActivity] }
+struct ActivitiesResponse: Codable { let activities: [HealthActivity] }
+
+/// Seven days of a client's Health for their coach; empty unless shared.
+struct HealthWeek: Codable {
+    let shared: Bool
+    var sharedSince: Date?
+    let days: [HealthSummary]
+    let activities: [HealthActivity]
 }
 
 // MARK: - Challenges
@@ -625,6 +666,7 @@ struct ClientsResponse: Codable { let clients: [ClientSummary] }
 
 struct ClientDetail: Codable {
     let client: ClientSummary
+    var healthShared: Bool?
     var health: HealthSummary?
     var nextWorkout: Workout?
 }
@@ -720,4 +762,94 @@ struct LooseValue: Codable, Hashable {
         var c = encoder.singleValueContainer()
         if let number { try c.encode(number) } else { try c.encode(flag ?? false) }
     }
+}
+
+
+// MARK: - Weekly feedback
+
+struct ReportCheckIn: Codable, Hashable {
+    let energy: Int
+    let sleep: Int
+    let pain: [String]
+    let note: String
+    var submittedAt: Date?
+}
+
+struct ActivityTotals: Codable, Hashable {
+    let count: Int
+    let minutes: Double
+    let types: [String]
+}
+
+/// The week's figures beside a report. Health ones are null unless shared.
+struct ReportStats: Codable, Hashable {
+    let workoutsPlanned: Int
+    let workoutsDone: Int
+    let setsLogged: Int
+    var habitsPct: Int?
+    var checkin: ReportCheckIn?
+    var weightStart: Double?
+    var weightEnd: Double?
+    let healthShared: Bool
+    var avgSteps: Double?
+    var avgSleepMinutes: Double?
+    var activities: ActivityTotals?
+}
+
+struct ReportPlan: Codable, Hashable {
+    let from: String
+    let to: String
+    let workouts: [WorkoutSummary]
+}
+
+/// A coach's write-up of one client's week (Monday `week` to Sunday `weekEnd`).
+/// `id` is nil for a week the coach hasn't saved yet.
+struct Report: Codable, Identifiable, Hashable {
+    let id: String?
+    let clientId: String
+    let week: String
+    let weekEnd: String
+    var summary: String
+    var wins: String
+    var focus: String
+    let status: String
+    var publishedAt: Date?
+    var readAt: Date?
+    var updatedAt: Date?
+    var coachName: String?
+    var stats: ReportStats?
+    var plan: ReportPlan?
+
+    var isPublished: Bool { status == "published" }
+    var isUnread: Bool { isPublished && readAt == nil }
+    var weekLabel: String { "Week of \(Fmt.dayMonth(week))" }
+}
+
+struct ReportsResponse: Codable {
+    let reports: [Report]
+    let unread: Int
+    let suggestedWeek: String
+}
+
+struct ReportInput: Codable {
+    var clientId: String
+    var week: String
+    var summary: String
+    var wins: String
+    var focus: String
+    var status: String
+}
+
+// MARK: - Calendar feed and the web desk
+
+struct CalendarFeed: Codable {
+    let active: Bool
+    var url: String?
+    var webcal: String?
+}
+
+struct LinkCode: Codable {
+    let code: String
+    let expiresAt: Date
+    let url: String
 }

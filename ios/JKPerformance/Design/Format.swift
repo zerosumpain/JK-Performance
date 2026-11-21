@@ -136,6 +136,12 @@ enum Fmt {
         return "\(m / 60)h \(String(format: "%02d", m % 60))m"
     }
 
+    /// "32 min", or "1h 05m" from an hour.
+    static func duration(_ minutes: Double) -> String {
+        let m = Int(minutes.rounded())
+        return m < 60 ? "\(m) min" : "\(m / 60)h \(String(format: "%02d", m % 60))m"
+    }
+
     static func relative(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.locale = Locale(identifier: "en_GB")

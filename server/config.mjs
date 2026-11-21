@@ -14,6 +14,8 @@ export function loadConfig(env = process.env) {
     coachEmails: list(env.COACH_EMAILS),
     primaryCoachEmail: env.PRIMARY_COACH_EMAIL?.trim().toLowerCase() || null,
     supportEmail: env.SUPPORT_EMAIL ?? '',
+    // Where the server is reached from outside: calendar feed and desk links.
+    publicUrl: env.PUBLIC_URL ?? 'https://jk.strangeramblings.com',
     // Testing: no plan required for services, and plans are picked without payment.
     gateServices: env.GATE_SERVICES === 'true',
     payments: env.PAYMENTS === 'on',

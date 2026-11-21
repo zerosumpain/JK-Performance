@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// One client, for the coach: header from the summary, then Plan (edit and
-/// publish workouts), Habits (habits and nutrition targets), Sessions
-/// (their bookings) and Notes (check-ins with replies).
+/// publish workouts), Feedback (weekly write-ups and check-in replies),
+/// Health (Apple Health, if shared), Habits (habits and nutrition targets)
+/// and Sessions (their bookings).
 struct ClientDetailView: View {
-    enum Tab: String, CaseIterable { case plan = "Plan", habits = "Habits", sessions = "Sessions", notes = "Notes" }
+    enum Tab: String, CaseIterable { case plan = "Plan", feedback = "Feedback", health = "Health", habits = "Habits", sessions = "Sessions" }
 
     let clientId: String
     let name: String
@@ -19,9 +20,13 @@ struct ClientDetailView: View {
                 Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
                 switch tab {
                 case .plan: CoachPlanTab(clientId: clientId, clientName: detail?.client.name ?? name)
+                case .feedback:
+                    CoachReportsSection(clientId: clientId, clientName: firstName)
+                    Eyebrow(text: "Check-ins")
+                    CoachNotesTab(clientId: clientId)
+                case .health: CoachHealthTab(clientId: clientId, clientName: firstName)
                 case .habits: CoachHabitsTab(clientId: clientId)
                 case .sessions: CoachSessionsTab(client: PersonRef(id: clientId, name: detail?.client.name ?? name))
-                case .notes: CoachNotesTab(clientId: clientId)
                 }
             }
             .padding(16)
@@ -63,6 +68,11 @@ struct ClientDetailView: View {
         }
     }
 
+    private var firstName: String {
+        let full = detail?.client.name ?? name
+        return full.split(separator: " ").first.map(String.init) ?? full
+    }
+
     private var subtitle: String {
         guard let c = detail?.client else { return " " }
         var parts = [Fmt.planName(c.plan)]
@@ -76,6 +86,7 @@ struct ClientDetailView: View {
         if let a = d.client.adherence { out.append("Adherence \(a)%") }
         out += (d.client.flags ?? []).map { ClientText.flag($0).prefix(1).uppercased() + ClientText.flag($0).dropFirst() }
         if d.client.checkinDue == true { out.append("Check-in due") }
+        if d.healthShared == false { out.append("Health not shared") }
         if let h = d.health {
             if let steps = h.steps { out.append("\(Fmt.number(steps, digits: 0)) steps") }
             if let sleep = h.sleepMinutes { out.append("Slept \(Fmt.minutes(sleep))") }

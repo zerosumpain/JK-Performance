@@ -109,8 +109,34 @@ export function openStore(path) {
       challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, joined_at TEXT NOT NULL,
       PRIMARY KEY (challenge_id, user_id));
+    CREATE TABLE IF NOT EXISTS health_activities (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, id TEXT NOT NULL,
+      type TEXT NOT NULL, date TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, minutes REAL NOT NULL,
+      kcal REAL, distance_km REAL, avg_hr REAL, source TEXT, received_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, id));
+    CREATE INDEX IF NOT EXISTS activities_user_start ON health_activities(user_id, start);
+    CREATE TABLE IF NOT EXISTS reports (
+      id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      coach_id TEXT REFERENCES users(id) ON DELETE SET NULL, week TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '', wins TEXT NOT NULL DEFAULT '', focus TEXT NOT NULL DEFAULT '',
+      published_at TEXT, read_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      UNIQUE (client_id, week));
+    CREATE TABLE IF NOT EXISTS link_codes (
+      hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at INTEGER NOT NULL, created_at TEXT NOT NULL);
   `);
+  // Columns added after the first release. SQLite has no ADD COLUMN IF NOT EXISTS.
+  addColumn(db, 'users', 'health_share', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'users', 'health_share_at', 'TEXT');
+  addColumn(db, 'users', 'cal_feed_hash', 'TEXT');
+  addColumn(db, 'sessions', 'kind', "TEXT NOT NULL DEFAULT 'app'");
   return db;
+}
+
+function addColumn(db, table, column, ddl) {
+  if (db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  return true;
 }
 
 /**

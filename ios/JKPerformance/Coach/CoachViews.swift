@@ -775,6 +775,7 @@ struct AssignProgramSheet: View {
 
 struct GuidesView: View {
     @State private var switchError: String?
+    @State private var showDesk = false
     @Environment(AppSession.self) private var session
     @State private var query = ""
     @State private var filter = "All"
@@ -837,6 +838,13 @@ struct GuidesView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    Button { showDesk = true } label: {
+                        Label("Coach desk on the web", systemImage: "desktopcomputer")
+                    }
+                    .buttonStyle(ChromeButtonStyle())
+                    .padding(.top, 20)
+                    Text("Write weekly feedback and plans from a computer.")
+                        .font(.caption2).foregroundStyle(JK.tertiary)
                     Button {
                         Task {
                             do { try await session.switchToDemoClient() } catch { switchError = error.readable }
@@ -844,8 +852,7 @@ struct GuidesView: View {
                     } label: {
                         Label("View the app as a client (demo: Sam Carter)", systemImage: "arrow.left.arrow.right")
                     }
-                    .buttonStyle(ChromeButtonStyle())
-                    .padding(.top, 20)
+                    .buttonStyle(GhostButtonStyle())
                     if let switchError { ErrorBanner(message: switchError) }
                     Button("Sign out") { Task { await session.signOut() } }
                         .buttonStyle(GhostButtonStyle())
@@ -855,6 +862,7 @@ struct GuidesView: View {
             .jkScreen()
             .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showDesk) { WebDeskSheet() }
             .task { await load() }
             .sheet(item: $open) { g in
                 ScrollView {
@@ -939,10 +947,11 @@ struct CoachAccountView: View {
                         }
                         .jkCard(padding: 12)
                     }
+                    CalendarSubscribeCard()
                     Button("Sign out") { confirmSignOut = true }
                         .buttonStyle(ChromeButtonStyle())
                         .padding(.top, 12)
-                    Text("To try the client side, sign out and choose \"I have a code\" on the welcome screen.")
+                    Text("To see the client side, use Guides › View the app as a client.")
                         .font(.caption2).foregroundStyle(JK.tertiary)
                 }
                 .padding(16)

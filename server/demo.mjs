@@ -2,17 +2,21 @@ import { recordPlan } from './account.mjs';
 import { setUpClient } from './auth.mjs';
 import { exerciseId } from './catalogue.mjs';
 import { newId, nowIso, tx } from './store.mjs';
-import { addDays, londonDay, londonToUtc } from './time.mjs';
+import { addDays, londonDay, londonToUtc, mondayOf } from './time.mjs';
 
 /**
  * A self-contained demo world for App Review and local testing: a demo coach,
  * "Sam Carter" (the client a DEMO_CODE signs in as) and five other clients,
  * with a few weeks of history. Every demo account is `is_demo=1` and belongs to
  * the demo coach, so none of it appears in a real coach's lists or numbers.
- * Idempotent: does nothing once the demo coach exists.
+ * Idempotent: once the demo coach exists it only tops up what later
+ * releases added (Health sharing, activities, weekly feedback).
  */
 export function seedDemo(db, today = londonDay()) {
-  if (db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-coach'").get()) return false;
+  if (db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-coach'").get()) {
+    topUpDemo(db, today);
+    return false;
+  }
   tx(db, () => {
     const at = d => londonToUtc(d, '09:00').toISOString();
     const user = (sub, name, role, coachId, createdDay) => {
@@ -117,5 +121,35 @@ export function seedDemo(db, today = londonDay()) {
       if (id !== sam) for (let k = 0; k < 18; k++) sample(id, 'distance', addDays(today, -k), [5.1, 4.5, 3.9, 2.0, 1.2][i - 1]);
     });
   });
+  topUpDemo(db, today);
   return true;
+}
+
+/** Sam shares Apple Health (with a fortnight of workouts) and has last week's feedback. */
+function topUpDemo(db, today) {
+  const sam = db.prepare("SELECT * FROM users WHERE apple_sub='demo-client'").get();
+  const coach = db.prepare("SELECT id FROM users WHERE apple_sub='demo-coach'").get();
+  if (!sam || !coach) return;
+  tx(db, () => {
+    if (!sam.health_share) db.prepare('UPDATE users SET health_share=1, health_share_at=? WHERE id=?').run(nowIso(), sam.id);
+    if (!db.prepare('SELECT 1 FROM health_activities WHERE user_id=?').get(sam.id)) {
+      const acts = [[1, 'Running', '07:10', 32, 360, 5.6, 152], [3, 'Cycling', '18:00', 55, 480, 21.4, 138], [5, 'Running', '07:05', 41, 450, 7.2, 155],
+        [8, 'Yoga', '19:30', 30, 110, null, 98], [10, 'Running', '07:15', 28, 300, 5.0, 149], [12, 'Cycling', '17:45', 62, 540, 24.8, 136]];
+      for (const [ago, type, time, minutes, kcal, km, hr] of acts) {
+        const date = addDays(today, -ago);
+        const start = londonToUtc(date, time);
+        db.prepare('INSERT INTO health_activities (user_id, id, type, date, start, end, minutes, kcal, distance_km, avg_hr, source, received_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+          .run(sam.id, `demo-${type}-${date}`, type, date, start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(), minutes, kcal, km, hr, 'Apple Watch', nowIso());
+      }
+    }
+    const week = addDays(mondayOf(today), -7);
+    if (!db.prepare('SELECT 1 FROM reports WHERE client_id=?').get(sam.id)) {
+      db.prepare('INSERT INTO reports (id, client_id, coach_id, week, summary, wins, focus, published_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+        newId('r'), sam.id, coach.id, week,
+        'A strong week, Sam. Both strength sessions done and your runs were steady. The knee settled once we put mobility first.',
+        'Back squat moved well at 100 kg for 5. Three runs, all at an easy heart rate. Seven-hour sleep on five nights.',
+        'Keep the 10-minute mobility block before every lower session. Aim for 9,000 steps on rest days. Lights out by 22:30 on Sunday to Thursday.',
+        londonToUtc(addDays(week, 7), '08:00').toISOString(), nowIso(), nowIso());
+    }
+  });
 }

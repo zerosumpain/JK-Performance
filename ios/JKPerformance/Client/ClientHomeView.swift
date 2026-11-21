@@ -1,21 +1,25 @@
 import SwiftUI
 
-/// "Morning, Sam": today's session, streak, what's coming up, membership.
-/// Daily habits, Progress, Challenges and the weekly check-in hang off it.
+/// "Morning, Sam": one card for today, the next booking, and four doors
+/// (habits, progress, check-in, feedback). Kept short on purpose; the
+/// detail lives behind each door.
 struct ClientHomeView: View {
     @Environment(AppSession.self) private var session
     @State private var week: [WorkoutSummary]?
     @State private var habits: HabitsResponse?
     @State private var bookings: [Booking]?
+    @State private var reports: ReportsResponse?
+    @State private var checkins: CheckInsResponse?
     @State private var error: String?
     @State private var loaded = false
 
     private var api: APIClient { APIClient.shared }
+    private let grid = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(eyebrow: Fmt.longDay(Date()),
                                  title: "\(Fmt.greeting()), \(session.me?.firstName ?? "there")") {
                         Text("JK")
@@ -30,24 +34,18 @@ struct ClientHomeView: View {
                         LoadingCard()
                     } else {
                         if let error { ErrorBanner(message: error) }
-                        todaySession
-                        HStack(spacing: 10) {
-                            streakTile
-                            weekTile
+                        todayCard
+                        nextBooking
+                        newFeedback
+                        healthPrompt
+                        LazyVGrid(columns: grid, spacing: 10) {
+                            HomeTile(title: "Habits", value: habitsValue, systemName: "checklist") { DailyHabitsView() }
+                            HomeTile(title: "Progress", value: "Weight, records", systemName: "chart.line.downtrend.xyaxis") { ProgressScreen() }
+                            HomeTile(title: "Check-in", value: checkinValue, systemName: "square.and.pencil",
+                                     highlight: checkinValue == "Due") { WeeklyCheckInView() }
+                            HomeTile(title: "Feedback", value: feedbackValue, systemName: "text.bubble",
+                                     highlight: (reports?.unread ?? 0) > 0) { WeeklyFeedbackListView() }
                         }
-
-                        Eyebrow(text: "Coming up")
-                        upcoming
-                    }
-
-                    NavigationLink { MembershipView() } label: { membershipCard }
-
-                    Eyebrow(text: "Your week")
-                    VStack(spacing: 8) {
-                        HomeLink(title: "Daily habits", detail: "Nutrition and habits set by \(coachName)", systemName: "checklist") { DailyHabitsView() }
-                        HomeLink(title: "Progress", detail: "Weight, records and photos", systemName: "chart.line.downtrend.xyaxis") { ProgressScreen() }
-                        HomeLink(title: "Challenges", detail: "Run, walk or row with the group", systemName: "trophy") { ChallengesView() }
-                        HomeLink(title: "Weekly check-in", detail: "Reviewed by \(coachName)", systemName: "square.and.pencil") { WeeklyCheckInView() }
                     }
                 }
                 .padding(16)
@@ -64,16 +62,20 @@ struct ClientHomeView: View {
     private func load() async {
         let today = Date()
         let days = Day.week(of: today)
-        let from = Day.string(days[0]), to = Day.string(days[6])
+        let from = Day.string(days[0]), to = Day.string(Day.add(7, to: days[6]))
         async let w: WorkoutsResponse = api.get("/api/workouts", query: ["from": from, "to": to])
         async let h: HabitsResponse = api.get("/api/habits", query: ["date": Day.today])
         async let b: BookingsResponse = api.get("/api/bookings", query: [
             "from": Day.today, "to": Day.string(Day.add(14, to: today)),
         ])
+        async let r: ReportsResponse = api.get("/api/reports")
+        async let c: CheckInsResponse = api.get("/api/checkins")
         var failures: [String] = []
         do { week = try await w.workouts } catch { if !error.isCancellation { failures.append(error.readable) } }
         do { habits = try await h } catch { if !error.isCancellation { failures.append(error.readable) } }
         do { bookings = try await b.bookings } catch { if !error.isCancellation { failures.append(error.readable) } }
+        reports = try? await r
+        checkins = try? await c
         await session.refreshMe()
         error = failures.first
         loaded = week != nil || habits != nil || bookings != nil
@@ -81,18 +83,32 @@ struct ClientHomeView: View {
 
     // MARK: Today
 
+    private var thisWeek: [WorkoutSummary] {
+        let days = Set(Day.week(of: Date()).map(Day.string))
+        return (week ?? []).filter { days.contains($0.date) }
+    }
+
     private var todayWorkout: WorkoutSummary? {
         let mine = (week ?? []).filter { $0.date == Day.today }
         return mine.first { $0.completedAt == nil } ?? mine.first
     }
 
+    private var nextWorkout: WorkoutSummary? {
+        (week ?? []).filter { $0.date > Day.today && $0.completedAt == nil }.min { $0.date < $1.date }
+    }
+
+    private var weekLine: String {
+        let done = thisWeek.filter { $0.completedAt != nil }.count
+        return thisWeek.isEmpty ? "" : "\(done) of \(thisWeek.count) sessions done this week"
+    }
+
     @ViewBuilder
-    private var todaySession: some View {
+    private var todayCard: some View {
         if let w = todayWorkout {
             let starts = w.startsAt.flatMap { Day.at(Date(), time: $0) }
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Eyebrow(text: "Today · Session")
+                    Eyebrow(text: "Today")
                     Spacer()
                     if let badge = w.completedAt != nil ? "Done" : starts.flatMap({ Fmt.countdown(to: $0) }) {
                         Text(badge)
@@ -103,123 +119,94 @@ struct ClientHomeView: View {
                     }
                 }
                 Text(w.title).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
-                Text([w.startsAt, "with \(coachName)"].compactMap { $0 }.joined(separator: " · "))
+                Text([w.startsAt, w.location?.isEmpty == false ? w.location : nil].compactMap { $0 }.joined(separator: " · ")
+                     + (w.completedAt == nil ? "" : " · \(w.doneCount) of \(w.itemCount) exercises"))
                     .font(.caption).foregroundStyle(JK.secondary)
-                if let location = w.location, !location.isEmpty {
-                    Label(location, systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(JK.secondary)
+                NavigationLink { WorkoutDetailLoader(workoutId: w.id) } label: {
+                    Label(w.completedAt == nil ? "Start workout" : "View workout", systemImage: w.completedAt == nil ? "play.fill" : "checkmark")
                 }
-                Text("\(w.doneCount) of \(w.itemCount) exercises done").font(.caption2).foregroundStyle(JK.tertiary)
-                HStack(spacing: 8) {
-                    NavigationLink { WorkoutDetailLoader(workoutId: w.id) } label: {
-                        Label("Open workout", systemImage: "play.fill")
-                    }
-                    .buttonStyle(ChromeButtonStyle())
-                    NavigationLink {
-                        MessagesThreadView(clientId: nil, otherName: coachName, subtitle: "About today's session")
-                    } label: {
-                        Image(systemName: "bubble.left").frame(width: 22)
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                    .frame(width: 52)
-                }
+                .buttonStyle(ChromeButtonStyle())
+                .padding(.top, 4)
+                if !weekLine.isEmpty { Text(weekLine).font(.caption2).foregroundStyle(JK.tertiary) }
             }
             .jkCard()
         } else {
-            EmptyCard(systemName: "figure.cooldown", title: "No session today",
-                      detail: "Rest, walk, and hit your habits. Your plan shows what's next.")
-        }
-    }
-
-    private var streakTile: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Eyebrow(text: "Streak")
-            HStack(alignment: .bottom) {
-                Text("\(habits?.streak ?? 0)").font(.title.weight(.semibold))
-                    + Text(" days").font(.caption).foregroundColor(JK.tertiary)
-                Spacer()
-                HStack(alignment: .bottom, spacing: 3) {
-                    ForEach(Array(weekBars.enumerated()), id: \.offset) { _, h in
-                        Capsule().fill(JK.text).frame(width: 3, height: h)
-                    }
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow(text: "Today")
+                Text("Rest day").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text(nextWorkout.map { w in
+                    "Next: \(w.title), \(Day.date(w.date).map { Fmt.weekday($0) } ?? w.date)" + (w.startsAt.map { " \($0)" } ?? "")
+                } ?? "Walk, recover and tick off your habits.")
+                    .font(.caption).foregroundStyle(JK.secondary)
+                if !weekLine.isEmpty { Text(weekLine).font(.caption2).foregroundStyle(JK.tertiary) }
             }
-            .foregroundStyle(JK.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .jkCard()
         }
-        .jkCard()
-    }
-
-    /// One bar per day this week: tall when a workout was completed, short
-    /// when one was planned, a stub when nothing was.
-    private var weekBars: [CGFloat] {
-        Day.week(of: Date()).map { day in
-            let key = Day.string(day)
-            let mine = (week ?? []).filter { $0.date == key }
-            if mine.contains(where: { $0.completedAt != nil }) { return 24 }
-            return mine.isEmpty ? 4 : 12
-        }
-    }
-
-    private var weekTile: some View {
-        let planned = (week ?? []).count
-        let done = (week ?? []).filter { $0.completedAt != nil }.count
-        return HStack {
-            ZStack {
-                Circle().stroke(JK.track, lineWidth: 5)
-                Circle().trim(from: 0, to: planned == 0 ? 0 : Double(done) / Double(planned))
-                    .stroke(JK.text, style: StrokeStyle(lineWidth: 5, lineCap: .round)).rotationEffect(.degrees(-90))
-            }
-            .frame(width: 40, height: 40)
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Eyebrow(text: "This week")
-                Text("\(done)/\(planned)").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-            }
-        }
-        .jkCard()
     }
 
     @ViewBuilder
-    private var upcoming: some View {
-        let items = Array((bookings ?? []).filter { $0.end > Date() && $0.isMine }.sorted { $0.start < $1.start }.prefix(3))
-        if items.isEmpty {
-            NavigationLink { BookSessionView() } label: {
-                EmptyCard(systemName: "calendar.badge.plus", title: "Nothing booked", detail: "Tap to book a session")
+    private var nextBooking: some View {
+        if let b = (bookings ?? []).filter({ $0.end > Date() && $0.isMine }).min(by: { $0.start < $1.start }) {
+            NavigationLink { MyCalendarView(initialDay: b.start, embedded: true) } label: {
+                UpcomingRow(weekday: Fmt.weekday(b.start), day: "\(Day.calendar.component(.day, from: b.start))",
+                            title: b.title ?? b.kindLabel,
+                            detail: [Fmt.time(b.start), b.location].compactMap { $0 }.joined(separator: " · "))
+                    .jkCard(padding: 4)
             }
-        } else {
-            VStack(spacing: 0) {
-                ForEach(items) { b in
-                    NavigationLink { MyCalendarView(initialDay: b.start, embedded: true) } label: {
-                        UpcomingRow(weekday: Fmt.weekday(b.start), day: "\(Day.calendar.component(.day, from: b.start))",
-                                    title: b.title ?? b.kindLabel,
-                                    detail: [Fmt.time(b.start), b.location].compactMap { $0 }.joined(separator: " · "))
-                    }
-                    if b.id != items.last?.id { Divider().overlay(JK.stroke) }
-                }
-            }
-            .jkCard(padding: 4)
         }
     }
 
-    private var membershipCard: some View {
-        let m = session.me?.membership
-        let active = m?.isActive == true
-        var detail: [String] = []
-        if active, let renews = m?.renewsOn { detail.append("Renews \(Fmt.dayMonth(renews))") }
-        if active, let left = m?.creditsLeft, let total = m?.creditsTotal, total > 0 { detail.append("\(left) of \(total) credits") }
-        if !active { detail.append("Choose a plan to unlock coaching") }
-        return HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(active ? "\(m?.displayName ?? "") membership" : "No membership").font(.subheadline.weight(.semibold))
-                Text(detail.joined(separator: " · ")).font(.caption2).foregroundStyle(JK.tertiary)
+    @ViewBuilder
+    private var newFeedback: some View {
+        if let r = reports?.reports.first(where: \.isUnread), let id = r.id {
+            NavigationLink { ReportDetailView(reportId: id) } label: {
+                HStack(spacing: 12) {
+                    IconTile(systemName: "text.bubble.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("New feedback from \(coachName)").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        Text(r.weekLabel).font(.caption2).foregroundStyle(JK.tertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                }
+                .jkCard(padding: 12)
             }
-            Spacer()
-            Text(active ? "Active" : "Choose")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(JK.cardRaised, in: Capsule())
         }
-        .foregroundStyle(JK.text)
-        .jkCard()
+    }
+
+    @ViewBuilder
+    private var healthPrompt: some View {
+        if !HealthSync.shared.optedIn, HealthSync.shared.available, session.me?.demo != true {
+            NavigationLink { HealthDevicesView() } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "heart.fill").foregroundStyle(.red)
+                    Text("Connect Apple Health").font(.subheadline.weight(.medium)).foregroundStyle(JK.text)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+            }
+        }
+    }
+
+    // MARK: Tiles
+
+    private var habitsValue: String {
+        guard let list = habits?.habits, !list.isEmpty else { return "None set" }
+        return "\(list.filter(\.done).count) of \(list.count) today"
+    }
+
+    private var checkinValue: String {
+        guard let c = checkins else { return "Weekly" }
+        return c.checkins.contains { $0.week == c.dueWeek } ? "Sent" : "Due"
+    }
+
+    private var feedbackValue: String {
+        guard let r = reports else { return "Weekly" }
+        if r.unread > 0 { return r.unread == 1 ? "1 new" : "\(r.unread) new" }
+        return r.reports.first.map { Fmt.dayMonth($0.week) } ?? "None yet"
     }
 }
 
@@ -228,6 +215,7 @@ struct UpcomingRow: View {
     let day: String
     let title: String
     let detail: String
+    var chevron = true
 
     var body: some View {
         HStack(spacing: 14) {
@@ -241,32 +229,37 @@ struct UpcomingRow: View {
                 Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            if chevron { Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary) }
         }
         .padding(12)
     }
 }
 
-private struct HomeLink<Destination: View>: View {
+/// A square door on Home: icon, name, one line of state.
+private struct HomeTile<Destination: View>: View {
     let title: String
-    let detail: String
+    let value: String
     let systemName: String
+    var highlight = false
     @ViewBuilder var destination: () -> Destination
 
     var body: some View {
         NavigationLink {
             destination()
         } label: {
-            HStack(spacing: 12) {
-                IconTile(systemName: systemName)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Image(systemName: systemName).font(.title3).foregroundStyle(JK.text)
+                    Spacer()
+                    if highlight { Circle().fill(JK.text).frame(width: 7, height: 7) }
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+                    Text(value).font(.caption2).foregroundStyle(highlight ? JK.text : JK.tertiary).lineLimit(1)
                 }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
             }
-            .jkCard(padding: 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .jkCard(padding: 14)
         }
     }
 }

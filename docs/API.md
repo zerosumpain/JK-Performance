@@ -21,6 +21,9 @@ The contract between `server/` and the iPhone app. Change both sides together.
 | POST | `/api/auth/apple` | `{identityToken, fullName?: {givenName?, familyName?}}` | `Session` |
 | POST | `/api/auth/code` | `{code}` (App Review demo / local testing; 404 when unset) | `Session` |
 | POST | `/api/auth/logout` | – | `{ok:true}` |
+| POST | `/api/auth/demo-client` (coach) | – | `Session` as the demo client (preview the client side) |
+| POST | `/api/auth/link-code` (coach) | – | `{code:"ABCD-EFGH", expiresAt, url}`: one use, 10 minutes, for the web desk |
+| POST | `/api/auth/link` | `{code}` (any case, dash optional) | `Session` with a 30-day web session; 401 bad/used/expired, 429 after 30 failures in 10 min |
 | GET | `/api/me` | – | `Me` |
 | PATCH | `/api/me` | `{name?}` | `Me` |
 | DELETE | `/api/me` | – | `{ok:true}` (erases the account and all its data, photos included) |
@@ -34,7 +37,8 @@ The contract between `server/` and the iPhone app. Change both sides together.
 // Me
 {"id":"u_…","name":"Sam Carter","email":"…","role":"client","createdAt":"…",
  "membership":{"plan":"elite","planName":"Elite","since":"…","renewsOn":"2026-12-01","creditsLeft":3,"creditsTotal":4,"creditsResetOn":"2026-12-01"},  // null for a coach
- "coach":{"id":"u_…","name":"Coach JK"}}       // null for a coach
+ "coach":{"id":"u_…","name":"Coach JK"},       // null for a coach
+ "isDemo":false, "healthSharing":true}          // healthSharing: clients only (null for a coach)
 // Plan
 {"id":"elite","name":"Elite","detail":"Weekly 1:1 sessions, nutrition, priority messaging",
  "monthlyPence":14900,"annualPence":152000,"credits":4}
@@ -179,11 +183,23 @@ Times are Europe/London. The server stores UTC and returns ISO instants.
 
 | POST | `/api/health/samples` | `{samples:[{id, kind, start, end, value}]}` (idempotent on id) | `{stored:n}` |
 |---|---|---|---|
+| POST | `/api/health/activities` | `{activities:[Activity]}` (≤500, idempotent on id) | `{stored:n}` |
+| GET | `/api/health/activities?clientId=&from=&to=` | – | `{activities:[Activity]}` (default the last 28 days) |
 | GET | `/api/health/summary?date=&clientId=` | – | `{date, steps, sleepMinutes, restingHr, activeKcal, weight, distanceKm}` |
-| GET | `/api/health/devices` | – | `{appleHealth:bool, lastSampleAt}` |
+| GET | `/api/health/week?clientId=&to=` | – | `{shared, sharedSince, days:[summary ×7], activities:[Activity]}`; not shared: `{shared:false, days:[], activities:[]}` |
+| GET | `/api/health/devices` | – | `{appleHealth, lastSampleAt, activityCount, lastActivityAt, sharing, sharingSince}` |
+| PUT | `/api/health/sharing` (client) | `{share:bool}` | as devices |
+| DELETE | `/api/health/data` | – | as devices: erases every sample and activity, sharing off |
 
-Kinds: `steps` (count), `sleep` (minutes asleep), `restingHr` (bpm), `activeKcal`, `weight` (kg, also written as a
-measurement), `distance` (km, walk/run/row; feeds challenges). The Steps and "Sleep 7h+" habits fill from these.
+Kinds: `steps` (count), `sleep` (minutes asleep), `restingHr` (bpm), `activeKcal`, `weight` (kg; also written as a
+progress measurement, but only while sharing is on), `distance` (km, walk/run/row; feeds challenges). The Steps and
+"Sleep 7h+" habits fill from these.
+
+`Activity` (an Apple Health workout): `{id (HealthKit UUID), type:"Running", date, start, end, minutes, kcal?, distanceKm?, avgHr?, source?}`.
+
+**Consent.** Health is the client's. The client always sees their own. Their coach sees it (summary, week, activities,
+Health-filled habit values, the Health line in a client's detail) only while `sharing` is on: otherwise those return
+403 `health_not_shared`, `shared:false`, or nulls. `GET /api/coach/clients/:id` carries `healthShared`.
 
 ## Challenges
 
@@ -214,6 +230,39 @@ measurement), `distance` (km, walk/run/row; feeds challenges). The Steps and "Sl
 ```
 Adherence = completed ÷ published workouts dated in the last 28 days, as a percentage.
 
+## Weekly feedback
+
+A coach's write-up of one client's week (Monday `week` to Sunday). Drafts are the coach's; publishing shows it to the
+client and, the first time, posts a message to their thread. Written from the app or the web desk (`/desk`).
+
+| GET | `/api/reports?clientId=` | – | `{reports:[Report], unread, suggestedWeek}` (client: published only) |
+|---|---|---|---|
+| GET | `/api/reports/week/:monday?clientId=` (coach) | – | `Report` with stats and plan (`id:null` when not written) |
+| PUT | `/api/reports` (coach) | `{clientId, week, summary, wins, focus, status:"draft"\|"published"}` | full `Report` |
+| GET | `/api/reports/:id` | – | full `Report`; a client reading marks it read |
+| DELETE | `/api/reports/:id` (coach) | – | `{ok:true}` |
+
+```jsonc
+// Report (list items omit stats and plan)
+{"id":"r_…","clientId","week":"2026-11-16","weekEnd":"2026-11-22","summary","wins","focus",
+ "status":"published","publishedAt","readAt","updatedAt","coachName":"Coach JK",
+ "stats":{"workoutsPlanned":2,"workoutsDone":2,"setsLogged":31,"habitsPct":71,"checkin":{energy,sleep,pain,note,submittedAt}|null,
+          "weightStart":79.1,"weightEnd":78.8,"healthShared":true,"avgSteps":9120,"avgSleepMinutes":431,
+          "activities":{"count":3,"minutes":128,"types":["Running","Cycling"]}},   // health figures null unless shared
+ "plan":{"from","to","workouts":[WorkoutSummary]}}   // the following week; drafts appear for the coach only
+```
+`suggestedWeek`: last week's Monday until Friday, then this week's.
+
+## Calendar feed
+
+| GET | `/api/calendar/feed` | – | `{active}` |
+|---|---|---|---|
+| POST | `/api/calendar/feed` | – | `{active:true, url, webcal}`: a new private URL; the old one stops |
+| DELETE | `/api/calendar/feed` | – | `{active:false}` |
+| GET | `/cal/<token>.ics` (no auth) | – | iCalendar: the person's bookings, joined classes and timed workouts (a coach: all their bookings), 30 days back onwards |
+
+Only the token's hash is stored. Single events are added on the phone with EventKit and need no server call.
+
 ## Demo accounts
 
 `DEMO_CODE` signs in as the demo client "Sam Carter", and `DEMO_COACH_CODE` (local only) as the demo coach. Both live in a
@@ -221,4 +270,5 @@ separate demo world with five other clients and a few weeks of history. Demo acc
 
 ## Pages (HTML)
 
-`/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`).
+`/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach desk: a
+browser app over this API; sign in with a link code from the app).
