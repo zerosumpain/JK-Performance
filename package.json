@@ -1,0 +1,11 @@
+{
+  "name": "jk-performance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.23.2" },
+  "scripts": {
+    "start": "node server/main.mjs",
+    "test": "node --test server/test/*.test.mjs"
+  }
+}

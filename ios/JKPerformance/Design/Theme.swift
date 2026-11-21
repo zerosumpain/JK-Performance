@@ -161,6 +161,8 @@ struct Segmented<T: Hashable>: View {
                 } label: {
                     Text(label(option))
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .foregroundStyle(selection == option ? JK.text : JK.tertiary)

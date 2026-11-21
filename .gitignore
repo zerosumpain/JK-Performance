@@ -13,3 +13,4 @@ DerivedData/
 *.p8
 artifacts/
 __pycache__/
+.claude/

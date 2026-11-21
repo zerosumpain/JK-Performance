@@ -4,80 +4,252 @@ import SwiftUI
 // MARK: - Today (coach tab root)
 
 struct CoachTodayView: View {
+    @State private var today: CoachToday?
+    @State private var error: String?
+    @State private var showAccount = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(eyebrow: "Coach · Fri 20 Nov", title: "Today") {
-                        HStack(spacing: 12) {
-                            Image(systemName: "bell").foregroundStyle(JK.secondary)
-                            NavigationLink { BusinessView() } label: {
-                                Text("JK")
-                                    .font(.caption.weight(.bold))
-                                    .frame(width: 30, height: 30)
-                                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.secondary, lineWidth: 1))
-                            }
-                            .foregroundStyle(JK.text)
+                    ScreenHeader(eyebrow: "Coach · \(Fmt.shortDay(Date()))", title: "Today") {
+                        Button { showAccount = true } label: {
+                            Image(systemName: "person.crop.circle")
+                                .font(.title3)
+                                .frame(width: 30, height: 30)
                         }
+                        .foregroundStyle(JK.text)
+                        .accessibilityLabel("Account")
+                        NavigationLink { BusinessView() } label: {
+                            Text("JK")
+                                .font(.caption.weight(.bold))
+                                .frame(width: 30, height: 30)
+                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.secondary, lineWidth: 1))
+                        }
+                        .foregroundStyle(JK.text)
+                        .accessibilityLabel("Business")
                     }
-                    HStack(spacing: 8) {
-                        StatTile(label: "Sessions", value: "5")
-                        StatTile(label: "Active clients", value: "18")
-                        StatTile(label: "Unread", value: "3")
-                    }
+                    Loadable(value: today, error: error, retry: load) { t in
+                        let sorted = t.sessions.sorted { $0.start < $1.start }
+                        let next = sorted.first { $0.end > Date() }?.id
+                        Eyebrow(text: "Sessions", trailing: sorted.isEmpty ? nil : "\(sorted.filter { $0.end > Date() }.count) to go")
+                        if sorted.isEmpty {
+                            Text("Nothing booked today.").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                        ForEach(sorted) { s in
+                            SessionRow(session: s, isNext: s.id == next)
+                        }
 
-                    Eyebrow(text: "Client obligations", trailing: "View week")
-                    ForEach(Mock.obligations) { o in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(o.start).font(.caption2.weight(.semibold))
-                                Text(o.end).font(.system(size: 9)).foregroundStyle(JK.tertiary)
-                            }
-                            .frame(width: 38, alignment: .leading)
-                            .foregroundStyle(o.done ? JK.tertiary : JK.text)
-                            NavigationLink { ClientDetailView() } label: {
-                                HStack(spacing: 10) {
-                                    Avatar(initials: o.initials, size: 28)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(o.name).font(.subheadline.weight(.semibold))
-                                        Text(o.detail).font(.caption2).foregroundStyle(JK.tertiary)
-                                    }
-                                    Spacer()
-                                    if o.next {
-                                        Text("Next")
-                                            .font(.system(size: 9, weight: .semibold))
-                                            .padding(.horizontal, 7).padding(.vertical, 3)
-                                            .background(JK.text, in: Capsule())
-                                            .foregroundStyle(.black)
-                                    } else if o.done {
-                                        Image(systemName: "checkmark").font(.caption)
-                                    } else {
-                                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
-                                    }
+                        Eyebrow(text: "To do")
+                        VStack(spacing: 0) {
+                            if let due = t.feedbackDue, !due.clients.isEmpty {
+                                NavigationLink { FeedbackDueView(due: due) } label: {
+                                    TodoRow(systemName: "text.bubble", title: "Feedback to write · \(due.clients.count)",
+                                            detail: "Week of \(Fmt.dayMonth(due.week))", link: true)
                                 }
-                                .foregroundStyle(o.done ? JK.tertiary : JK.text)
-                                .padding(10)
-                                .background(JK.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(o.next ? JK.secondary : JK.stroke, lineWidth: 1))
+                                Divider().overlay(JK.stroke)
+                            }
+                            if let n = t.checkinsToReview, n > 0 {
+                                TodoRow(systemName: "square.and.pencil", title: n == 1 ? "1 check-in to reply to" : "\(n) check-ins to reply to",
+                                        detail: "Client › Feedback", link: false)
+                                Divider().overlay(JK.stroke)
+                            }
+                            if t.unread > 0 {
+                                TodoRow(systemName: "bubble.left", title: t.unread == 1 ? "1 unread message" : "\(t.unread) unread messages",
+                                        detail: "Messages tab", link: false)
+                                Divider().overlay(JK.stroke)
+                            }
+                            ForEach(t.attention ?? [], id: \.self) { item in
+                                NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name) } label: {
+                                    TodoRow(systemName: item.kind == "checkin" ? "calendar.badge.exclamationmark" : "figure.walk",
+                                            title: item.client.name, detail: item.reason, link: true)
+                                }
+                                Divider().overlay(JK.stroke)
+                            }
+                            if (t.feedbackDue?.clients.isEmpty ?? true) && (t.checkinsToReview ?? 0) == 0 && t.unread == 0 && (t.attention ?? []).isEmpty {
+                                TodoRow(systemName: "checkmark", title: "All caught up", detail: "\(t.activeClients) active clients", link: false)
                             }
                         }
+                        .jkCard(padding: 2)
                     }
-
-                    HStack(alignment: .top, spacing: 12) {
-                        IconTile(systemName: "lightbulb", size: 32)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Tip of the day").font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-                            Text("Open each 1:1 with one question about sleep. It predicts session quality better than mood.")
-                                .font(.caption2).foregroundStyle(JK.tertiary)
-                        }
-                    }
-                    .jkCard()
                 }
                 .padding(16)
             }
             .jkScreen()
+            .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showAccount) { CoachAccountView() }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        do {
+            today = try await APIClient.shared.get("/api/coach/today", query: ["date": Day.today])
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
+        }
+    }
+}
+
+private struct TodoRow: View {
+    let systemName: String
+    let title: String
+    let detail: String
+    let link: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(systemName: systemName, size: 32)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+            }
+            Spacer()
+            if link { Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary) }
+        }
+        .padding(10)
+    }
+}
+
+/// Clients whose feedback for the week isn't published yet.
+private struct FeedbackDueView: View {
+    let due: FeedbackDue
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                ScreenHeader(eyebrow: "Week of \(Fmt.dayMonth(due.week))", title: "Feedback to write")
+                ForEach(due.clients) { c in
+                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name, initialTab: .feedback) } label: {
+                        HStack(spacing: 12) {
+                            Avatar(initials: c.displayInitials, size: 32)
+                            Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                        .jkCard(padding: 12)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .jkScreen()
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct SessionRow: View {
+    let session: Booking
+    let isNext: Bool
+
+    private var done: Bool { session.end < Date() }
+    private var who: String {
+        if let c = session.client { return c.name }
+        return session.title ?? "Group"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(Fmt.time(session.start)).font(.caption2.weight(.semibold))
+                Text(Fmt.time(session.end)).font(.system(size: 9)).foregroundStyle(JK.tertiary)
+            }
+            .frame(width: 38, alignment: .leading)
+            .foregroundStyle(done ? JK.tertiary : JK.text)
+            NavigationLink {
+                if let c = session.client {
+                    ClientDetailView(clientId: c.id, name: c.name)
+                } else {
+                    ClassDetailView(booking: session)
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Avatar(initials: session.client.map { $0.displayInitials } ?? "G", size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session.isGroup ? "\(who) · \(session.attendeeCount ?? session.attendees?.count ?? 0) clients" : who)
+                            .font(.subheadline.weight(.semibold))
+                        Text([session.title, session.kindLabel].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption2).foregroundStyle(JK.tertiary)
+                    }
+                    Spacer()
+                    if isNext {
+                        Text("Next")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(JK.text, in: Capsule())
+                            .foregroundStyle(.black)
+                    } else if done {
+                        Image(systemName: "checkmark").font(.caption)
+                    } else {
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                    }
+                }
+                .foregroundStyle(done ? JK.tertiary : JK.text)
+                .padding(10)
+                .background(JK.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isNext ? JK.secondary : JK.stroke, lineWidth: 1))
+            }
+        }
+    }
+}
+
+/// A group class: who's coming, and cancel.
+struct ClassDetailView: View {
+    let booking: Booking
+    @Environment(\.dismiss) private var dismiss
+    @State private var error: String?
+    @State private var confirm = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(booking.title ?? booking.kindLabel).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("\(Fmt.longDay(booking.start)) · \(Fmt.time(booking.start))–\(Fmt.time(booking.end))")
+                        .font(.caption).foregroundStyle(JK.secondary)
+                    if let location = booking.location { Text(location).font(.caption).foregroundStyle(JK.tertiary) }
+                }
+                Eyebrow(text: "Attendees", trailing: booking.capacity.map { "\(booking.attendeeCount ?? booking.attendees?.count ?? 0) of \($0)" })
+                let people = booking.attendees ?? (booking.client.map { [$0] } ?? [])
+                if people.isEmpty {
+                    EmptyCard(systemName: "person.2", title: "Nobody yet")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(people) { p in
+                            HStack(spacing: 10) {
+                                Avatar(initials: p.displayInitials, size: 28)
+                                Text(p.name).font(.subheadline).foregroundStyle(JK.text)
+                                Spacer()
+                            }
+                            .padding(10)
+                        }
+                    }
+                    .jkCard(padding: 2)
+                }
+                if let error { ErrorBanner(message: error) }
+                if booking.cancellable != false && booking.start > Date() {
+                    Button(booking.isGroup ? "Cancel class" : "Cancel booking", role: .destructive) { confirm = true }
+                        .buttonStyle(GhostButtonStyle())
+                }
+            }
+            .padding(16)
+        }
+        .jkScreen()
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("Cancel this?", isPresented: $confirm, titleVisibility: .visible) {
+            Button("Cancel it", role: .destructive) { Task { await cancel() } }
+        }
+    }
+
+    private func cancel() async {
+        do {
+            let _: OK = try await APIClient.shared.send("DELETE", "/api/bookings/\(seg(booking.id))")
+            dismiss()
+        } catch {
+            self.error = error.readable
         }
     }
 }
@@ -87,69 +259,114 @@ struct CoachTodayView: View {
 struct BusinessView: View {
     enum Period: String, CaseIterable { case week = "Week", month = "Month" }
     @State private var period: Period = .month
+    @State private var data: Business?
+    @State private var error: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                ScreenHeader(eyebrow: "Coach · November", title: "Business") {
+                ScreenHeader(eyebrow: "Coach · \(Fmt.month(Date()))", title: "Business") {
                     Segmented(options: Period.allCases, selection: $period) { $0.rawValue }.frame(width: 120)
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Eyebrow(text: "Monthly recurring revenue")
-                        Spacer()
-                        DeltaBadge(text: "+12%")
+                Loadable(value: data, error: error, retry: load) { b in
+                    mrrCard(b)
+                    HStack(spacing: 8) {
+                        StatTile(label: "Active", value: "\(b.active)")
+                        StatTile(label: "New", value: "\(b.new)")
+                        StatTile(label: "Churned", value: "\(b.churned)")
+                        StatTile(label: "Adherence", value: b.adherence.map { "\($0)%" } ?? "–")
                     }
-                    Text("£2,486").font(.largeTitle.weight(.semibold)).foregroundStyle(JK.text)
-                    Chart(Mock.mrr) { p in
-                        AreaMark(x: .value("Day", p.day), y: .value("£", p.kg))
-                            .foregroundStyle(LinearGradient(colors: [JK.text.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Day", p.day), y: .value("£", p.kg)).foregroundStyle(JK.text)
-                    }
-                    .chartYScale(domain: 1700...2550)
-                    .chartXAxis(.hidden)
-                    .chartYAxis(.hidden)
-                    .frame(height: 90)
-                }
-                .jkCard()
-                HStack(spacing: 8) {
-                    StatTile(label: "Active", value: "18")
-                    StatTile(label: "New", value: "2")
-                    StatTile(label: "Churned", value: "1")
-                    StatTile(label: "Adherence", value: "86%")
-                }
-                Eyebrow(text: "Needs attention", trailing: "Auto-flagged")
-                VStack(spacing: 0) {
-                    ForEach(Mock.attention) { item in
-                        HStack(spacing: 12) {
-                            Avatar(initials: item.initials)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(.subheadline.weight(.semibold))
-                                Text(item.reason).font(.caption2).foregroundStyle(JK.tertiary)
-                            }
-                            Spacer()
-                            Image(systemName: item.systemName).font(.caption).foregroundStyle(JK.secondary)
+                    if let plans = b.plans, !plans.isEmpty {
+                        Eyebrow(text: "Members by plan")
+                        HStack(spacing: 8) {
+                            ForEach(plans, id: \.id) { p in StatTile(label: p.name, value: "\(p.members)") }
                         }
-                        .foregroundStyle(JK.text)
-                        .padding(12)
+                    }
+                    Eyebrow(text: "Needs attention", trailing: "Auto-flagged")
+                    if b.attention.isEmpty {
+                        EmptyCard(systemName: "checkmark.seal", title: "Everyone's on track")
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(b.attention, id: \.self) { item in
+                                NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name) } label: {
+                                    HStack(spacing: 12) {
+                                        Avatar(initials: item.client.displayInitials)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.client.name).font(.subheadline.weight(.semibold))
+                                            Text(item.reason).font(.caption2).foregroundStyle(JK.tertiary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: Self.icon(item.kind)).font(.caption).foregroundStyle(JK.secondary)
+                                    }
+                                    .foregroundStyle(JK.text)
+                                    .padding(12)
+                                }
+                            }
+                        }
+                        .jkCard(padding: 2)
                     }
                 }
-                .jkCard(padding: 2)
-                HStack(spacing: 10) {
-                    Button {} label: { Label("Nudge all 3", systemImage: "bubble.left") }
-                    Button {} label: { Label("Full report", systemImage: "chart.bar") }
-                }
-                .buttonStyle(GhostButtonStyle())
             }
             .padding(16)
         }
         .jkScreen()
+        .jkRefreshable { await load() }
+        .task(id: period) { await load() }
+    }
+
+    private static func icon(_ kind: String) -> String {
+        switch kind {
+        case "payment": return "creditcard"
+        case "checkin": return "doc.text"
+        default: return "exclamationmark.triangle"
+        }
+    }
+
+    @ViewBuilder
+    private func mrrCard(_ b: Business) -> some View {
+        let points = b.series.compactMap { s in Day.date(s.date).map { ($0, Double(s.pence) / 100) } }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Eyebrow(text: "Monthly recurring revenue")
+                Spacer()
+                if let delta = b.mrrDeltaPct { DeltaBadge(text: "\(Fmt.delta(delta, digits: 0))%") }
+            }
+            Text(Fmt.pounds(b.mrrPence)).font(.largeTitle.weight(.semibold)).foregroundStyle(JK.text)
+            if points.count >= 2 {
+                let values = points.map(\.1)
+                let span = max((values.max() ?? 0) - (values.min() ?? 0), 1)
+                let low = (values.min() ?? 0) - span * 0.1, high = (values.max() ?? 0) + span * 0.1
+                Chart(points, id: \.0) { pt in
+                    AreaMark(x: .value("Day", pt.0), yStart: .value("£", low), yEnd: .value("£", pt.1))
+                        .foregroundStyle(LinearGradient(colors: [JK.text.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom))
+                    LineMark(x: .value("Day", pt.0), y: .value("£", pt.1)).foregroundStyle(JK.text)
+                }
+                .chartYScale(domain: low...high)
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .frame(height: 90)
+            }
+        }
+        .jkCard()
+    }
+
+    private func load() async {
+        do {
+            data = try await APIClient.shared.get("/api/coach/business", query: ["period": period.rawValue.lowercased()])
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
+        }
     }
 }
 
 // MARK: - Clients (coach tab root)
 
 struct ClientsView: View {
+    @State private var clients: [ClientSummary]?
+    @State private var error: String?
+    @State private var query = ""
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -163,105 +380,82 @@ struct ClientsView: View {
                         }
                         .foregroundStyle(JK.text)
                     }
-                    VStack(spacing: 0) {
-                        ForEach(Mock.clients) { c in
-                            NavigationLink { ClientDetailView() } label: {
-                                HStack(spacing: 12) {
-                                    Avatar(initials: c.initials, size: 34)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(c.name).font(.subheadline.weight(.semibold))
-                                        Text(c.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(JK.tertiary)
+                        TextField("Search clients", text: $query).autocorrectionDisabled()
+                    }
+                    .jkCard(padding: 10)
+                    Loadable(value: clients, error: error, retry: load) { list in
+                        let shown = list.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+                        if shown.isEmpty {
+                            EmptyCard(systemName: "person.2", title: list.isEmpty ? "No clients yet" : "No matches",
+                                      detail: list.isEmpty ? "Clients appear here when they sign up." : nil)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(shown) { c in
+                                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name) } label: {
+                                        HStack(spacing: 12) {
+                                            Avatar(initials: c.displayInitials, size: 34)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(c.name).font(.subheadline.weight(.semibold))
+                                                Text(ClientText.line(c)).font(.caption2).foregroundStyle(JK.tertiary)
+                                            }
+                                            Spacer()
+                                            if let unread = c.unread, unread > 0 {
+                                                Image(systemName: "bubble.left.fill").font(.caption2).foregroundStyle(JK.secondary)
+                                            }
+                                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                                        }
+                                        .foregroundStyle(JK.text)
+                                        .padding(12)
                                     }
-                                    Spacer()
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
                                 }
-                                .foregroundStyle(JK.text)
-                                .padding(12)
                             }
+                            .jkCard(padding: 2)
                         }
                     }
-                    .jkCard(padding: 2)
                 }
                 .padding(16)
             }
             .jkScreen()
+            .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        do {
+            let reply: ClientsResponse = try await APIClient.shared.get("/api/coach/clients")
+            clients = reply.clients
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
         }
     }
 }
 
-struct ClientDetailView: View {
-    enum Tab: String, CaseIterable { case plan = "Plan", sessions = "Sessions", notes = "Notes", billing = "Billing" }
-    @State private var tab: Tab = .plan
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    Avatar(initials: "SC", size: 48)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Sam Carter").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                        Text("Elite · since Mar 2026").font(.caption).foregroundStyle(JK.tertiary)
-                    }
-                }
-                HStack(spacing: 6) {
-                    ForEach(["Paid · renews 1 Dec", "Adherence 86%", "Knee: monitor"], id: \.self) { t in
-                        Text(t)
-                            .font(.system(size: 10, weight: .medium))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
-                            .foregroundStyle(JK.secondary)
-                    }
-                }
-                Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
-
-                if tab == .plan {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Fri · Lower Body Strength").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                        Text("Last edit by Sam · 09:31 (logged sets 1–2)").font(.caption2).foregroundStyle(JK.tertiary)
-                    }
-                    VStack(spacing: 0) {
-                        ForEach(Mock.clientPlan) { row in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(row.name).font(.subheadline.weight(.medium))
-                                    Text(row.prescription).font(.caption2).foregroundStyle(JK.tertiary)
-                                }
-                                Spacer()
-                                if let badge = row.badge {
-                                    Text(badge)
-                                        .font(.system(size: 9, weight: .semibold))
-                                        .padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(badge == "New" ? AnyShapeStyle(JK.text) : AnyShapeStyle(JK.cardRaised), in: Capsule())
-                                        .foregroundStyle(badge == "New" ? Color.black : JK.secondary)
-                                }
-                                Image(systemName: "pencil").font(.caption).foregroundStyle(JK.tertiary)
-                            }
-                            .foregroundStyle(JK.text)
-                            .padding(12)
-                        }
-                    }
-                    .jkCard(padding: 2)
-                    Label("Add exercise or copy from template", systemImage: "plus")
-                        .font(.caption)
-                        .foregroundStyle(JK.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
-                    Button("Publish changes to Sam") {}.buttonStyle(ChromeButtonStyle())
-                } else {
-                    Text("\(tab.rawValue) — not designed yet")
-                        .font(.footnote)
-                        .foregroundStyle(JK.tertiary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                }
-            }
-            .padding(16)
+/// Human text for a client summary's plan, adherence and flags.
+enum ClientText {
+    static func flag(_ f: String) -> String {
+        if f == "no-workout-yet" { return "no workout yet" }
+        if f == "checkin-overdue" { return "check-in overdue" }
+        if f.hasPrefix("no-workout-"), let days = Int(f.dropFirst("no-workout-".count).dropLast()) {
+            return "no workout in \(days) days"
         }
-        .jkScreen()
-        .navigationTitle("Clients")
-        .navigationBarTitleDisplayMode(.inline)
+        return f.replacingOccurrences(of: "-", with: " ")
+    }
+
+    static func line(_ c: ClientSummary) -> String {
+        var parts = [Fmt.planName(c.plan)]
+        if let first = c.flags?.first {
+            parts.append(flag(first))
+        } else if let a = c.adherence {
+            parts.append("adherence \(a)%")
+        } else if c.checkinDue == true {
+            parts.append("check-in due")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -270,132 +464,372 @@ struct ClientDetailView: View {
 struct ProgramsView: View {
     enum Tab: String, CaseIterable { case programs = "Programs", autoflows = "Autoflows", forms = "Forms" }
     @State private var tab: Tab = .programs
+    @State private var programs: [Program]?
+    @State private var error: String?
+    @State private var editing: ProgramDraft?
+    @State private var assigning: Program?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 ScreenHeader(eyebrow: "Templates & automation", title: "Programs") {
-                    Button {} label: { Label("New", systemImage: "plus") }
+                    Button { editing = ProgramDraft() } label: { Label("New", systemImage: "plus") }
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 12).padding(.vertical, 7)
                         .background(JK.chrome, in: Capsule())
                         .foregroundStyle(.black)
                 }
                 Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
-                ForEach(Mock.programs) { p in
-                    HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 10).fill(JK.cardRaised).frame(width: 52, height: 52)
-                            .overlay(Image(systemName: "chart.xyaxis.line").foregroundStyle(JK.tertiary))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(p.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                            Text(p.detail).font(.caption2).foregroundStyle(JK.tertiary)
-                            Text(p.audience)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(JK.cardRaised, in: Capsule())
-                                .foregroundStyle(JK.secondary)
+                switch tab {
+                case .programs:
+                    Loadable(value: programs, error: error, retry: load) { list in
+                        if list.isEmpty {
+                            EmptyCard(systemName: "square.stack", title: "No programs yet",
+                                      detail: "Build a template once, then assign it to any client with a start date.")
                         }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                        ForEach(list) { p in programRow(p) }
                     }
-                    .jkCard(padding: 12)
+                case .autoflows:
+                    comingSoon("Autoflows", "Automatic welcome messages, forms and program assignment for new clients.", "bolt")
+                case .forms:
+                    comingSoon("Forms", "Intake, PAR-Q and custom questionnaires.", "doc.text")
                 }
-                Eyebrow(text: "Autoflow · New client onboarding")
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Mock.onboarding) { step in
-                        HStack(spacing: 12) {
-                            Image(systemName: step.systemName)
-                                .font(.caption)
-                                .frame(width: 26, height: 26)
-                                .overlay(Circle().stroke(JK.stroke, lineWidth: 1))
-                            Text(step.when).font(.caption2).foregroundStyle(JK.tertiary).frame(width: 56, alignment: .leading)
-                            Text(step.action).font(.caption.weight(.medium))
-                        }
-                        .foregroundStyle(JK.text)
-                        .padding(10)
-                    }
-                }
-                .jkCard(padding: 4)
             }
             .padding(16)
         }
         .jkScreen()
+        .jkRefreshable { await load() }
+        .task { await load() }
+        .sheet(item: $editing) { draft in
+            ProgramEditorSheet(draft: draft) { await load() }
+        }
+        .sheet(item: $assigning) { program in
+            AssignProgramSheet(program: program) { await load() }
+        }
+    }
+
+    private func comingSoon(_ title: String, _ detail: String, _ icon: String) -> some View {
+        EmptyCard(systemName: icon, title: "\(title) · coming soon", detail: detail)
+    }
+
+    private func programRow(_ p: Program) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10).fill(JK.cardRaised).frame(width: 52, height: 52)
+                .overlay(Image(systemName: "chart.xyaxis.line").foregroundStyle(JK.tertiary))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(p.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text("\(p.daysPerWeek) days / week · \(p.weeks) weeks · \(p.workouts.count) workouts")
+                    .font(.caption2).foregroundStyle(JK.tertiary)
+                Text(p.clientCount.map { $0 == 1 ? "1 client" : "\($0) clients" } ?? "Template")
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(JK.cardRaised, in: Capsule())
+                    .foregroundStyle(JK.secondary)
+            }
+            Spacer()
+            Menu {
+                Button { editing = ProgramDraft(p) } label: { Label("Edit", systemImage: "pencil") }
+                Button { assigning = p } label: { Label("Assign to client", systemImage: "person.badge.plus") }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.secondary)
+            }
+        }
+        .jkCard(padding: 12)
+        .contentShape(Rectangle())
+        .onTapGesture { editing = ProgramDraft(p) }
+    }
+
+    private func load() async {
+        do {
+            let reply: ProgramsResponse = try await APIClient.shared.get("/api/programs")
+            programs = reply.programs
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
+        }
     }
 }
 
-// MARK: - Schedule (week grid)
+struct ProgramDraft: Identifiable {
+    let id = UUID()
+    var programId: String?
+    var name = ""
+    var detail = ""
+    var daysPerWeek = 3
+    var weeks = 4
+    var workouts: [ProgramWorkout] = []
 
-struct ScheduleView: View {
-    @State private var filter = "All · 18"
-    private let filters = ["All · 18", "1:1", "Group", "Calls", "Assessments"]
-    private let days = ["Mon 16", "Tue 17", "Wed 18", "Thu 19", "Fri 20", "Sat 21"]
-    private let hours = Array(6...19)
-    private let rowHeight: CGFloat = 34
+    init() {}
+
+    init(_ p: Program) {
+        programId = p.id
+        name = p.name
+        detail = p.detail
+        daysPerWeek = p.daysPerWeek
+        weeks = p.weeks
+        workouts = p.workouts
+    }
+
+    var input: ProgramInput {
+        ProgramInput(name: name, detail: detail, daysPerWeek: daysPerWeek, weeks: weeks,
+                     workouts: workouts.sorted { $0.dayOffset < $1.dayOffset })
+    }
+}
+
+struct ProgramEditorSheet: View {
+    @State var draft: ProgramDraft
+    let onSaved: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var picking: UUID?
+    @State private var saving = false
+    @State private var error: String?
+    @State private var confirmDelete = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    ScreenHeader(eyebrow: "All clients", title: "Schedule") {
-                        Button {} label: { Label("Book", systemImage: "plus") }
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(JK.chrome, in: Capsule())
-                            .foregroundStyle(.black)
+                    JKField(label: "Name", text: $draft.name, prompt: "12-Week Strength Block")
+                    JKField(label: "Description", text: $draft.detail, prompt: "4 days / week, barbell focus")
+                    HStack(spacing: 12) {
+                        Stepper("\(draft.daysPerWeek) days / week", value: $draft.daysPerWeek, in: 1...7)
+                        Stepper("\(draft.weeks) wk", value: $draft.weeks, in: 1...52)
                     }
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(filters, id: \.self) { f in Chip(label: f, selected: filter == f) { filter = f } }
+                    .font(.caption)
+                    .foregroundStyle(JK.text)
+
+                    Eyebrow(text: "Workouts", trailing: "Day offset from the start date")
+                    ForEach($draft.workouts) { $w in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                JKField(label: "Title", text: $w.title, prompt: "Lower Body Strength")
+                                Stepper("Day \(w.dayOffset + 1)", value: $w.dayOffset, in: 0...(draft.weeks * 7 - 1))
+                                    .font(.caption).frame(width: 150)
+                            }
+                            ItemsEditor(items: $w.items)
+                            HStack {
+                                Button { picking = w.localId } label: { Label("Add exercise", systemImage: "plus") }
+                                    .buttonStyle(SmallPillStyle())
+                                Spacer()
+                                Button(role: .destructive) {
+                                    draft.workouts.removeAll { $0.localId == w.localId }
+                                } label: { Label("Remove workout", systemImage: "trash") }
+                                    .buttonStyle(SmallPillStyle())
+                            }
                         }
+                        .jkCard()
                     }
-                    grid
+                    Button {
+                        let next = (draft.workouts.map(\.dayOffset).max() ?? -1) + 1
+                        draft.workouts.append(ProgramWorkout(dayOffset: min(next, draft.weeks * 7 - 1), title: "Workout \(draft.workouts.count + 1)", items: []))
+                    } label: { Label("Add workout", systemImage: "plus") }
+                        .buttonStyle(GhostButtonStyle())
+
+                    if let error { ErrorBanner(message: error) }
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if saving { ProgressView().tint(.black) } else { Text(draft.programId == nil ? "Create program" : "Save program") }
+                    }
+                    .buttonStyle(ChromeButtonStyle())
+                    .disabled(saving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if draft.programId != nil {
+                        Button("Delete program", role: .destructive) { confirmDelete = true }
+                            .buttonStyle(GhostButtonStyle())
+                    }
                 }
                 .padding(16)
             }
             .jkScreen()
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle(draft.programId == nil ? "New program" : "Edit program")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .sheet(isPresented: Binding(get: { picking != nil }, set: { if !$0 { picking = nil } })) {
+                ExercisePickerSheet { exercise in
+                    guard let target = picking, let i = draft.workouts.firstIndex(where: { $0.localId == target }) else { return }
+                    draft.workouts[i].items.append(WorkoutItemInput(exerciseId: exercise.id, exerciseName: exercise.name))
+                }
+            }
+            .confirmationDialog("Delete this program?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await delete() } }
+            } message: {
+                Text("Workouts already assigned to clients stay.")
+            }
         }
     }
 
-    private var grid: some View {
-        HStack(alignment: .top, spacing: 4) {
-            VStack(spacing: 0) {
-                Text(" ").font(.system(size: 9)).frame(height: 24)
-                ForEach(hours, id: \.self) { h in
-                    Text("\(h)").font(.system(size: 9)).foregroundStyle(JK.tertiary).frame(height: rowHeight, alignment: .top)
-                }
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            if let id = draft.programId {
+                let _: Program = try await APIClient.shared.send("PUT", "/api/programs/\(seg(id))", body: draft.input)
+            } else {
+                let _: Program = try await APIClient.shared.send("POST", "/api/programs", body: draft.input)
             }
-            .frame(width: 18)
-            ForEach(Array(days.enumerated()), id: \.offset) { index, day in
-                VStack(spacing: 0) {
-                    Text(day)
-                        .font(.system(size: 9, weight: index == 4 ? .bold : .regular))
-                        .foregroundStyle(index == 4 ? Color.black : JK.tertiary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 20)
-                        .background(index == 4 ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(.bottom, 4)
-                    ZStack(alignment: .top) {
+            await onSaved()
+            dismiss()
+        } catch {
+            self.error = error.readable
+        }
+    }
+
+    private func delete() async {
+        guard let id = draft.programId else { return }
+        do {
+            let _: OK = try await APIClient.shared.send("DELETE", "/api/programs/\(seg(id))")
+            await onSaved()
+            dismiss()
+        } catch {
+            self.error = error.readable
+        }
+    }
+}
+
+/// Rows of exercise prescriptions: sets, reps, load, RPE, note; reorder and
+/// delete. Shared by the program editor and the client plan editor.
+struct ItemsEditor: View {
+    @Binding var items: [WorkoutItemInput]
+
+    var body: some View {
+        if items.isEmpty {
+            Text("No exercises yet.").font(.caption2).foregroundStyle(JK.tertiary)
+        }
+        ForEach(Array(items.enumerated()), id: \.element.localId) { index, item in
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(item.exerciseName.isEmpty ? item.exerciseId : item.exerciseName)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    if item.id == nil {
+                        Text("New")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(JK.text, in: Capsule())
+                            .foregroundStyle(.black)
+                    }
+                    Spacer()
+                    Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                        .disabled(index == 0)
+                    Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                        .disabled(index == items.count - 1)
+                    Button(role: .destructive) { items.remove(at: index) } label: { Image(systemName: "trash") }
+                }
+                .font(.caption)
+                .foregroundStyle(JK.secondary)
+                .buttonStyle(.plain)
+                HStack(spacing: 6) {
+                    JKField(label: "Sets", text: Binding(get: { "\(items[index].sets)" },
+                                                         set: { items[index].sets = Int($0) ?? items[index].sets }),
+                            keyboard: .numberPad)
+                        .frame(width: 52)
+                    JKField(label: "Reps", text: $items[index].reps, prompt: "10")
+                    JKField(label: "Load", text: $items[index].load, prompt: "60 kg")
+                    JKField(label: "RPE", text: Binding(get: { items[index].rpe ?? "" },
+                                                        set: { items[index].rpe = $0.isEmpty ? nil : $0 }), prompt: "7–8")
+                        .frame(width: 56)
+                }
+                JKField(label: "Note", text: Binding(get: { items[index].note ?? "" },
+                                                     set: { items[index].note = $0.isEmpty ? nil : $0 }),
+                        prompt: "Cue for the client")
+            }
+            .padding(10)
+            .background(JK.cardRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
+    private func move(_ index: Int, by offset: Int) {
+        let target = index + offset
+        guard items.indices.contains(target) else { return }
+        items.swapAt(index, target)
+    }
+}
+
+struct AssignProgramSheet: View {
+    let program: Program
+    let onDone: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var clients: [ClientSummary]?
+    @State private var clientId: String?
+    @State private var start = Day.add(1, to: Day.start(Date()))
+    @State private var error: String?
+    @State private var saving = false
+    @State private var created: Int?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(program.name).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                    DatePicker("Start date", selection: $start, displayedComponents: .date)
+                        .font(.subheadline).foregroundStyle(JK.text)
+                    Eyebrow(text: "Client")
+                    if let clients {
                         VStack(spacing: 0) {
-                            ForEach(hours, id: \.self) { _ in
-                                Rectangle().fill(JK.stroke).frame(height: 1).frame(height: rowHeight, alignment: .top)
+                            ForEach(clients) { c in
+                                Button { clientId = c.id } label: {
+                                    HStack(spacing: 10) {
+                                        Avatar(initials: c.displayInitials, size: 28)
+                                        Text(c.name).font(.subheadline).foregroundStyle(JK.text)
+                                        Spacer()
+                                        CheckCircle(on: clientId == c.id)
+                                    }
+                                    .padding(10)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
-                        ForEach(Mock.scheduleBlocks.filter { $0.day == index }) { block in
-                            Text(block.label)
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(JK.text)
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
-                                .padding(3)
-                                .frame(height: rowHeight * block.length - 2, alignment: .top)
-                                .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 4))
-                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(JK.stroke, lineWidth: 1))
-                                .offset(y: rowHeight * (block.start - CGFloat(hours[0])))
-                        }
+                        .jkCard(padding: 2)
+                    } else {
+                        LoadingCard()
                     }
-                    .frame(height: rowHeight * CGFloat(hours.count), alignment: .top)
+                    if let created {
+                        Label("Created \(created) draft workouts. Publish them from the client's Plan tab.", systemImage: "checkmark.circle")
+                            .font(.caption).foregroundStyle(JK.secondary)
+                    }
+                    if let error { ErrorBanner(message: error) }
+                    Button {
+                        Task { await assign() }
+                    } label: {
+                        if saving { ProgressView().tint(.black) } else { Text(created == nil ? "Assign" : "Done") }
+                    }
+                    .buttonStyle(ChromeButtonStyle())
+                    .disabled(saving || (created == nil && clientId == nil))
+                }
+                .padding(16)
+            }
+            .jkScreen()
+            .navigationTitle("Assign program")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .task {
+                do {
+                    let reply: ClientsResponse = try await APIClient.shared.get("/api/coach/clients")
+                    clients = reply.clients
+                } catch {
+                    if !error.isCancellation { self.error = error.readable }
                 }
             }
+        }
+    }
+
+    private func assign() async {
+        if created != nil {
+            await onDone()
+            dismiss()
+            return
+        }
+        guard let clientId else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            let reply: AssignResponse = try await APIClient.shared.send(
+                "POST", "/api/programs/\(seg(program.id))/assign",
+                body: AssignInput(clientId: clientId, startDate: Day.string(start)))
+            created = reply.created
+            error = nil
+        } catch {
+            self.error = error.readable
         }
     }
 }
@@ -403,9 +837,26 @@ struct ScheduleView: View {
 // MARK: - Hints & guides (coach tab root)
 
 struct GuidesView: View {
-    @AppStorage("jk.role") private var role: AppRole = .coach
+    @State private var switchError: String?
+    @State private var showDesk = false
+    @Environment(AppSession.self) private var session
     @State private var query = ""
     @State private var filter = "All"
+    @State private var guides: GuidesResponse?
+    @State private var error: String?
+    @State private var open: Guide?
+
+    private var tags: [String] {
+        let all = (guides?.tips ?? []).flatMap(\.tags) + (guides?.featured?.tags ?? [])
+        var seen: [String] = []
+        for t in all where !seen.contains(t) { seen.append(t) }
+        return ["All"] + seen
+    }
+
+    private func matches(_ g: Guide) -> Bool {
+        (filter == "All" || g.tags.contains(filter))
+            && (query.isEmpty || g.title.localizedCaseInsensitiveContains(query) || g.body.localizedCaseInsensitiveContains(query))
+    }
 
     var body: some View {
         NavigationStack {
@@ -414,56 +865,220 @@ struct GuidesView: View {
                     ScreenHeader(eyebrow: "Coach library", title: "Hints & guides")
                     HStack {
                         Image(systemName: "magnifyingglass").foregroundStyle(JK.tertiary)
-                        TextField("Search guides, cues, templates", text: $query)
+                        TextField("Search guides and cues", text: $query)
                     }
                     .jkCard(padding: 10)
-                    HStack(spacing: 6) {
-                        ForEach(["All", "Programming", "Retention", "Business"], id: \.self) { f in
-                            Chip(label: f, selected: filter == f) { filter = f }
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        ZStack(alignment: .topTrailing) {
-                            Rectangle().fill(JK.cardRaised).frame(height: 110)
-                            Text("Video + PDF")
-                                .font(.system(size: 9, weight: .semibold))
-                                .padding(.horizontal, 7).padding(.vertical, 3)
-                                .background(JK.card, in: Capsule())
-                                .foregroundStyle(JK.secondary)
-                                .padding(8)
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Eyebrow(text: "Featured guide · 8 min")
-                            Text("Running a 12-week block without losing clients at week 6")
-                                .font(.headline).foregroundStyle(JK.text)
-                            Text("Deload timing, re-testing, and the check-in script that keeps adherence above 80%.")
-                                .font(.caption).foregroundStyle(JK.tertiary)
-                        }
-                        .padding(14)
-                    }
-                    .background(JK.card)
-                    .clipShape(RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.stroke, lineWidth: 1))
-
-                    Eyebrow(text: "Quick tips")
-                    ForEach(Mock.tips) { tip in
-                        HStack(alignment: .top, spacing: 12) {
-                            IconTile(systemName: tip.systemName, size: 32)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(tip.title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                Text(tip.body).font(.caption2).foregroundStyle(JK.tertiary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(tags, id: \.self) { f in
+                                Chip(label: f, selected: filter == f) { filter = f }
                             }
                         }
-                        .jkCard(padding: 12)
                     }
-                    Button("Sign out") { role = .signedOut }
+                    Loadable(value: guides, error: error, retry: load) { g in
+                        if let featured = g.featured, matches(featured) {
+                            Button { open = featured } label: { featuredCard(featured) }
+                                .buttonStyle(.plain)
+                        }
+                        Eyebrow(text: "Quick tips")
+                        let tips = g.tips.filter(matches)
+                        if tips.isEmpty {
+                            Text("Nothing matches.").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                        ForEach(tips) { tip in
+                            Button { open = tip } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    IconTile(systemName: symbol(tip.icon ?? "lightbulb", fallback: "lightbulb"), size: 32)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(tip.title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                                        Text(tip.body).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(3)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .jkCard(padding: 12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Button { showDesk = true } label: {
+                        Label("Coach desk on the web", systemImage: "desktopcomputer")
+                    }
+                    .buttonStyle(ChromeButtonStyle())
+                    .padding(.top, 20)
+                    Text("Write weekly feedback and plans from a computer.")
+                        .font(.caption2).foregroundStyle(JK.tertiary)
+                    Button {
+                        Task {
+                            do { try await session.switchToDemoClient() } catch { switchError = error.readable }
+                        }
+                    } label: {
+                        Label("View the app as a client (demo: Sam Carter)", systemImage: "arrow.left.arrow.right")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                    if let switchError { ErrorBanner(message: switchError) }
+                    Button("Sign out") { Task { await session.signOut() } }
                         .buttonStyle(GhostButtonStyle())
-                        .padding(.top, 20)
                 }
                 .padding(16)
             }
             .jkScreen()
+            .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showDesk) { WebDeskSheet() }
+            .task { await load() }
+            .sheet(item: $open) { g in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Eyebrow(text: ([g.minutes.map { "\($0) min" }] + g.tags.map { Optional($0) }).compactMap { $0 }.joined(separator: " · "))
+                        Text(g.title).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                        Text(g.body).font(.body).foregroundStyle(JK.secondary)
+                    }
+                    .padding(20)
+                }
+                .background(JK.bg.ignoresSafeArea())
+                .presentationDetents([.medium, .large])
+            }
         }
+    }
+
+    private func featuredCard(_ g: Guide) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                Rectangle().fill(JK.cardRaised).frame(height: 110)
+                    .overlay(Image(systemName: "book.pages").font(.largeTitle).foregroundStyle(JK.tertiary))
+                if let first = g.tags.first {
+                    Text(first)
+                        .font(.system(size: 9, weight: .semibold))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(JK.card, in: Capsule())
+                        .foregroundStyle(JK.secondary)
+                        .padding(8)
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow(text: "Featured guide" + (g.minutes.map { " · \($0) min" } ?? ""))
+                Text(g.title).font(.headline).foregroundStyle(JK.text).multilineTextAlignment(.leading)
+                Text(g.body).font(.caption).foregroundStyle(JK.tertiary).lineLimit(3).multilineTextAlignment(.leading)
+            }
+            .padding(14)
+        }
+        .background(JK.card)
+        .clipShape(RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+    }
+
+    private func load() async {
+        do {
+            guides = try await APIClient.shared.get("/api/guides")
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
+        }
+    }
+}
+
+
+// MARK: - Coach account
+
+/// The coach's own account: who is signed in, privacy, and signing out (to
+/// switch to another account, such as the demo client with "I have a code").
+struct CoachAccountView: View {
+    @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmSignOut = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 12) {
+                        Avatar(initials: initialsOf(session.me?.name ?? "Coach"), size: 48)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(session.me?.name ?? "Coach").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                            Text(session.me?.email ?? "Coach account").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                    }
+                    Text("Signed in as the coach. Clients who sign up are assigned to you.")
+                        .font(.footnote).foregroundStyle(JK.secondary)
+                    Link(destination: APIClient.shared.privacyURL) {
+                        HStack(spacing: 12) {
+                            IconTile(systemName: "hand.raised")
+                            Text("Privacy policy").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Spacer()
+                            Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(JK.tertiary)
+                        }
+                        .jkCard(padding: 12)
+                    }
+                    CalendarSubscribeCard()
+                    WebSessionsRow()
+                    Button("Sign out") { confirmSignOut = true }
+                        .buttonStyle(ChromeButtonStyle())
+                        .padding(.top, 12)
+                    Text("To see the client side, use Guides › View the app as a client.")
+                        .font(.caption2).foregroundStyle(JK.tertiary)
+                }
+                .padding(16)
+            }
+            .jkScreen()
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+            .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) {
+                    dismiss()
+                    Task { await session.signOut() }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+    }
+
+    private func initialsOf(_ name: String) -> String {
+        name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+    }
+}
+
+/// Browsers signed in to the coach desk, and a button to sign them all out.
+private struct WebSessionsRow: View {
+    struct Sessions: Decodable { let count: Int; var latestSignIn: Date? }
+    @State private var sessions: Sessions?
+    @State private var busy = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(systemName: "desktopcomputer")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Coach desk on the web").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+            }
+            Spacer()
+            if (sessions?.count ?? 0) > 0 {
+                Button("Sign out all") { Task { await endAll() } }
+                    .font(.caption.weight(.semibold))
+                    .disabled(busy)
+            }
+        }
+        .jkCard(padding: 12)
+        .task { sessions = try? await APIClient.shared.get("/api/auth/web-sessions") }
+    }
+
+    private var detail: String {
+        guard let s = sessions else { return " " }
+        if s.count == 0 { return "Not signed in on any browser" }
+        let browsers = s.count == 1 ? "1 browser" : "\(s.count) browsers"
+        return browsers + (s.latestSignIn.map { " · last sign-in \(Fmt.relative($0))" } ?? "")
+    }
+
+    private func endAll() async {
+        busy = true
+        defer { busy = false }
+        struct Ended: Decodable { let ended: Int }
+        do {
+            let _: Ended = try await APIClient.shared.send("DELETE", "/api/auth/web-sessions")
+            sessions = Sessions(count: 0, latestSignIn: nil)
+        } catch {}
     }
 }
