@@ -59,7 +59,7 @@ const PEOPLE = [
     goal: 'First powerlifting meet in March', checkin: [5, 4, [], 'Felt strong all week. Bench is flying.'], unread: 'Can we talk peaking for the meet at our next session?' },
   { name: 'Marcus Reid', plan: 'performance', routine: 'hypertrophy', days: [0, 2, 4, 5], time: '18:30', adherence: 0.8, weight: [82.0, 83.4], shares: true, oneToOne: [3, '19:30', 'inperson'], fortnightly: true,
     checkin: [4, 3, [], 'Work was mad Thursday so I skipped legs. Back on it.'] },
-  { name: 'Hannah Okafor', plan: 'elite', routine: 'fatLoss', days: [1, 3, 5], time: '12:15', adherence: 0.75, weight: [78.5, 75.9], shares: true, oneToOne: [5, '09:00', 'inperson'],
+  { name: 'Hannah Okafor', plan: 'elite', routine: 'fatLoss', poorSleep: true, days: [1, 3, 5], time: '12:15', adherence: 0.75, weight: [78.5, 75.9], shares: true, oneToOne: [5, '09:00', 'inperson'],
     checkin: [3, 2, [], 'Down again on the scales! Sleep is rubbish with the baby teething.'], unread: 'Is it OK to swap Thursday for Friday this week?' },
   { name: 'Daniel Price', plan: 'performance', routine: 'running', days: [1, 3, 6], time: '06:30', adherence: 0.9, weight: [71.3, 70.4], shares: true, oneToOne: [2, '17:00', 'video'], fortnightly: true, runner: true,
     checkin: [4, 4, ['Calf'], 'Right calf tight after the intervals, eased off by Sunday.'] },
@@ -108,7 +108,6 @@ export function addTestClients(db, coachId, today = londonDay()) {
     }
 
     PEOPLE.forEach((p, idx) => {
-      const r = rng(idx * 7919 + 17);
       const joined = addDays(today, p.isNew ? -16 : -60 - idx * 9);
       const id = newId('u');
       db.prepare('INSERT INTO users (id, apple_sub, email, name, role, coach_id, is_demo, created_at, health_share, health_share_at) VALUES (?,?,?,?,?,?,0,?,?,?)')
@@ -117,149 +116,195 @@ export function addTestClients(db, coachId, today = londonDay()) {
       setUpClient(db, id, coachId);
       recordPlan(db, id, p.plan, at(joined));
       out.push({ id, name: p.name });
-
-      // Training: from 4 weeks back (or joining) to 3 weeks ahead.
-      const routine = ROUTINES[p.routine];
-      let k = 0;
-      for (let w = -4; w <= 3; w++) {
-        for (const wd of p.days) {
-          const date = addDays(monday, 7 * w + wd);
-          const [title, items] = routine[k++ % routine.length];
-          if (date < joined) continue;
-          const past = date < today;
-          const done = past && r() < p.adherence;
-          const draft = w === 3; // three weeks out: still to be checked and published
-          const progress = Math.max(0, w + 4) * (r() < 0.6 ? 2.5 : 0);
-          const wid = newId('w');
-          db.prepare('INSERT INTO workouts (id, client_id, date, title, starts_at, location, notes, published, published_at, edited_at, edited_by, completed_at, completion_note, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-            .run(wid, id, date, title, p.time, p.routine === 'running' && /Run|Intervals/.test(title) ? 'Outdoors' : 'Studio 2',
-              /Intervals/.test(title) ? '90 s easy jog between reps.' : '', draft ? 0 : 1, draft ? null : at(addDays(date, -6)),
-              at(addDays(date, -6)), 'coach', done ? at(date, p.time) : null,
-              done && r() < 0.25 ? ['Felt strong today.', 'Bit tired, kept it honest.', 'Last set was a grind.', 'Great session!'][Math.floor(r() * 4)] : null, coachId);
-          items.forEach(([name, sets, reps, kg], position) => {
-            const load = kg ? loadText(Math.round((kg + (/(Squat|Deadlift|Bench|Press|Row|Thrust)/.test(name) ? progress : 0)) * 2) / 2, name) : 'BW';
-            const itemId = newId('i');
-            db.prepare('INSERT INTO workout_items (id, workout_id, position, exercise_id, sets, reps, load) VALUES (?,?,?,?,?,?,?)')
-              .run(itemId, wid, position, exerciseId(name), sets, reps, load);
-            if (!done) return;
-            const target = Number.parseInt(reps, 10) || 1;
-            for (let n = 1; n <= sets; n++) {
-              const repsDone = Math.max(1, target - (n === sets && r() < 0.35 ? 1 + Math.floor(r() * 2) : 0));
-              db.prepare('INSERT INTO set_logs (item_id, number, load, reps, rpe, at) VALUES (?,?,?,?,?,?)')
-                .run(itemId, n, load, repsDone, Math.round((6.5 + n * 0.5 + r()) * 2) / 2, at(date, p.time));
-            }
-          });
-        }
-      }
-
-      // Body weight twice a week, drifting from start to now.
-      const span = Math.max(1, Math.round((Date.parse(today) - Date.parse(joined)) / 86_400_000));
-      for (let d = 0; d <= span; d += 3 + (d % 2)) {
-        const w = p.weight[0] + ((p.weight[1] - p.weight[0]) * d) / span + (r() - 0.5) * 0.6;
-        db.prepare("INSERT OR REPLACE INTO measurements (user_id, date, kind, value) VALUES (?,?,'weight',?)").run(id, addDays(joined, d), Math.round(w * 10) / 10);
-      }
-      db.prepare("INSERT OR REPLACE INTO measurements (user_id, date, kind, value) VALUES (?,?,'weight',?)").run(id, today, p.weight[1]);
-
-      // Habits: ticked in line with how they train.
-      for (const h of db.prepare('SELECT id, kind, target, health_kind FROM habits WHERE client_id=?').all(id)) {
-        if (h.health_kind) continue;
-        for (let i = 1; i <= 21; i++) {
-          const day = addDays(today, -i);
-          if (day < joined || r() > p.adherence) continue;
-          db.prepare('INSERT INTO habit_days (habit_id, date, value, done) VALUES (?,?,?,1)').run(h.id, day, h.kind === 'count' ? h.target : 1);
-        }
-      }
-
-      // Apple Health for those who share: steps, sleep, resting HR, workouts.
-      if (p.shares) {
-        const sample = (kind, date, value) => db.prepare('INSERT OR REPLACE INTO health_samples (user_id, id, kind, date, start, end, value, received_at) VALUES (?,?,?,?,?,?,?,?)')
-          .run(id, `${kind}-${date}`, kind, date, at(date, '00:00'), at(date, '23:00'), value, nowIso());
-        for (let i = 0; i < 28; i++) {
-          const d = addDays(today, -i);
-          if (d < joined) break;
-          sample('steps', d, Math.round(5500 + r() * 7000 + (p.runner ? 3000 : 0)));
-          sample('sleep', d, Math.round(p.name.startsWith('Hannah') ? 300 + r() * 80 : 380 + r() * 110));
-          sample('restingHr', d, Math.round((p.runner ? 49 : 58) + r() * 5));
-          sample('activeKcal', d, Math.round(300 + r() * 500));
-          sample('distance', d, Math.round((2 + r() * 5 + (p.runner ? 4 : 0)) * 10) / 10);
-        }
-        for (let i = 1; i < 28; i++) {
-          const d = addDays(today, -i);
-          if (d < joined || r() > (p.runner ? 0.45 : 0.15)) continue;
-          const type = p.runner ? (r() < 0.8 ? 'Running' : 'Cycling') : ['Walking', 'Yoga', 'Cycling', 'Swimming'][Math.floor(r() * 4)];
-          const minutes = Math.round(25 + r() * 45);
-          const start = londonToUtc(d, p.runner ? '06:30' : '18:00');
-          const km = type === 'Yoga' ? null : Math.round(minutes * (type === 'Running' ? 0.18 : type === 'Cycling' ? 0.42 : type === 'Swimming' ? 0.04 : 0.09) * 10) / 10;
-          db.prepare('INSERT OR REPLACE INTO health_activities (user_id, id, type, date, start, end, minutes, kcal, distance_km, avg_hr, source, received_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-            .run(id, `test-${type}-${d}`, type, d, start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(),
-              minutes, Math.round(minutes * (7 + r() * 4)), km, Math.round(120 + r() * 40), p.runner ? 'Garmin' : 'Apple Watch', nowIso());
-        }
-      }
-
-      // Weekly check-ins: three past weeks reviewed; the latest one waits for the coach.
-      if (p.checkin) {
-        const [energy, sleep, pain, note] = p.checkin;
-        for (let w = 3; w >= 1; w--) {
-          const week = addDays(monday, -7 * w);
-          if (week < joined) continue;
-          const latest = w === 1;
-          db.prepare('INSERT INTO checkins (id, client_id, week, energy, sleep, pain, note, submitted_at, reviewed_at, reply) VALUES (?,?,?,?,?,?,?,?,?,?)')
-            .run(newId('c'), id, week, latest ? energy : Math.min(5, Math.max(1, energy + (r() < 0.5 ? -1 : 0))),
-              latest ? sleep : Math.min(5, Math.max(1, sleep + (r() < 0.5 ? 1 : 0))), JSON.stringify(latest ? pain : []),
-              latest ? note : 'Solid week overall.', at(addDays(week, 4), '18:20'),
-              latest ? null : at(addDays(week, 6), '10:00'), latest ? null : 'Thanks, all noted. Keep going.');
-        }
-      }
-
-      // Weekly feedback published for two and three weeks ago; last week's is yours to write.
-      for (const w of [3, 2]) {
-        const week = addDays(monday, -7 * w);
-        if (week < joined || p.quiet) continue;
-        db.prepare('INSERT INTO reports (id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
-          newId('r'), id, coachId, week,
-          `Good week, ${p.name.split(' ')[0]}. ${p.adherence > 0.8 ? 'Every session done and the numbers are moving.' : 'Most sessions done; let\'s protect the midweek one.'}`,
-          p.goal ? `On track for: ${p.goal.toLowerCase()}.` : 'Consistent habits and honest logging.',
-          'Same plan, small load increases where the last set felt easy.',
-          at(addDays(week, 7), '08:00'), w === 3 ? at(addDays(week, 7), '12:00') : null, at(addDays(week, 7), '07:30'), at(addDays(week, 7), '08:00'));
-      }
-
-      // Messages: a short thread; some end with a question you haven't read.
-      const msg = (role, text, hoursAgo, read = true) => db.prepare('INSERT INTO messages (id, client_id, from_id, from_role, text, at, read_at) VALUES (?,?,?,?,?,?,?)')
-        .run(newId('m'), id, role === 'coach' ? coachId : id, role, text, new Date(Date.now() - hoursAgo * 3_600_000).toISOString(), read ? nowIso() : null);
-      if (!p.quiet) {
-        msg('coach', `How did ${routine[0][0]} feel this week?`, 70 + idx * 3);
-        msg('client', p.adherence > 0.8 ? 'Really good, felt in control the whole way.' : 'Hard but got through it.', 66 + idx * 3);
-        if (p.unread) msg('client', p.unread, 3 + idx, false);
-      }
-
-      // Food today for those on Elite (nutrition is part of it).
-      if (p.plan === 'elite') {
-        for (const [name, kcal, pr, c, f] of [['Breakfast · eggs on toast', 480, 28, 40, 22], ['Lunch · chicken rice bowl', 650, 45, 70, 18]]) {
-          db.prepare('INSERT INTO nutrition_entries (id, client_id, date, name, kcal, protein, carbs, fat, at) VALUES (?,?,?,?,?,?,?,?,?)')
-            .run(newId('n'), id, today, name, kcal, pr, c, f, nowIso());
-        }
-      }
-
-      // 1:1s: weekly or fortnightly through the next three weeks, plus last week's.
-      if (p.oneToOne) {
-        const [wd, time, kind] = p.oneToOne;
-        for (let w = -1; w <= 3; w++) {
-          if (p.fortnightly && w % 2 !== 0) continue;
-          const d = addDays(monday, 7 * w + wd);
-          if (d < joined) continue;
-          const start = londonToUtc(d, time);
-          db.prepare('INSERT INTO bookings (id, coach_id, client_id, kind, start, end, location, title, uses_credit, created_at) VALUES (?,?,?,?,?,?,?,?,1,?)')
-            .run(newId('bt'), coachId, id, kind, start.toISOString(), new Date(start.getTime() + 3_600_000).toISOString(),
-              kind === 'video' ? 'Video call' : 'Studio 2', `${kind === 'video' ? 'Video call' : '1:1'} with ${coach.name}`, nowIso());
-        }
-      }
-      if (['hybrid', 'fatLoss', 'running'].includes(p.routine) && !p.quiet) {
-        for (const c of classIds) db.prepare('INSERT INTO class_attendees (booking_id, user_id) VALUES (?,?)').run(c, id);
-      }
+      buildPerson(db, { id, coach, p, idx, today, joined, classIds });
     });
   });
   addTestExtras(db, coachId, today);
   return out;
+}
+
+/**
+ * One client's whole story, from joining (or `weeksBack` weeks ago, whichever
+ * is later) to three weeks ahead: training with set logs and progression,
+ * body measurements, habits, Apple Health if they share, weekly check-ins and
+ * feedback, a message thread, food, 1:1s and classes. `rich` adds a check-in
+ * and published feedback for every week, a week of food and body-fat and
+ * waist measurements: what a demo account needs to show trends.
+ */
+export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [], weeksBack = 4, rich = false }) {
+  const coachId = coach.id;
+  const at = (d, t = '09:00') => londonToUtc(d, t).toISOString();
+  const monday = mondayOf(today);
+  const r = rng(idx * 7919 + 17);
+  const first = p.name.split(' ')[0];
+
+  // Training: from `weeksBack` weeks ago (or joining) to 3 weeks ahead; loads climb week on week.
+  const routine = ROUTINES[p.routine];
+  let k = 0;
+  for (let w = -weeksBack; w <= 3; w++) {
+    for (const wd of p.days) {
+      const date = addDays(monday, 7 * w + wd);
+      const [title, items] = routine[k++ % routine.length];
+      if (date < joined) continue;
+      const past = date < today;
+      const done = past && r() < p.adherence;
+      const draft = w === 3; // three weeks out: still to be checked and published
+      const progress = Math.max(0, w + weeksBack) * (r() < 0.6 ? 2.5 : 0);
+      // Rich: a steady climb from about 85% to 105% of the routine's load, in 2.5 kg steps.
+      const share = 0.85 + (0.2 * Math.max(0, w + weeksBack)) / (weeksBack + 3);
+      const wid = newId('w');
+      db.prepare('INSERT INTO workouts (id, client_id, date, title, starts_at, location, notes, published, published_at, edited_at, edited_by, completed_at, completion_note, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(wid, id, date, title, p.time, p.routine === 'running' && /Run|Intervals/.test(title) ? 'Outdoors' : 'Studio 2',
+          /Intervals/.test(title) ? '90 s easy jog between reps.' : '', draft ? 0 : 1, draft ? null : at(addDays(date, -6)),
+          at(addDays(date, -6)), 'coach', done ? at(date, p.time) : null,
+          done && r() < 0.25 ? ['Felt strong today.', 'Bit tired, kept it honest.', 'Last set was a grind.', 'Great session!'][Math.floor(r() * 4)] : null, coachId);
+      items.forEach(([name, sets, reps, kg], position) => {
+        const lifts = /(Squat|Deadlift|Bench|Press|Row|Thrust)/.test(name);
+        const kgNow = rich ? (lifts ? Math.max(2.5, Math.round((kg * share) / 2.5) * 2.5) : kg) : Math.round((kg + (lifts ? progress : 0)) * 2) / 2;
+        const load = kg ? loadText(kgNow, name) : 'BW';
+        const itemId = newId('i');
+        db.prepare('INSERT INTO workout_items (id, workout_id, position, exercise_id, sets, reps, load) VALUES (?,?,?,?,?,?,?)')
+          .run(itemId, wid, position, exerciseId(name), sets, reps, load);
+        if (!done) return;
+        const target = Number.parseInt(reps, 10) || 1;
+        for (let n = 1; n <= sets; n++) {
+          const repsDone = Math.max(1, target - (n === sets && r() < 0.35 ? 1 + Math.floor(r() * 2) : 0));
+          db.prepare('INSERT INTO set_logs (item_id, number, load, reps, rpe, at) VALUES (?,?,?,?,?,?)')
+            .run(itemId, n, load, repsDone, Math.round((6.5 + n * 0.5 + r()) * 2) / 2, at(date, p.time));
+        }
+      });
+    }
+  }
+
+  // Body weight twice a week, drifting from start to now; body fat and waist fortnightly when given.
+  const span = Math.max(1, Math.round((Date.parse(today) - Date.parse(joined)) / 86_400_000));
+  const measure = (kind, date, value) => db.prepare('INSERT OR REPLACE INTO measurements (user_id, date, kind, value) VALUES (?,?,?,?)').run(id, date, kind, value);
+  for (let d = 0; d <= span; d += 3 + (d % 2)) {
+    const w = p.weight[0] + ((p.weight[1] - p.weight[0]) * d) / span + (r() - 0.5) * 0.6;
+    measure('weight', addDays(joined, d), Math.round(w * 10) / 10);
+  }
+  measure('weight', today, p.weight[1]);
+  for (const [kind, range] of [['bodyFat', p.bodyFat], ['waist', p.waist], ['restingHr', p.rhr]]) {
+    if (!range) continue;
+    for (let d = 0; d <= span; d += 14) measure(kind, addDays(joined, d), Math.round((range[0] + ((range[1] - range[0]) * d) / span + (r() - 0.5) * 0.4) * 10) / 10);
+    measure(kind, today, range[1]);
+  }
+
+  // Habits: ticked in line with how they train.
+  for (const h of db.prepare('SELECT id, kind, target, health_kind FROM habits WHERE client_id=?').all(id)) {
+    if (h.health_kind) continue;
+    for (let i = 1; i <= Math.max(21, rich ? weeksBack * 7 : 0); i++) {
+      const day = addDays(today, -i);
+      if (day < joined || r() > p.adherence) continue;
+      db.prepare('INSERT INTO habit_days (habit_id, date, value, done) VALUES (?,?,?,1)').run(h.id, day, h.kind === 'count' ? h.target : 1);
+    }
+  }
+
+  // Apple Health for those who share: steps, sleep, resting HR, workouts.
+  if (p.shares) {
+    const days = Math.max(28, rich ? weeksBack * 7 : 0);
+    const sample = (kind, date, value) => db.prepare('INSERT OR REPLACE INTO health_samples (user_id, id, kind, date, start, end, value, received_at) VALUES (?,?,?,?,?,?,?,?)')
+      .run(id, `${kind}-${date}`, kind, date, at(date, '00:00'), at(date, '23:00'), value, nowIso());
+    for (let i = 0; i < days; i++) {
+      const d = addDays(today, -i);
+      if (d < joined) break;
+      // Fitter over time: resting HR eases down, steps creep up.
+      const fitter = rich ? (days - i) / days : 0;
+      sample('steps', d, Math.round(5500 + r() * 7000 + (p.runner ? 3000 : 0) + fitter * 1500));
+      sample('sleep', d, Math.round(p.poorSleep ? 300 + r() * 80 : 380 + r() * 110));
+      sample('restingHr', d, Math.round((p.runner ? 49 : 58) + r() * 5 - fitter * 4));
+      sample('activeKcal', d, Math.round(300 + r() * 500));
+      sample('distance', d, Math.round((2 + r() * 5 + (p.runner ? 4 : 0)) * 10) / 10);
+    }
+    for (let i = 1; i < days; i++) {
+      const d = addDays(today, -i);
+      if (d < joined || r() > (p.runner ? 0.45 : 0.15)) continue;
+      const type = p.runner ? (r() < 0.8 ? 'Running' : 'Cycling') : ['Walking', 'Yoga', 'Cycling', 'Swimming'][Math.floor(r() * 4)];
+      const minutes = Math.round(25 + r() * 45);
+      const start = londonToUtc(d, p.runner ? '06:30' : '18:00');
+      const km = type === 'Yoga' ? null : Math.round(minutes * (type === 'Running' ? 0.18 : type === 'Cycling' ? 0.42 : type === 'Swimming' ? 0.04 : 0.09) * 10) / 10;
+      db.prepare('INSERT OR REPLACE INTO health_activities (user_id, id, type, date, start, end, minutes, kcal, distance_km, avg_hr, source, received_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(id, `test-${type}-${d}`, type, d, start.toISOString(), new Date(start.getTime() + minutes * 60_000).toISOString(),
+          minutes, Math.round(minutes * (7 + r() * 4)), km, Math.round(120 + r() * 40), p.runner ? 'Garmin' : 'Apple Watch', nowIso());
+    }
+  }
+
+  // Weekly check-ins: past weeks reviewed with a reply; the latest one waits for the coach.
+  const NOTES = ['Solid week overall.', 'Busy at work but got the sessions in.', 'Legs sore early in the week, fine by Thursday.',
+    'Slept better this week.', 'Missed one session, family stuff. Back on it.', 'Feeling stronger on the big lifts.', 'Energy dipped midweek, ate better at the weekend.'];
+  const REPLIES = ['Thanks, all noted. Keep going.', 'Good week. Same plan, small load increases.', 'Nice. Protect that sleep.',
+    'Noted, we\'ll keep Thursday lighter.', 'Great work, the numbers show it.', 'Missed sessions happen. The trend is what counts.'];
+  if (p.checkin) {
+    const [energy, sleep, pain, note] = p.checkin;
+    for (let w = rich ? weeksBack : 3; w >= 1; w--) {
+      const week = addDays(monday, -7 * w);
+      if (week < joined) continue;
+      const latest = w === 1;
+      db.prepare('INSERT INTO checkins (id, client_id, week, energy, sleep, pain, note, submitted_at, reviewed_at, reply) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        .run(newId('c'), id, week, latest ? energy : Math.min(5, Math.max(1, energy + (r() < 0.5 ? -1 : 0))),
+          latest ? sleep : Math.min(5, Math.max(1, sleep + (r() < 0.5 ? 1 : 0) - (rich && w > weeksBack / 2 ? 1 : 0))), JSON.stringify(latest ? pain : []),
+          latest ? note : rich ? NOTES[w % NOTES.length] : 'Solid week overall.', at(addDays(week, 4), '18:20'),
+          latest && !p.latestReviewed ? null : at(addDays(week, 6), '10:00'),
+          latest && !p.latestReviewed ? null : rich ? REPLIES[w % REPLIES.length] : 'Thanks, all noted. Keep going.');
+    }
+  }
+
+  // Weekly feedback: rich has every past week (last week's new); otherwise two and three weeks ago.
+  const weeks = rich ? Array.from({ length: weeksBack }, (_, i) => weeksBack - i) : [3, 2];
+  const FOCUS = ['Same plan, small load increases where the last set felt easy.', 'Protect the midweek session: it\'s the one that slips.',
+    'Ten minutes of mobility before every lower session.', 'Hit protein at breakfast; it makes the rest of the day easy.', 'Lights out by 22:30 four nights this week.'];
+  for (const w of weeks) {
+    const week = addDays(monday, -7 * w);
+    if (week < joined || p.quiet) continue;
+    db.prepare('INSERT INTO reports (id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
+      newId('r'), id, coachId, week,
+      `Good week, ${first}. ${p.adherence > 0.8 ? 'Every session done and the numbers are moving.' : 'Most sessions done; let\'s protect the midweek one.'}`,
+      p.goal ? `On track for: ${p.goal.toLowerCase()}.` : 'Consistent habits and honest logging.',
+      rich ? FOCUS[w % FOCUS.length] : FOCUS[0],
+      at(addDays(week, 7), '08:00'), w === 1 && rich ? null : w === 3 || rich ? at(addDays(week, 7), '12:00') : null, at(addDays(week, 7), '07:30'), at(addDays(week, 7), '08:00'));
+  }
+
+  // Messages: a thread (the spec's own when it has one); some end with a question you haven't read.
+  const msg = (role, text, hoursAgo, read = true) => db.prepare('INSERT INTO messages (id, client_id, from_id, from_role, text, at, read_at) VALUES (?,?,?,?,?,?,?)')
+    .run(newId('m'), id, role === 'coach' ? coachId : id, role, text, new Date(Date.now() - hoursAgo * 3_600_000).toISOString(), read ? nowIso() : null);
+  if (p.thread) {
+    for (const [role, text, hoursAgo, read = true] of p.thread) msg(role, text, hoursAgo, read);
+  } else if (!p.quiet) {
+    msg('coach', `How did ${routine[0][0]} feel this week?`, 70 + idx * 3);
+    msg('client', p.adherence > 0.8 ? 'Really good, felt in control the whole way.' : 'Hard but got through it.', 66 + idx * 3);
+    if (p.unread) msg('client', p.unread, 3 + idx, false);
+  }
+
+  // Food for those on Elite (nutrition is part of it): today, or the last week when rich.
+  if (p.plan === 'elite') {
+    const MEALS = [['Breakfast · eggs on toast', 480, 28, 40, 22], ['Breakfast · oats and whey', 620, 48, 80, 14], ['Lunch · chicken rice bowl', 650, 45, 70, 18],
+      ['Lunch · tuna salad wrap', 520, 38, 50, 16], ['Dinner · salmon, potatoes, greens', 710, 46, 60, 28], ['Snack · Greek yoghurt and berries', 220, 20, 24, 4]];
+    for (let i = 0; i < (rich ? 7 : 1); i++) {
+      const d = addDays(today, -i);
+      const meals = i === 0 ? [MEALS[1], MEALS[2]] : [MEALS[i % 2], MEALS[2 + (i % 2)], MEALS[4], ...(i % 3 ? [MEALS[5]] : [])];
+      for (const [name, kcal, pr, c, f] of meals) {
+        db.prepare('INSERT INTO nutrition_entries (id, client_id, date, name, kcal, protein, carbs, fat, at) VALUES (?,?,?,?,?,?,?,?,?)')
+          .run(newId('n'), id, d, name, kcal, pr, c, f, at(d, '12:00'));
+      }
+    }
+  }
+
+  // 1:1s: weekly or fortnightly through the next three weeks, plus past ones.
+  if (p.oneToOne) {
+    const [wd, time, kind] = p.oneToOne;
+    for (let w = rich ? -weeksBack : -1; w <= 3; w++) {
+      if (p.fortnightly && w % 2 !== 0) continue;
+      const d = addDays(monday, 7 * w + wd);
+      if (d < joined) continue;
+      const start = londonToUtc(d, time);
+      db.prepare('INSERT INTO bookings (id, coach_id, client_id, kind, start, end, location, title, uses_credit, created_at) VALUES (?,?,?,?,?,?,?,?,1,?)')
+        .run(newId(p.bookingPrefix ?? 'bt'), coachId, id, kind, start.toISOString(), new Date(start.getTime() + 3_600_000).toISOString(),
+          kind === 'video' ? 'Video call' : 'Studio 2', `${kind === 'video' ? 'Video call' : '1:1'} with ${coach.name}`, nowIso());
+    }
+  }
+  if (['hybrid', 'fatLoss', 'running'].includes(p.routine) && !p.quiet) {
+    for (const c of classIds) db.prepare('INSERT INTO class_attendees (booking_id, user_id) VALUES (?,?)').run(c, id);
+  }
 }
 
 // Program templates the coach's library starts with, built from the routines above.
@@ -272,6 +317,20 @@ const PROGRAMS = [
   { name: 'Hyrox Hybrid', detail: 'Strength, engine and race practice', routine: 'hybrid', days: [0, 1, 3, 5], weeks: 8, people: ['Aisha Khan'] },
   { name: 'Move Well · Strong Back', detail: 'Mobility and trunk strength, two days', routine: 'mobility', days: [0, 3], weeks: 4, people: ['Sophie Turner'] },
 ];
+
+/** A program template's workouts from a routine: loads climb 2.5 kg a week, every fourth week lighter. */
+export function programWorkouts(routineKey, days, weeks) {
+  const routine = ROUTINES[routineKey];
+  const workouts = [];
+  let k = 0;
+  for (let w = 0; w < weeks; w++) {
+    for (const d of days) {
+      const [title, items] = routine[k++ % routine.length];
+      workouts.push({ dayOffset: w * 7 + d, title, items: items.map(([name, sets, reps, kg]) => ({ exerciseId: exerciseId(name), sets, reps, load: kg ? loadText(kg + w * (kg >= 40 ? 2.5 : 0), name) : 'BW', rpe: w % 4 === 3 ? '6' : '8', note: null })) });
+    }
+  }
+  return workouts;
+}
 
 const slug = name => `test-${name.toLowerCase().replace(/[^a-z]+/g, '-')}`;
 
@@ -299,15 +358,7 @@ export function addTestExtras(db, coachId, today = londonDay()) {
     // Programs, and the clients' existing workouts tagged with the one they follow.
     const program = {};
     for (const p of PROGRAMS) {
-      const routine = ROUTINES[p.routine];
-      const workouts = [];
-      let k = 0;
-      for (let w = 0; w < p.weeks; w++) {
-        for (const d of p.days) {
-          const [title, items] = routine[k++ % routine.length];
-          workouts.push({ dayOffset: w * 7 + d, title, items: items.map(([name, sets, reps, kg]) => ({ exerciseId: exerciseId(name), sets, reps, load: kg ? loadText(kg + w * (kg >= 40 ? 2.5 : 0), name) : 'BW', rpe: w % 4 === 3 ? '6' : '8', note: null })) });
-        }
-      }
+      const workouts = programWorkouts(p.routine, p.days, p.weeks);
       const id = newId('tp');
       db.prepare('INSERT INTO programs (id, coach_id, name, detail, days_per_week, weeks, body, updated_at) VALUES (?,?,?,?,?,?,?,?)')
         .run(id, coachId, p.name, p.detail, p.days.length, p.weeks, JSON.stringify({ workouts }), ago(24 * (10 + p.weeks)));

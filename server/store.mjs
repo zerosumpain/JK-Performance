@@ -128,6 +128,7 @@ export function openStore(path) {
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       env TEXT NOT NULL CHECK (env IN ('production','sandbox')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS push_tokens_user ON push_tokens(user_id);
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS forms (
       id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL, intro TEXT NOT NULL DEFAULT '', questions TEXT NOT NULL,
