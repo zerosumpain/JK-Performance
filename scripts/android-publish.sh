@@ -8,7 +8,10 @@ set -euo pipefail
 repo="${JK_REPO:-zerosumpain/JK-Performance}"
 dest="${JK_ANDROID_DIR:-/var/lib/jk-performance/android}"
 
-run=$(gh run list -R "$repo" --workflow android.yml --branch main --status success --event push --limit 1 --json databaseId,headSha -q '.[0] | "\(.databaseId) \(.headSha)"')
+# Filter here rather than with gh's --branch/--status/--event: combined, those
+# return nothing (gh 2.105), and an empty list must not read as run "null".
+run=$(gh run list -R "$repo" --workflow android.yml --limit 30 --json databaseId,headSha,headBranch,event,conclusion \
+  -q '[.[] | select(.headBranch == "main" and .event == "push" and .conclusion == "success")][0] // empty | "\(.databaseId) \(.headSha)"')
 [ -n "$run" ] || { echo "No successful Android build on main yet"; exit 0; }
 read -r id sha <<<"$run"
 current=$(sed -n 's/.*"commit":"\([0-9a-f]*\)".*/\1/p' "$dest/version.json" 2>/dev/null || true)
