@@ -83,6 +83,7 @@ class JKApplication : Application() {
         APIClient.init(this)
         Outbox.init(this)
         Push.init(this)
+        Reminders.init(this)
         val scope = MainScope()
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
