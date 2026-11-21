@@ -150,10 +150,10 @@ struct ScheduleView: View {
     /// The colour key for the kinds of session on the grid.
     private var legend: some View {
         HStack(spacing: 14) {
-            ForEach([("inperson", "1:1 in person"), ("video", "Video call"), ("group", "Group class")], id: \.0) { kind, name in
+            ForEach([("inperson", "1:1 in person"), ("video", "Video call"), ("group", "Group class")], id: \.0) { item in
                 HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 2).fill(JK.slot(kind)).frame(width: 10, height: 10)
-                    Text(name).font(.caption2).foregroundStyle(JK.secondary)
+                    RoundedRectangle(cornerRadius: 2).fill(JK.slot(item.0)).frame(width: 10, height: 10)
+                    Text(item.1).font(.caption2).foregroundStyle(JK.secondary)
                 }
             }
         }
