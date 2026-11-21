@@ -28,6 +28,8 @@ android {
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
         // The API; override with -PapiBase=http://100.83.68.108:5671 for the local preview.
+        // Plain http only for builds pointed at the local preview (-PapiBase=http://…).
+        manifestPlaceholders["allowHttp"] = (project.findProperty("apiBase")?.toString()?.startsWith("http://") == true).toString()
         buildConfigField("String", "API_BASE", "\"${project.findProperty("apiBase") ?: "https://jk.strangeramblings.com"}\"")
     }
 
