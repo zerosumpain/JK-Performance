@@ -92,7 +92,20 @@ object Day {
 object Fmt {
     private val gb: Locale = Locale.UK
 
-    private fun pattern(p: String) = DateTimeFormatter.ofPattern(p, gb)
+    // Android's en-GB data abbreviates September as "Sept"; iOS (and the
+    // server's pages) say "Sep", so short months are spelled out here.
+    private val shortMonths = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        .withIndex().associate { (i, m) -> (i + 1).toLong() to m }
+
+    private fun pattern(p: String): DateTimeFormatter {
+        if (!p.contains("MMM") || p.contains("MMMM")) return DateTimeFormatter.ofPattern(p, gb)
+        val (before, after) = p.split("MMM", limit = 2)
+        return java.time.format.DateTimeFormatterBuilder().apply {
+            if (before.isNotEmpty()) appendPattern(before)
+            appendText(java.time.temporal.ChronoField.MONTH_OF_YEAR, shortMonths)
+            if (after.isNotEmpty()) appendPattern(after)
+        }.toFormatter(gb)
+    }
     private val longDayF = pattern("EEEE d MMM")
     private val shortDayF = pattern("EEE d MMM")
     private val dayMonthF = pattern("d MMM")
