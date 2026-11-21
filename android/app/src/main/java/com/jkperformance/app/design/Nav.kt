@@ -1,13 +1,12 @@
 package com.jkperformance.app.design
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -32,7 +31,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import java.util.concurrent.atomic.AtomicLong
@@ -62,26 +60,39 @@ class NavStack internal constructor() {
 
 val LocalNav = staticCompositionLocalOf<NavStack> { error("No NavStack: wrap the tab in NavHost { }") }
 
-/** One tab's navigation: shows `root`, or the top pushed screen; system back pops. */
+/**
+ * One tab's navigation: `root` with the pushed screens on top; system back pops.
+ *
+ * Like a SwiftUI NavigationStack, screens underneath stay alive: every layer
+ * stays composed (so plain `remember` state — a half-written draft, a loaded
+ * list, a scroll position — is still there on the way back), but only the top
+ * one is placed, drawn and touchable. The top layer slides in when pushed.
+ */
 @Composable
 fun NavHost(stack: NavStack = remember { NavStack() }, root: @Composable () -> Unit) {
-    val holder = rememberSaveableStateHolder()
     BackHandler(enabled = stack.depth > 0) { stack.pop() }
     CompositionLocalProvider(LocalNav provides stack) {
-        val top = stack.entries.lastOrNull()
-        AnimatedContent(
-            targetState = top,
-            transitionSpec = {
-                val forward = (targetState?.key ?: 0) > (initialState?.key ?: 0)
-                if (forward) (slideInHorizontally(tween(260)) { it / 3 } + fadeIn(tween(200))) togetherWith fadeOut(tween(150))
-                else fadeIn(tween(200)) togetherWith (slideOutHorizontally(tween(240)) { it / 3 } + fadeOut(tween(200)))
+        val entries = stack.entries.toList()
+        Layout(
+            content = {
+                Box { root() }
+                entries.forEach { entry ->
+                    key(entry.key) {
+                        val shown = remember { Animatable(0f) }
+                        LaunchedEffect(Unit) { shown.animateTo(1f, tween(260)) }
+                        Box(Modifier.graphicsLayer {
+                            translationX = (1f - shown.value) * size.width / 3f
+                            alpha = 0.4f + 0.6f * shown.value
+                        }) {
+                            CompositionLocalProvider(LocalDismiss provides { stack.pop() }) { entry.content() }
+                        }
+                    }
+                }
             },
-            label = "nav",
-        ) { entry ->
-            holder.SaveableStateProvider(entry?.key ?: 0L) {
-                if (entry == null) root()
-                else CompositionLocalProvider(LocalDismiss provides { stack.pop() }) { entry.content() }
-            }
+        ) { measurables, constraints ->
+            // Only the top layer is measured and placed; the rest wait, composed.
+            val top = measurables.last().measure(constraints)
+            layout(top.width, top.height) { top.place(0, 0) }
         }
     }
 }

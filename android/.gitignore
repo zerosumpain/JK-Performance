@@ -6,3 +6,5 @@ app/google-services.json
 *.jks
 *.keystore
 .kotlin/
+screens/
+.gradle-home/
