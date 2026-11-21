@@ -213,9 +213,9 @@ Health-filled habit values, the Health line in a client's detail) only while `sh
 
 ## Coach
 
-| GET | `/api/coach/today?date=` | – | `{date, sessions:[Booking], activeClients, totalClients, unread, tip:Guide, feedbackDue:{week, clients:[PersonRef]}, checkinsToReview, attention:[AttentionItem ≤5]}` |
+| GET | `/api/coach/today?date=` | – | `{date, sessions:[Booking], activeClients, totalClients, unread, tip:Guide, feedbackDue:{week, dueBy, clients:[PersonRef]}, checkinsToReview, checkinClients:[PersonRef+at], formsToReview, formClients:[PersonRef+at], unreadClients:[PersonRef+at], urgent:[AttentionItem], quiet:[PersonRef+days], upcoming:[{client, date, autoflow, action}], sessionsLeftThisWeek, attention:[AttentionItem ≤5]}` |
 |---|---|---|---|
-| GET | `/api/coach/clients` | – | `{clients:[ClientSummary]}` |
+| GET | `/api/coach/clients` | – | `{clients:[ClientSummary]}`, most in need first (see `demand`) |
 | GET | `/api/coach/clients/:id` | – | `{client:ClientSummary, health, nextWorkout:Workout?}` |
 | GET | `/api/coach/business?period=week|month` | – | `Business` |
 | GET | `/api/guides` | – | `{featured:Guide, tips:[Guide]}` — `Guide`: `{id, title, minutes, tags, body}` |
@@ -223,13 +223,64 @@ Health-filled habit values, the Health line in a client's detail) only while `sh
 ```jsonc
 // ClientSummary (adherence null when nothing was due)
 {"id","name","initials","plan","since","adherence":86,"lastWorkoutAt":"…","checkinDue":false,
- "flags":["no-workout-9d","no-workout-yet","checkin-overdue"],"unread":1}
+ "flags":["no-workout-9d","no-workout-yet","checkin-overdue"],"unread":1,"lastMessageAt","lastMessageFrom":"client|coach",
+ "demand":{"kind":"urgent|message|form|checkin|quiet|inactive|ok","reason":"Mentions pain in a message","at":"…",
+           "urgent":["…every urgent reason"],"lastContactAt":"…","quietDays":12,"rank":5}}
+// urgent = an unread message mentioning pain/injury, a check-in with pain AND energy ≤ 2, or a form "yes" to a flagged question.
+// Order: urgent, unread message (newest first), form to read, check-in to reply to, no coach contact (message or
+// check-in reply) in 7+ days (longest first), no workout lately, then everyone else.
 // Business
 {"mrrPence":248600,"mrrDeltaPct":12,"series":[{"date","pence"}],"active":18,"new":2,"churned":1,"adherence":86,
  "attention":[{"client":{id,name,initials},"reason":"No workout logged in 9 days","kind":"inactive|checkin|payment"}],
  "plans":[{"id":"elite","name":"Elite","members":3}]}   // mrrDeltaPct and adherence may be null
 ```
 Adherence = completed ÷ published workouts dated in the last 28 days, as a percentage.
+
+## Forms
+
+| | | | |
+|---|---|---|---|
+| GET | `/api/forms` | coach | `{forms:[Form], templates:[{name,intro,questions}]}` — templates are ready-made starting points |
+| POST · PUT | `/api/forms` · `/api/forms/:id` | coach | `{name, intro?, questions:[Question]}` → `Form` |
+| DELETE | `/api/forms/:id` | coach | sent copies stay with clients |
+| POST | `/api/forms/:id/send` | coach | `{clientId}` → `FormRequest`; pushes the client |
+| GET | `/api/form-requests?clientId=` | both | `{requests:[FormRequest]}` — a coach naming no client gets every answered, unread one |
+| GET | `/api/form-requests/:id` | both | `FormRequest` |
+| POST | `/api/form-requests/:id/answers` | client | `{answers:{questionId: value}}` once; 409 after; pushes the coach |
+| POST | `/api/form-requests/:id/review` | coach | marks read |
+| DELETE | `/api/form-requests/:id` | coach | withdraw an unanswered one (409 once answered) |
+
+```jsonc
+// Question: kind text (≤300) | long (≤4000) | scale (1–5) | yesno (bool) | choice (one of options)
+{"id":"joint","kind":"yesno","label":"…","flag":true,"required":false,"options":["…"]}
+// Form
+{"id","name","intro","questions":[Question],"sent":4,"waiting":1,"toReview":1,"updatedAt"}
+// FormRequest: its own copy of the questions, so later edits never change it. flagged = labels answered yes on flag questions.
+{"id","formId","name","intro","questions","client":PersonRef,"sentAt","answers":{…}|null,"submittedAt","reviewedAt","flagged":["…"],"fromAutoflow":true}
+```
+
+## Autoflows
+
+Steps run on day N after the start (0 = the day itself): `message` (`{first}` becomes the client's first name),
+`form`, or `program` (laid from the next Monday and **published**). A `join` flow starts when a client signs up to the
+coach; `manual` ones when the coach enrols someone. The server runs due steps on enrolment and every 5 minutes, once each.
+
+| | | | |
+|---|---|---|---|
+| GET | `/api/autoflows` | coach | `{autoflows:[Autoflow]}` |
+| POST · PUT | `/api/autoflows` · `/api/autoflows/:id` | coach | `{name, trigger:'join'|'manual', active?, steps:[{id?, day, action, text?|formId?|programId?}]}` |
+| DELETE | `/api/autoflows/:id` | coach | |
+| POST | `/api/autoflows/:id/enrol` | coach | `{clientId, startDate?}` → `Run`; 409 if already in it |
+| DELETE | `/api/autoflows/:id/runs/:runId` | coach | stop a client's run |
+| GET | `/api/coach/clients/:id/autoflows` | coach | `{runs:[Run]}` |
+
+```jsonc
+// Autoflow
+{"id","name","trigger","active":true,"steps":[{"id","day","action","text"|"formId"|"programId","label":"Form · Intake"}],"runs":[Run]}
+// Run
+{"id","autoflowId","autoflowName","client":PersonRef,"startDay","stepsDone":2,"steps":5,"stoppedAt":null,
+ "next":{"day":7,"date":"2026-11-28","label":"Message · First week done…"}|null,"log":[{"stepId","label","at","outcome"}]}
+```
 
 ## Weekly feedback
 

@@ -1,4 +1,5 @@
 import { createPublicKey, timingSafeEqual, verify } from 'node:crypto';
+import { startJoinFlows } from './autoflows.mjs';
 import { DEFAULT_HABITS, DEFAULT_TARGETS, WELCOME_MESSAGE } from './catalogue.mjs';
 import { fail } from './http.mjs';
 import { hash, newId, nowIso, secret, tx } from './store.mjs';
@@ -84,13 +85,16 @@ export function upsertAppleUser(db, config, claims, fullName) {
   const name = (`${given} ${family}`.trim() || (email ? email.split('@')[0] : 'New client')).slice(0, 80);
   const role = isCoachEmail(config, email) ? 'coach' : 'client';
   const id = newId('u');
-  return tx(db, () => {
+  const user = tx(db, () => {
     const coachId = role === 'client' ? primaryCoachId(db, config) : null;
     db.prepare('INSERT INTO users (id, apple_sub, email, name, role, coach_id, created_at) VALUES (?,?,?,?,?,?,?)')
       .run(id, claims.sub, email, name, role, coachId, nowIso());
     if (role === 'client') setUpClient(db, id, coachId);
     return db.prepare('SELECT * FROM users WHERE id=?').get(id);
   });
+  // The coach's onboarding autoflows start the moment a client joins.
+  if (role === 'client') startJoinFlows(db, config, user);
+  return user;
 }
 
 // MARK: - Sessions

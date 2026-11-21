@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { createApp } from './app.mjs';
+import { startAutoflowClock } from './autoflows.mjs';
 import { seedCatalogue } from './catalogue.mjs';
 import { loadConfig } from './config.mjs';
 import { seedDemo } from './demo.mjs';
@@ -14,4 +15,8 @@ if (config.demoCode || config.demoCoachCode) {
 }
 const app = createApp(db, config);
 app.listen(config.port, config.host, () => console.log(`JK Performance listening on ${config.host}:${config.port}`));
-process.on('SIGTERM', () => app.close(() => { db.close(); process.exit(0); }));
+const clock = startAutoflowClock(db, config);
+process.on('SIGTERM', () => {
+  clearInterval(clock);
+  app.close(() => { db.close(); process.exit(0); });
+});

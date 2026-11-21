@@ -22,6 +22,7 @@ final class TabRouter {
         case "report": client = .home
         case "booking": client = .calendar; coach = .schedule
         case "checkin": coach = .today
+        case "form": client = .home; coach = .today
         default: break
         }
     }

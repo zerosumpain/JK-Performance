@@ -59,7 +59,7 @@ struct ScheduleView: View {
                         HStack(spacing: 6) {
                             ForEach(Filter.allCases, id: \.self) { f in
                                 let count = (bookings ?? []).filter(f.keeps).count
-                                Chip(label: f == .all ? "All · \(count)" : f.rawValue, selected: filter == f) { filter = f }
+                                Chip(label: f == .all ? "All · \(count)" : "\(f.rawValue) · \(count)", selected: filter == f) { filter = f }
                             }
                         }
                     }
@@ -70,6 +70,7 @@ struct ScheduleView: View {
                     } else {
                         if let error { ErrorBanner(message: error) }
                         grid
+                        legend
                         Text("Tap a block for details. The clock button edits your weekly availability.")
                             .font(.caption2).foregroundStyle(JK.tertiary)
                     }
@@ -128,8 +129,12 @@ struct ScheduleView: View {
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
                                     .padding(3)
                                     .frame(height: rowHeight * CGFloat(length) - 2, alignment: .top)
-                                    .background(b.isGroup ? JK.card : JK.cardRaised, in: RoundedRectangle(cornerRadius: 4))
-                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(JK.stroke, lineWidth: 1))
+                                    .background(JK.slot(b.kind).opacity(0.24), in: RoundedRectangle(cornerRadius: 4))
+                                    .overlay(alignment: .leading) {
+                                        UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 4)
+                                            .fill(JK.slot(b.kind)).frame(width: 2)
+                                    }
+                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(JK.slot(b.kind).opacity(0.55), lineWidth: 1))
                             }
                             .buttonStyle(.plain)
                             .offset(y: rowHeight * CGFloat(start - Double(hours[0])))
@@ -140,6 +145,20 @@ struct ScheduleView: View {
                 }
             }
         }
+    }
+
+    /// The colour key for the kinds of session on the grid.
+    private var legend: some View {
+        HStack(spacing: 14) {
+            ForEach([("inperson", "1:1 in person"), ("video", "Video call"), ("group", "Group class")], id: \.0) { item in
+                HStack(spacing: 5) {
+                    RoundedRectangle(cornerRadius: 2).fill(JK.slot(item.0)).frame(width: 10, height: 10)
+                    Text(item.1).font(.caption2).foregroundStyle(JK.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private func blocks(on day: Date) -> [Booking] {

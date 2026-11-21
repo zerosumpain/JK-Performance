@@ -20,6 +20,32 @@ enum JK {
     )
 
     static let corner: CGFloat = 14
+
+    // The few colours that carry meaning: urgent, waiting, and the kinds of slot on the schedule.
+    static let urgent = Color(red: 1.0, green: 0.42, blue: 0.38)
+    static let waiting = Color(red: 1.0, green: 0.76, blue: 0.36)
+    static let inPerson = Color(red: 0.40, green: 0.68, blue: 1.0)
+    static let video = Color(red: 0.74, green: 0.56, blue: 1.0)
+    static let group = Color(red: 0.36, green: 0.82, blue: 0.62)
+
+    /// The colour of a booking kind (`inperson`, `video`, `group`).
+    static func slot(_ kind: String) -> Color {
+        switch kind {
+        case "video": return video
+        case "group": return group
+        default: return inPerson
+        }
+    }
+}
+
+/// A small coloured dot, for keys and status.
+struct Dot: View {
+    let color: Color
+    var size: CGFloat = 8
+
+    var body: some View {
+        Circle().fill(color).frame(width: size, height: size)
+    }
 }
 
 // MARK: - Surfaces

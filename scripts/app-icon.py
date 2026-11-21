@@ -1,93 +1,52 @@
 #!/usr/bin/env python3
-"""Render the app icon: a silver "JK" in a rounded square on black, the mark
-from the welcome screen. Standard library only (porkserv has no imaging
-library). RGB with no alpha channel, because App Store Connect refuses an icon
-that has one.
+"""Render the app icon: the "JK" badge from the top-right corner of the app,
+scaled up. A bold white "JK" inside a thin rounded square (60% white) on black,
+in the badge's own proportions (30 pt square, 7 pt corners, 1 pt line, 12 pt
+bold type).
 
-    python3 scripts/app-icon.py
+Needs Pillow and a bold sans font close to SF Pro (Inter Bold is the usual
+open stand-in). porkserv has no imaging library, so run it in a container:
+
+    docker run --rm -v "$PWD:/w" -v "$FONT_DIR:/font:ro" -w /w python:3.12-slim \
+      sh -c "pip install -q pillow && python scripts/app-icon.py /font/inter-700.woff"
+
+RGB with no alpha channel, because App Store Connect refuses an icon that has one.
 """
-import json
-import math
-import struct
-import zlib
+import sys
 from pathlib import Path
 
+from PIL import Image, ImageDraw, ImageFont
+
 SIZE = 1024
-OUT = Path(__file__).resolve().parent.parent / "ios/JKPerformance/Assets.xcassets/AppIcon.appiconset"
+OUT = Path(__file__).resolve().parent.parent / "ios/JKPerformance/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 
-# Strokes as (polyline, half-width), in 1024-space.
-def arc(cx, cy, r, a0, a1, n=24):
-    return [(cx + r * math.cos(math.radians(a0 + (a1 - a0) * i / n)),
-             cy + r * math.sin(math.radians(a0 + (a1 - a0) * i / n))) for i in range(n + 1)]
-
-LETTER = 30
-J = [(372, 392), (482, 392)], [(452, 392), (452, 560)] , [(452, 560)] + arc(402, 560, 50, 0, 180) + [(352, 536)]
-K = [(552, 392), (552, 632)], [(552, 532), (672, 392)], [(590, 490), (680, 632)]
-STROKES = [(p, LETTER) for p in (*J, *K)]
-
-BOX = (232, 792, 96)  # lo, hi, corner radius
-BOX_HALF = 7
+# The badge in points, and how many pixels a point becomes.
+BADGE, CORNER, LINE, TYPE = 30, 7, 1, 12
+SCALE = 20  # a 600 px badge in the 1024 px icon
 
 
-def seg_dist(px, py, ax, ay, bx, by):
-    dx, dy = bx - ax, by - ay
-    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy or 1)))
-    return math.hypot(px - ax - t * dx, py - ay - t * dy)
+def main(font_path):
+    # Draw at 4x and scale down for smooth edges.
+    k = 4
+    img = Image.new("RGB", (SIZE * k, SIZE * k), (0, 0, 0))
+    d = ImageDraw.Draw(img)
+    side = BADGE * SCALE * k
+    lo = (SIZE * k - side) // 2
+    line = LINE * SCALE * k
+    d.rounded_rectangle([lo, lo, lo + side, lo + side], radius=CORNER * SCALE * k, outline=(153, 153, 153), width=line)
 
+    font = ImageFont.truetype(font_path, TYPE * SCALE * k)
+    # Centre on the letters' ink, not the font's line box, as SwiftUI's frame does visually.
+    left, top, right, bottom = d.textbbox((0, 0), "JK", font=font)
+    x = (SIZE * k - (right - left)) / 2 - left
+    y = (SIZE * k - (bottom - top)) / 2 - top
+    d.text((x, y), "JK", font=font, fill=(255, 255, 255))
 
-def box_dist(px, py):
-    lo, hi, r = BOX
-    c = (lo + hi) / 2
-    h = (hi - lo) / 2 - r
-    qx, qy = abs(px - c) - h, abs(py - c) - h
-    outside = math.hypot(max(qx, 0), max(qy, 0)) + min(max(qx, qy), 0) - r
-    return abs(outside)
-
-
-SEGS = [(p[i], p[i + 1], w) for p, w in STROKES for i in range(len(p) - 1)]
-
-
-def coverage(d, half):
-    return max(0.0, min(1.0, half + 0.5 - d))
-
-
-def silver(y):
-    t = (y - 360) / 300
-    return 0.97 - 0.32 * max(0.0, min(1.0, t)) + 0.2 * max(0.0, t - 0.7)
-
-
-def main():
-    rows = []
-    for y in range(SIZE):
-        row = bytearray([0])
-        for x in range(SIZE):
-            # Ground: near-black, a touch lighter at the top.
-            g = 0.02 + 0.06 * (1 - y / SIZE) * max(0.0, 1 - math.hypot(x - 512, y - 300) / 700)
-            a = coverage(box_dist(x, y), BOX_HALF) * 0.75
-            if 340 <= x <= 720 and 360 <= y <= 670:
-                for (ax, ay), (bx, by), w in SEGS:
-                    a = max(a, coverage(seg_dist(x, y, ax, ay, bx, by), w))
-                    if a >= 1:
-                        break
-            v = g + (silver(y) - g) * a
-            c = int(max(0, min(255, round(v * 255))))
-            row += bytes((c, c, c))
-        rows.append(bytes(row))
-    raw = b"".join(rows)
-
-    def chunk(kind, data):
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
-
-    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", SIZE, SIZE, 8, 2, 0, 0, 0)) \
-        + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "AppIcon.png").write_bytes(png)
-    (OUT / "Contents.json").write_text(json.dumps({
-        "images": [{"filename": "AppIcon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024"}],
-        "info": {"author": "xcode", "version": 1},
-    }, indent=2) + "\n")
-    print("wrote", OUT / "AppIcon.png")
+    img.resize((SIZE, SIZE), Image.LANCZOS).save(OUT, "PNG", optimize=True)
+    print(f"Wrote {OUT}")
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2:
+        sys.exit("usage: app-icon.py <bold-font.ttf|.otf|.woff>")
+    main(sys.argv[1])
