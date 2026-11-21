@@ -30,6 +30,7 @@ struct ClientDetailView: View {
                     CoachReportsSection(clientId: clientId, clientName: firstName)
                     Eyebrow(text: "Check-ins")
                     CoachNotesTab(clientId: clientId)
+                    ClientAutomationSection(client: PersonRef(id: clientId, name: detail?.client.name ?? name))
                 case .health: CoachHealthTab(clientId: clientId, clientName: firstName)
                 case .habits: CoachHabitsTab(clientId: clientId)
                 case .sessions: CoachSessionsTab(client: PersonRef(id: clientId, name: detail?.client.name ?? name))
@@ -89,6 +90,7 @@ struct ClientDetailView: View {
     private var chips: [String] {
         guard let d = detail else { return [] }
         var out: [String] = []
+        for reason in d.client.demand?.urgent ?? [] { out.append("⚠︎ \(reason)") }
         if let a = d.client.adherence { out.append("Adherence \(a)%") }
         out += (d.client.flags ?? []).map { ClientText.flag($0).prefix(1).uppercased() + ClientText.flag($0).dropFirst() }
         if d.client.checkinDue == true { out.append("Check-in due") }

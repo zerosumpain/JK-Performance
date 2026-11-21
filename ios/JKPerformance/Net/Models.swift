@@ -648,10 +648,45 @@ struct CoachToday: Decodable {
     var feedbackDue: FeedbackDue?
     var checkinsToReview: Int?
     var attention: [AttentionItem]?
+    var checkinClients: [PersonAt]?
+    var formsToReview: Int?
+    var formClients: [PersonAt]?
+    var unreadClients: [PersonAt]?
+    var urgent: [AttentionItem]?
+    var quiet: [QuietClient]?
+    var upcoming: [UpcomingStep]?
+    var sessionsLeftThisWeek: Int?
+}
+
+/// A client with the moment something of theirs started waiting.
+struct PersonAt: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    var initials: String?
+    var at: Date?
+
+    var ref: PersonRef { PersonRef(id: id, name: name, initials: initials) }
+}
+
+struct QuietClient: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    var initials: String?
+    let days: Int
+
+    var ref: PersonRef { PersonRef(id: id, name: name, initials: initials) }
+}
+
+struct UpcomingStep: Codable, Hashable {
+    let client: PersonRef
+    let date: String
+    let autoflow: String
+    let action: String
 }
 
 struct FeedbackDue: Decodable {
     let week: String
+    var dueBy: String?
     let clients: [PersonRef]
 }
 
@@ -666,8 +701,19 @@ struct ClientSummary: Codable, Identifiable, Hashable {
     var checkinDue: Bool?
     var flags: [String]?
     var unread: Int?
+    var lastMessageAt: Date?
+    var demand: Demand?
 
     var displayInitials: String { initials ?? Fmt.initials(name) }
+}
+
+/// Why a client is where they are in the list (the server sorts by it).
+struct Demand: Codable, Hashable {
+    let kind: String   // urgent | message | form | checkin | quiet | inactive | ok
+    var reason: String?
+    var at: Date?
+    var urgent: [String]?
+    var quietDays: Int?
 }
 
 struct ClientsResponse: Codable { let clients: [ClientSummary] }
@@ -860,4 +906,161 @@ struct LinkCode: Codable {
     let code: String
     let expiresAt: Date
     let url: String
+}
+
+// MARK: - Forms
+
+struct FormQuestion: Codable, Hashable, Identifiable {
+    var id: String
+    var kind: String   // text | long | scale | yesno | choice
+    var label: String
+    var options: [String]?
+    var flag: Bool?
+    var required: Bool?
+
+    var isRequired: Bool { required != false }
+
+    static let kinds: [(String, String)] = [("text", "Short answer"), ("long", "Long answer"), ("scale", "Scale 1–5"), ("yesno", "Yes / no"), ("choice", "Choice")]
+    static func kindName(_ kind: String) -> String { kinds.first { $0.0 == kind }?.1 ?? kind }
+}
+
+/// One answer: text, a 1–5 number, yes/no, or a choice (text).
+enum FormAnswer: Codable, Hashable {
+    case text(String)
+    case number(Int)
+    case yes(Bool)
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let b = try? c.decode(Bool.self) { self = .yes(b) }
+        else if let n = try? c.decode(Int.self) { self = .number(n) }
+        else { self = .text(try c.decode(String.self)) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .text(let t): try c.encode(t)
+        case .number(let n): try c.encode(n)
+        case .yes(let b): try c.encode(b)
+        }
+    }
+
+    var display: String {
+        switch self {
+        case .text(let t): return t
+        case .number(let n): return "\(n) / 5"
+        case .yes(let b): return b ? "Yes" : "No"
+        }
+    }
+}
+
+struct FormTemplate: Codable, Hashable {
+    let name: String
+    var intro: String?
+    let questions: [FormQuestion]
+}
+
+struct CoachForm: Codable, Hashable, Identifiable {
+    let id: String
+    var name: String
+    var intro: String?
+    var questions: [FormQuestion]
+    var sent: Int?
+    var waiting: Int?
+    var toReview: Int?
+}
+
+struct FormsResponse: Codable {
+    let forms: [CoachForm]
+    var templates: [FormTemplate]?
+}
+
+struct FormInput: Codable {
+    var name: String
+    var intro: String
+    var questions: [FormQuestion]
+}
+
+struct FormRequest: Codable, Hashable, Identifiable {
+    let id: String
+    var formId: String?
+    let name: String
+    var intro: String?
+    let questions: [FormQuestion]
+    var client: PersonRef?
+    let sentAt: Date
+    var answers: [String: FormAnswer]?
+    var submittedAt: Date?
+    var reviewedAt: Date?
+    var flagged: [String]?
+    var fromAutoflow: Bool?
+
+    var isFlagged: Bool { !(flagged ?? []).isEmpty }
+}
+
+struct FormRequestsResponse: Codable { let requests: [FormRequest] }
+struct FormAnswersInput: Codable { let answers: [String: FormAnswer] }
+struct ClientIdInput: Codable { let clientId: String }
+
+// MARK: - Autoflows
+
+struct AutoflowStep: Codable, Hashable, Identifiable {
+    var id: String
+    var day: Int
+    var action: String   // message | form | program
+    var text: String?
+    var formId: String?
+    var programId: String?
+    var label: String?
+
+    var icon: String {
+        switch action {
+        case "message": return "bubble.left"
+        case "form": return "doc.text"
+        default: return "dumbbell"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey { case id, day, action, text, formId, programId, label }
+}
+
+struct AutoflowRun: Codable, Hashable, Identifiable {
+    struct Next: Codable, Hashable { let day: Int; let date: String; let label: String }
+    struct LogEntry: Codable, Hashable { let stepId: String; let label: String; let at: Date; let outcome: String }
+
+    let id: String
+    let autoflowId: String
+    var autoflowName: String?
+    var client: PersonRef?
+    let startDay: String
+    let stepsDone: Int
+    let steps: Int
+    var stoppedAt: Date?
+    var next: Next?
+    var log: [LogEntry]?
+}
+
+struct Autoflow: Codable, Hashable, Identifiable {
+    let id: String
+    var name: String
+    var trigger: String   // join | manual
+    var active: Bool
+    var steps: [AutoflowStep]
+    var runs: [AutoflowRun]?
+}
+
+struct AutoflowsResponse: Codable { let autoflows: [Autoflow] }
+struct AutoflowRunsResponse: Codable { let runs: [AutoflowRun] }
+
+struct AutoflowInput: Codable {
+    var name: String
+    var trigger: String
+    var active: Bool
+    var steps: [AutoflowStep]
+}
+
+struct EnrolInput: Codable {
+    let clientId: String
+    var startDate: String?
 }

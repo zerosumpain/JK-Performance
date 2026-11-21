@@ -128,6 +128,25 @@ export function openStore(path) {
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       env TEXT NOT NULL CHECK (env IN ('production','sandbox')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS push_tokens_user ON push_tokens(user_id);
+    CREATE TABLE IF NOT EXISTS forms (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, intro TEXT NOT NULL DEFAULT '', questions TEXT NOT NULL,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS form_requests (
+      id TEXT PRIMARY KEY, form_id TEXT REFERENCES forms(id) ON DELETE SET NULL,
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, intro TEXT NOT NULL DEFAULT '', questions TEXT NOT NULL,
+      sent_at TEXT NOT NULL, answers TEXT, submitted_at TEXT, reviewed_at TEXT, autoflow_id TEXT);
+    CREATE INDEX IF NOT EXISTS form_requests_client ON form_requests(client_id, sent_at);
+    CREATE TABLE IF NOT EXISTS autoflows (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, trigger TEXT NOT NULL CHECK (trigger IN ('join','manual')),
+      active INTEGER NOT NULL DEFAULT 1, steps TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS autoflow_runs (
+      id TEXT PRIMARY KEY, autoflow_id TEXT NOT NULL REFERENCES autoflows(id) ON DELETE CASCADE,
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      start_day TEXT NOT NULL, done TEXT NOT NULL DEFAULT '{}', stopped_at TEXT, created_at TEXT NOT NULL,
+      UNIQUE (autoflow_id, client_id));
   `);
   // Columns added after the first release. SQLite has no ADD COLUMN IF NOT EXISTS.
   addColumn(db, 'users', 'health_share', 'INTEGER NOT NULL DEFAULT 0');

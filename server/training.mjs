@@ -298,21 +298,28 @@ function deleteProgram(_req, ctx) {
   return { ok: true };
 }
 
-/** Lay a program onto a client's calendar as draft workouts the coach then publishes. */
+/**
+ * Lay a program onto a client's calendar from `start`. By default the workouts
+ * are drafts the coach checks and publishes; an autoflow publishes them.
+ */
+export function layProgram(db, program, clientId, start, coachId, { publish = false } = {}) {
+  const { workouts } = JSON.parse(program.body);
+  const now = nowIso();
+  tx(db, () => {
+    for (const w of workouts) {
+      const id = newId('w');
+      db.prepare("INSERT INTO workouts (id, client_id, date, title, notes, published, published_at, edited_at, edited_by, created_by, program_id) VALUES (?,?,?,?,'',?,?,?,'coach',?,?)")
+        .run(id, clientId, addDays(start, w.dayOffset), w.title, publish ? 1 : 0, publish ? now : null, now, coachId, program.id);
+      writeItems(db, id, w.items.map(i => ({ ...i, id: null })));
+    }
+  });
+  return workouts.length;
+}
+
 function assignProgram(_req, ctx) {
   const p = ownProgram(ctx);
   const client = clientFor(ctx, ctx.body.clientId);
-  const start = day(ctx.body.startDate, 'startDate');
-  const { workouts } = JSON.parse(p.body);
-  tx(ctx.db, () => {
-    for (const w of workouts) {
-      const id = newId('w');
-      ctx.db.prepare("INSERT INTO workouts (id, client_id, date, title, notes, published, edited_at, edited_by, created_by, program_id) VALUES (?,?,?,?,'',0,?,'coach',?,?)")
-        .run(id, client.id, addDays(start, w.dayOffset), w.title, nowIso(), ctx.user.id, p.id);
-      writeItems(ctx.db, id, w.items.map(i => ({ ...i, id: null })));
-    }
-  });
-  return { created: workouts.length };
+  return { created: layProgram(ctx.db, p, client.id, day(ctx.body.startDate, 'startDate'), ctx.user.id) };
 }
 
 export function trainingRoutes(r) {

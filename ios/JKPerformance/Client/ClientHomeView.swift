@@ -12,6 +12,7 @@ struct ClientHomeView: View {
     @State private var checkins: CheckInsResponse?
     @State private var error: String?
     @State private var loaded = false
+    @State private var reloads = 0
 
     private var api: APIClient { APIClient.shared }
     private let grid = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
@@ -34,6 +35,7 @@ struct ClientHomeView: View {
                         LoadingCard()
                     } else {
                         if let error { ErrorBanner(message: error) }
+                        ClientFormsCard(refresh: reloads)
                         todayCard
                         nextBooking
                         newFeedback
@@ -80,6 +82,7 @@ struct ClientHomeView: View {
         await session.refreshMe()
         error = failures.first
         loaded = week != nil || habits != nil || bookings != nil
+        reloads += 1
     }
 
     // MARK: Today

@@ -30,47 +30,7 @@ struct CoachTodayView: View {
                         .accessibilityLabel("Business")
                     }
                     Loadable(value: today, error: error, retry: load) { t in
-                        let sorted = t.sessions.sorted { $0.start < $1.start }
-                        let next = sorted.first { $0.end > Date() }?.id
-                        Eyebrow(text: "Sessions", trailing: sorted.isEmpty ? nil : "\(sorted.filter { $0.end > Date() }.count) to go")
-                        if sorted.isEmpty {
-                            Text("Nothing booked today.").font(.caption).foregroundStyle(JK.tertiary)
-                        }
-                        ForEach(sorted) { s in
-                            SessionRow(session: s, isNext: s.id == next)
-                        }
-
-                        Eyebrow(text: "To do")
-                        VStack(spacing: 0) {
-                            if let due = t.feedbackDue, !due.clients.isEmpty {
-                                NavigationLink { FeedbackDueView(due: due) } label: {
-                                    TodoRow(systemName: "text.bubble", title: "Feedback to write · \(due.clients.count)",
-                                            detail: "Week of \(Fmt.dayMonth(due.week))", link: true)
-                                }
-                                Divider().overlay(JK.stroke)
-                            }
-                            if let n = t.checkinsToReview, n > 0 {
-                                TodoRow(systemName: "square.and.pencil", title: n == 1 ? "1 check-in to reply to" : "\(n) check-ins to reply to",
-                                        detail: "Client › Feedback", link: false)
-                                Divider().overlay(JK.stroke)
-                            }
-                            if t.unread > 0 {
-                                TodoRow(systemName: "bubble.left", title: t.unread == 1 ? "1 unread message" : "\(t.unread) unread messages",
-                                        detail: "Messages tab", link: false)
-                                Divider().overlay(JK.stroke)
-                            }
-                            ForEach(t.attention ?? [], id: \.self) { item in
-                                NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name) } label: {
-                                    TodoRow(systemName: item.kind == "checkin" ? "calendar.badge.exclamationmark" : "figure.walk",
-                                            title: item.client.name, detail: item.reason, link: true)
-                                }
-                                Divider().overlay(JK.stroke)
-                            }
-                            if (t.feedbackDue?.clients.isEmpty ?? true) && (t.checkinsToReview ?? 0) == 0 && t.unread == 0 && (t.attention ?? []).isEmpty {
-                                TodoRow(systemName: "checkmark", title: "All caught up", detail: "\(t.activeClients) active clients", link: false)
-                            }
-                        }
-                        .jkCard(padding: 2)
+                        TodayCards(today: t)
                     }
                 }
                 .padding(16)
@@ -93,28 +53,8 @@ struct CoachTodayView: View {
     }
 }
 
-private struct TodoRow: View {
-    let systemName: String
-    let title: String
-    let detail: String
-    let link: Bool
-
-    var body: some View {
-        HStack(spacing: 12) {
-            IconTile(systemName: systemName, size: 32)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
-            }
-            Spacer()
-            if link { Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary) }
-        }
-        .padding(10)
-    }
-}
-
 /// Clients whose feedback for the week isn't published yet.
-private struct FeedbackDueView: View {
+struct FeedbackDueView: View {
     let due: FeedbackDue
 
     var body: some View {
@@ -140,7 +80,7 @@ private struct FeedbackDueView: View {
     }
 }
 
-private struct SessionRow: View {
+struct SessionRow: View {
     let session: Booking
     let isNext: Bool
 
@@ -166,6 +106,7 @@ private struct SessionRow: View {
                 }
             } label: {
                 HStack(spacing: 10) {
+                    Capsule().fill(JK.slot(session.kind).opacity(done ? 0.4 : 1)).frame(width: 3, height: 28)
                     Avatar(initials: session.client.map { $0.displayInitials } ?? "G", size: 28)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(session.isGroup ? "\(who) · \(session.attendeeCount ?? session.attendees?.count ?? 0) clients" : who)
@@ -390,28 +331,16 @@ struct ClientsView: View {
                         if shown.isEmpty {
                             EmptyCard(systemName: "person.2", title: list.isEmpty ? "No clients yet" : "No matches",
                                       detail: list.isEmpty ? "Clients appear here when they sign up." : nil)
+                        } else if query.isEmpty {
+                            // The server sends them most-in-need first; group them so the line between is clear.
+                            let now = shown.filter { ClientText.needsYou($0) }
+                            let later = shown.filter { $0.demand?.kind == "quiet" || $0.demand?.kind == "inactive" }
+                            let fine = shown.filter { !ClientText.needsYou($0) && $0.demand?.kind != "quiet" && $0.demand?.kind != "inactive" }
+                            clientGroup("Needs you", now)
+                            clientGroup("Check in with", later)
+                            clientGroup("On track", fine)
                         } else {
-                            VStack(spacing: 0) {
-                                ForEach(shown) { c in
-                                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name) } label: {
-                                        HStack(spacing: 12) {
-                                            Avatar(initials: c.displayInitials, size: 34)
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(c.name).font(.subheadline.weight(.semibold))
-                                                Text(ClientText.line(c)).font(.caption2).foregroundStyle(JK.tertiary)
-                                            }
-                                            Spacer()
-                                            if let unread = c.unread, unread > 0 {
-                                                Image(systemName: "bubble.left.fill").font(.caption2).foregroundStyle(JK.secondary)
-                                            }
-                                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
-                                        }
-                                        .foregroundStyle(JK.text)
-                                        .padding(12)
-                                    }
-                                }
-                            }
-                            .jkCard(padding: 2)
+                            clientGroup(nil, shown)
                         }
                     }
                 }
@@ -421,6 +350,21 @@ struct ClientsView: View {
             .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
             .task { await load() }
+        }
+    }
+
+    @ViewBuilder
+    private func clientGroup(_ title: String?, _ list: [ClientSummary]) -> some View {
+        if !list.isEmpty {
+            if let title { Eyebrow(text: title, trailing: "\(list.count)") }
+            VStack(spacing: 0) {
+                ForEach(list) { c in
+                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name, initialTab: ClientText.tab(for: c)) } label: {
+                        ClientRow(client: c)
+                    }
+                }
+            }
+            .jkCard(padding: 2)
         }
     }
 
@@ -435,8 +379,63 @@ struct ClientsView: View {
     }
 }
 
+private struct ClientRow: View {
+    let client: ClientSummary
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Avatar(initials: client.displayInitials, size: 34)
+                .overlay(alignment: .topTrailing) {
+                    if let tint = ClientText.tint(client) { Dot(color: tint, size: 9).overlay(Circle().stroke(JK.card, lineWidth: 2)) }
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(client.name).font(.subheadline.weight(.semibold))
+                Text(ClientText.reason(client))
+                    .font(.caption2)
+                    .foregroundStyle(client.demand?.kind == "urgent" ? JK.urgent : JK.tertiary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if let unread = client.unread, unread > 0 {
+                Image(systemName: "bubble.left.fill").font(.caption2).foregroundStyle(JK.secondary)
+            }
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+        }
+        .foregroundStyle(JK.text)
+        .padding(12)
+    }
+}
+
 /// Human text for a client summary's plan, adherence and flags.
 enum ClientText {
+    /// Something of theirs is waiting on the coach.
+    static func needsYou(_ c: ClientSummary) -> Bool {
+        ["urgent", "message", "form", "checkin"].contains(c.demand?.kind ?? "")
+    }
+
+    static func tint(_ c: ClientSummary) -> Color? {
+        switch c.demand?.kind {
+        case "urgent": return JK.urgent
+        case "message", "form", "checkin": return JK.waiting
+        default: return nil
+        }
+    }
+
+    /// Why they're where they are: "Sent you a message · 2 hr. ago", else the usual plan line.
+    static func reason(_ c: ClientSummary) -> String {
+        guard let d = c.demand, let reason = d.reason else { return line(c) }
+        if let at = d.at, ["urgent", "message", "form", "checkin"].contains(d.kind) { return "\(reason) · \(Fmt.relative(at))" }
+        return reason
+    }
+
+    /// The tab that answers what they need.
+    static func tab(for c: ClientSummary) -> ClientDetailView.Tab {
+        switch c.demand?.kind {
+        case "urgent", "form", "checkin": return .feedback
+        default: return .plan
+        }
+    }
+
     static func flag(_ f: String) -> String {
         if f == "no-workout-yet" { return "no workout yet" }
         if f == "checkin-overdue" { return "check-in overdue" }
@@ -463,21 +462,27 @@ enum ClientText {
 
 struct ProgramsView: View {
     enum Tab: String, CaseIterable { case programs = "Programs", autoflows = "Autoflows", forms = "Forms" }
-    @State private var tab: Tab = .programs
+    @State private var tab: Tab
     @State private var programs: [Program]?
     @State private var error: String?
     @State private var editing: ProgramDraft?
     @State private var assigning: Program?
 
+    init(initialTab: Tab = .programs) {
+        _tab = State(initialValue: initialTab)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                ScreenHeader(eyebrow: "Templates & automation", title: "Programs") {
-                    Button { editing = ProgramDraft() } label: { Label("New", systemImage: "plus") }
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(JK.chrome, in: Capsule())
-                        .foregroundStyle(.black)
+                ScreenHeader(eyebrow: "Templates & automation", title: tab.rawValue) {
+                    if tab == .programs {
+                        Button { editing = ProgramDraft() } label: { Label("New", systemImage: "plus") }
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(JK.chrome, in: Capsule())
+                            .foregroundStyle(.black)
+                    }
                 }
                 Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
                 switch tab {
@@ -490,9 +495,9 @@ struct ProgramsView: View {
                         ForEach(list) { p in programRow(p) }
                     }
                 case .autoflows:
-                    comingSoon("Autoflows", "Automatic welcome messages, forms and program assignment for new clients.", "bolt")
+                    AutoflowsTab()
                 case .forms:
-                    comingSoon("Forms", "Intake, PAR-Q and custom questionnaires.", "doc.text")
+                    FormsTab()
                 }
             }
             .padding(16)
@@ -506,10 +511,6 @@ struct ProgramsView: View {
         .sheet(item: $assigning) { program in
             AssignProgramSheet(program: program) { await load() }
         }
-    }
-
-    private func comingSoon(_ title: String, _ detail: String, _ icon: String) -> some View {
-        EmptyCard(systemName: icon, title: "\(title) · coming soon", detail: detail)
     }
 
     private func programRow(_ p: Program) -> some View {

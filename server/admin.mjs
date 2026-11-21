@@ -4,10 +4,11 @@
  *   node server/admin.mjs make-coach <email>     (a signed-in account becomes a coach)
  *   node server/admin.mjs assign <client-email> <coach-email>
  *   node server/admin.mjs test-clients add <coach-email> | remove   (made-up clients to rehearse with)
+ *   node server/admin.mjs test-clients more <coach-email>   (programs, forms, autoflows for clients added before them)
  */
 import { join } from 'node:path';
 import { openStore } from './store.mjs';
-import { addTestClients, removeTestClients } from './testclients.mjs';
+import { addTestClients, addTestExtras, removeTestClients } from './testclients.mjs';
 
 const db = openStore(join(process.env.DATA_DIR ?? './data', 'jk.sqlite'));
 const [cmd, a, b] = process.argv.slice(2);
@@ -37,10 +38,14 @@ if (cmd === 'users') {
   if (coach.role !== 'coach') { console.error(`${b} is not a coach`); process.exit(1); }
   for (const c of addTestClients(db, coach.id)) console.log(`${c.id}  ${c.name}`);
   console.log(`Added made-up clients for ${coach.name}. Remove with: test-clients remove`);
+} else if (cmd === 'test-clients' && a === 'more') {
+  const coach = byEmail(b);
+  const r = addTestExtras(db, coach.id);
+  console.log(`Added ${r.programs} programs, ${r.forms} forms and ${r.autoflows} autoflows for ${coach.name}'s made-up clients.`);
 } else if (cmd === 'test-clients' && a === 'remove') {
   const r = removeTestClients(db);
-  console.log(`Removed ${r.users} made-up clients and ${r.classes} of their bookings and classes.`);
+  console.log(`Removed ${r.users} made-up clients, ${r.classes} of their bookings and classes, and ${r.library} programs, forms, autoflows and challenges made for them.`);
 } else {
-  console.error('Usage: admin.mjs users | make-coach <email> | assign <client-email> <coach-email> | test-clients add <coach-email> | test-clients remove');
+  console.error('Usage: admin.mjs users | make-coach <email> | assign <client-email> <coach-email> | test-clients add|more <coach-email> | test-clients remove');
   process.exit(2);
 }

@@ -1,6 +1,7 @@
 import { recordPlan } from './account.mjs';
 import { setUpClient } from './auth.mjs';
-import { exerciseId } from './catalogue.mjs';
+import { WELCOME_MESSAGE, exerciseId } from './catalogue.mjs';
+import { FORM_TEMPLATES } from './forms.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, mondayOf } from './time.mjs';
 
@@ -257,14 +258,182 @@ export function addTestClients(db, coachId, today = londonDay()) {
       }
     });
   });
+  addTestExtras(db, coachId, today);
   return out;
 }
 
-/** Every made-up client and everything about them (cascades), plus their group classes. */
+// Program templates the coach's library starts with, built from the routines above.
+const PROGRAMS = [
+  { name: '12-Week Strength Block', detail: 'Barbell focus · squat, bench, deadlift', routine: 'strength', days: [0, 2, 4], weeks: 12, people: ['Ella Hughes', 'Tom Ashworth'] },
+  { name: 'Hypertrophy · Push Pull Legs', detail: 'Four days, volume first', routine: 'hypertrophy', days: [0, 2, 4, 5], weeks: 8, people: ['Marcus Reid', 'Grace Lin'] },
+  { name: 'Fat Loss Circuits', detail: 'Full body circuits, short rests', routine: 'fatLoss', days: [1, 3, 5], weeks: 6, people: ['Hannah Okafor', 'Ben Carter'] },
+  { name: 'Half Marathon Base', detail: 'Easy miles, intervals and runner strength', routine: 'running', days: [1, 3, 6], weeks: 10, people: ['Daniel Price'] },
+  { name: 'Knee Rehab Return', detail: 'Graded loading back to running', routine: 'rehab', days: [0, 2, 4], weeks: 6, people: ['James Whitfield'] },
+  { name: 'Hyrox Hybrid', detail: 'Strength, engine and race practice', routine: 'hybrid', days: [0, 1, 3, 5], weeks: 8, people: ['Aisha Khan'] },
+  { name: 'Move Well · Strong Back', detail: 'Mobility and trunk strength, two days', routine: 'mobility', days: [0, 3], weeks: 4, people: ['Sophie Turner'] },
+];
+
+const slug = name => `test-${name.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+
+/**
+ * The coach's side of the made-up world: program templates (linked to the
+ * clients already following them), forms with answers, autoflows part-way
+ * through, a challenge, and messages timed so the clients list has someone
+ * in each state: urgent, just messaged, a form to read, a check-in to reply
+ * to, and not spoken to in a while. Rows the coach owns have ids starting
+ * `tp_`, `tf_`, `ta_`, `tc_`, so removal finds them. Runs once per coach.
+ */
+export function addTestExtras(db, coachId, today = londonDay()) {
+  if (db.prepare("SELECT 1 FROM programs WHERE coach_id=? AND id LIKE 'tp\\_%' ESCAPE '\\'").get(coachId)) throw new Error('The extra test data is already there');
+  const person = {};
+  for (const p of PEOPLE) {
+    const u = db.prepare("SELECT * FROM users WHERE apple_sub=? AND coach_id=?").get(slug(p.name), coachId);
+    if (!u) throw new Error(`Test client ${p.name} is missing; add the test clients first`);
+    person[p.name] = u;
+  }
+  const at = (d, t = '09:00') => londonToUtc(d, t).toISOString();
+  const ago = hours => new Date(Date.now() - hours * 3_600_000).toISOString();
+  const joinedDay = name => person[name].created_at.slice(0, 10);
+
+  return tx(db, () => {
+    // Programs, and the clients' existing workouts tagged with the one they follow.
+    const program = {};
+    for (const p of PROGRAMS) {
+      const routine = ROUTINES[p.routine];
+      const workouts = [];
+      let k = 0;
+      for (let w = 0; w < p.weeks; w++) {
+        for (const d of p.days) {
+          const [title, items] = routine[k++ % routine.length];
+          workouts.push({ dayOffset: w * 7 + d, title, items: items.map(([name, sets, reps, kg]) => ({ exerciseId: exerciseId(name), sets, reps, load: kg ? loadText(kg + w * (kg >= 40 ? 2.5 : 0), name) : 'BW', rpe: w % 4 === 3 ? '6' : '8', note: null })) });
+        }
+      }
+      const id = newId('tp');
+      db.prepare('INSERT INTO programs (id, coach_id, name, detail, days_per_week, weeks, body, updated_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(id, coachId, p.name, p.detail, p.days.length, p.weeks, JSON.stringify({ workouts }), ago(24 * (10 + p.weeks)));
+      program[p.name] = id;
+      for (const name of p.people) db.prepare('UPDATE workouts SET program_id=? WHERE client_id=? AND program_id IS NULL').run(id, person[name].id);
+    }
+
+    // Forms: the ready-made four, and what each client has sent back.
+    const form = {};
+    for (const t of FORM_TEMPLATES) {
+      const id = newId('tf');
+      db.prepare('INSERT INTO forms (id, coach_id, name, intro, questions, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+        .run(id, coachId, t.name, t.intro, JSON.stringify(t.questions), ago(24 * 90), ago(24 * 90));
+      form[t.name] = { id, ...t };
+    }
+    const request = (name, formName, sentAt, answers, { submittedAt = null, reviewed = true, flow = null } = {}) => {
+      const f = form[formName];
+      db.prepare('INSERT INTO form_requests (id, form_id, client_id, name, intro, questions, sent_at, answers, submitted_at, reviewed_at, autoflow_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+        .run(newId('fr'), f.id, person[name].id, f.name, f.intro, JSON.stringify(f.questions), sentAt, answers ? JSON.stringify(answers) : null,
+          answers ? submittedAt ?? sentAt : null, answers && reviewed ? submittedAt ?? sentAt : null, flow);
+    };
+    const NO = { heart: false, chest: false, dizzy: false, condition: false, medication: false, joint: false, supervised: false };
+    const EXPERIENCE = { 'Ella Hughes': '3+ years', 'Marcus Reid': '1–3 years', 'Hannah Okafor': 'Under a year', 'Daniel Price': '1–3 years', 'Sophie Turner': 'New to it',
+      'James Whitfield': '3+ years', 'Aisha Khan': '3+ years', 'Ben Carter': 'New to it', 'Grace Lin': '1–3 years', 'Tom Ashworth': 'Under a year' };
+    for (const p of PEOPLE) {
+      const joined = joinedDay(p.name);
+      request(p.name, 'Intake', at(joined, '10:00'), {
+        goal: p.goal ?? { strength: 'Get properly strong', hypertrophy: 'Build muscle and keep it', fatLoss: 'Lose 6 kg and keep it off', running: 'Sub-1:40 half marathon',
+          rehab: 'Run pain-free again', hybrid: 'Finish Hyrox under 1:20', mobility: 'Stop my back hurting at work' }[p.routine],
+        why: 'I want to feel fit and confident again.', experience: EXPERIENCE[p.name], days: String(Math.min(p.days.length, 5)).replace('5', '5+'),
+        ...(p.checkin?.[2]?.length ? { injuries: `${p.checkin[2][0]} niggles now and then.` } : {}), sleep: p.name === 'Hannah Okafor' ? 2 : 4, stress: p.quiet ? 4 : 3,
+      }, { submittedAt: at(joined, '20:15') });
+      if (p.name === 'Tom Ashworth') continue;
+      request(p.name, 'PAR-Q health check', at(addDays(joined, 1), '10:00'),
+        p.routine === 'rehab' ? { ...NO, joint: true, details: 'Left knee: meniscus repair last year, physio signed off.' } : NO,
+        { submittedAt: at(addDays(joined, 1), '19:40') });
+    }
+    // Tom joined recently: his PAR-Q came back with a yes you haven't read yet.
+    const tomJoined = joinedDay('Tom Ashworth');
+    request('Tom Ashworth', 'PAR-Q health check', at(addDays(tomJoined, 1), '10:00'),
+      { ...NO, joint: true, details: 'Left shoulder pinches pressing overhead. Never seen anyone about it.' }, { submittedAt: ago(20), reviewed: false });
+    request('Grace Lin', 'Monthly review', ago(72), { proud: 'Hit a 100 kg hip thrust for 8!', hard: 'Two late nights at work threw my Thursday.', enjoy: 5, next: 'Pull-ups: get my first strict one.' }, { submittedAt: ago(30), reviewed: false });
+    request('Marcus Reid', 'Monthly review', ago(80), null);
+    request('Ben Carter', 'Monthly review', ago(24 * 9), null);
+    request('James Whitfield', 'Injury report', at(addDays(today, -40), '09:00'), { where: 'Left knee', how: 'Twisted it on the last rep of lunges.', level: 2, sharp: false }, { submittedAt: at(addDays(today, -40), '12:30') });
+
+    // Autoflows: onboarding for everyone who joins, two the coach starts by hand.
+    const flow = (name, trigger, steps) => {
+      const id = newId('ta');
+      const withIds = steps.map((s, i) => ({ id: `s${i + 1}`, ...s }));
+      db.prepare('INSERT INTO autoflows (id, coach_id, name, trigger, active, steps, created_at, updated_at) VALUES (?,?,?,?,1,?,?,?)')
+        .run(id, coachId, name, trigger, JSON.stringify(withIds), ago(24 * 60), ago(24 * 60));
+      return { id, steps: withIds };
+    };
+    const onboarding = flow('New client onboarding', 'join', [
+      { day: 0, action: 'message', text: 'Welcome aboard, {first}! Fill in the intake form when you get a minute and I\'ll build your first block around it.' },
+      { day: 0, action: 'form', formId: form.Intake.id },
+      { day: 1, action: 'form', formId: form['PAR-Q health check'].id },
+      { day: 7, action: 'message', text: 'First week done, {first}. How are you finding it? Anything feel too easy or too hard?' },
+      { day: 28, action: 'form', formId: form['Monthly review'].id },
+    ]);
+    const injury = flow('Return from injury', 'manual', [
+      { day: 0, action: 'program', programId: program['Knee Rehab Return'] },
+      { day: 0, action: 'message', text: 'Sorry you\'re hurt, {first}. I\'ve put a rehab block on your calendar; nothing should go above 3/10 pain.' },
+      { day: 14, action: 'form', formId: form['Injury report'].id },
+      { day: 42, action: 'message', text: 'Six weeks in. Let\'s book a session and test it properly.' },
+    ]);
+    const hyrox = flow('Race countdown · 8 weeks', 'manual', [
+      { day: 0, action: 'program', programId: program['Hyrox Hybrid'] },
+      { day: 0, action: 'message', text: 'Eight weeks to race day, {first}. The plan builds to a full simulation in week 6.' },
+      { day: 21, action: 'message', text: 'Five weeks out. How are the wall balls feeling?' },
+      { day: 42, action: 'message', text: 'Simulation week! Treat Saturday like race day: same breakfast, same kit.' },
+      { day: 53, action: 'message', text: 'Race week. Sleep, carbs, and trust the work. You\'re ready.' },
+    ]);
+    // A run with every step up to today already done, so nothing fires twice.
+    const run = (f, name, start, outcomes = {}) => {
+      const done = {};
+      for (const s of f.steps) if (addDays(start, s.day) <= today) done[s.id] = { at: at(addDays(start, s.day), '09:00'), outcome: outcomes[s.id] ?? 'sent' };
+      db.prepare('INSERT INTO autoflow_runs (id, autoflow_id, client_id, start_day, done, created_at) VALUES (?,?,?,?,?,?)')
+        .run(newId('ar'), f.id, person[name].id, start, JSON.stringify(done), at(start, '09:00'));
+    };
+    run(onboarding, 'Tom Ashworth', tomJoined);
+    run(injury, 'James Whitfield', addDays(today, -40), { s1: 'assigned at the start of rehab' });
+    run(hyrox, 'Aisha Khan', addDays(today, -19), { s1: 'assigned for race prep' });
+
+    // A distance challenge the runners are in.
+    const challenge = newId('tc');
+    db.prepare("INSERT INTO challenges (id, coach_id, title, detail, metric, target, start, end, created_at) VALUES (?,?,?,?,'distance',?,?,?,?)")
+      .run(challenge, coachId, '100 km in November', 'Run, walk or cycle: everything with a distance counts.', 100, `${today.slice(0, 7)}-01`, addDays(`${today.slice(0, 7)}-01`, 29), ago(24 * 20));
+    for (const name of ['Daniel Price', 'Aisha Khan', 'Ella Hughes', 'Hannah Okafor', 'Grace Lin']) {
+      db.prepare('INSERT INTO challenge_members (challenge_id, user_id, joined_at) VALUES (?,?,?)').run(challenge, person[name].id, ago(24 * 18));
+    }
+
+    // Messages, timed so the clients list shows every kind of need. The app's
+    // welcome message goes back to the day each client joined.
+    for (const p of PEOPLE) {
+      db.prepare("UPDATE messages SET at=?, read_at=? WHERE client_id=? AND from_role='coach' AND text=?")
+        .run(person[p.name].created_at, person[p.name].created_at, person[p.name].id, WELCOME_MESSAGE);
+    }
+    const msg = (name, role, text, at, read = true) => db.prepare('INSERT INTO messages (id, client_id, from_id, from_role, text, at, read_at) VALUES (?,?,?,?,?,?,?)')
+      .run(newId('m'), person[name].id, role === 'coach' ? coachId : person[name].id, role, text, at, read ? at : null);
+    msg('Sophie Turner', 'client', 'Did something to my back lifting the kids this morning. Sharp pain down my left leg when I bend. Should I still come tonight?', ago(0.7), false);
+    msg('Tom Ashworth', 'coach', 'First week done, Tom. How are you finding it? Anything feel too easy or too hard?', at(addDays(tomJoined, 7), '09:00'));
+    msg('Tom Ashworth', 'client', 'Good! Overhead press feels a bit off on the left side but everything else is great.', at(addDays(tomJoined, 7), '12:40'));
+    msg('Daniel Price', 'client', 'Parkrun PB this morning! 21:48 🎉 Calf held up fine.', ago(0.4), false);
+    // Marcus and Aisha: last spoken to over a week ago (their check-ins were answered then too).
+    for (const [name, days] of [['Marcus Reid', 12], ['Aisha Khan', 10]]) {
+      const id = person[name].id;
+      const thread = db.prepare('SELECT id FROM messages WHERE client_id=? ORDER BY at').all(id);
+      thread.forEach((m, i) => db.prepare('UPDATE messages SET at=?, read_at=? WHERE id=?').run(ago(24 * days - i * 3), ago(24 * days - i * 3), m.id));
+      const c = db.prepare('SELECT id, submitted_at FROM checkins WHERE client_id=? AND reviewed_at IS NULL').get(id);
+      if (c) db.prepare('UPDATE checkins SET reviewed_at=?, reply=? WHERE id=?').run(new Date(Date.parse(c.submitted_at) + 2 * 3_600_000).toISOString(), 'Great week, noted. Same again.', c.id);
+    }
+    return { programs: PROGRAMS.length, forms: FORM_TEMPLATES.length, autoflows: 3 };
+  });
+}
+
+/** Every made-up client and everything about them (cascades), plus the coach-side rows made for them. */
 export function removeTestClients(db) {
   return tx(db, () => {
     const users = db.prepare("DELETE FROM users WHERE apple_sub LIKE 'test-%' AND is_demo=0").run().changes;
     const classes = db.prepare("DELETE FROM bookings WHERE id LIKE 'bt\\_%' ESCAPE '\\'").run().changes;
-    return { users, classes };
+    let library = 0;
+    for (const [table, prefix] of [['autoflows', 'ta'], ['forms', 'tf'], ['programs', 'tp'], ['challenges', 'tc']]) {
+      library += db.prepare(`DELETE FROM ${table} WHERE id LIKE '${prefix}\\_%' ESCAPE '\\'`).run().changes;
+    }
+    return { users, classes, library };
   });
 }
