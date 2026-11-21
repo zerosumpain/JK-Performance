@@ -26,6 +26,15 @@ export function loadConfig(env = process.env) {
     apple: env.APPLE_KEY_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_FILE
       ? { keyId: env.APPLE_KEY_ID, teamId: env.APPLE_TEAM_ID, keyFile: env.APPLE_KEY_FILE }
       : null,
+    // Android. Google sign-in: the OAuth client ids whose ID tokens we accept
+    // (the web client the app asks Credential Manager for). Apple on the web:
+    // the Services ID, with return URL <PUBLIC_URL>/api/auth/apple/callback.
+    googleClientIds: (env.GOOGLE_CLIENT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean),
+    appleServicesId: env.APPLE_SERVICES_ID?.trim() || null,
+    // Firebase Cloud Messaging service account JSON (Android push); off without it.
+    fcmServiceAccountFile: env.FCM_SERVICE_ACCOUNT_FILE || null,
+    // The APK download page is /android/<token>; without a token there is none.
+    androidDownloadToken: code('ANDROID_DOWNLOAD_TOKEN', env.ANDROID_DOWNLOAD_TOKEN),
     // Tests swap this for a recorder; see apple.mjs.
     pushTransport: null,
     logRequests: env.LOG_REQUESTS === '1',

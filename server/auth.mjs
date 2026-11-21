@@ -9,40 +9,58 @@ const WEB_SESSION_DAYS = 30;
 const APPLE_ISSUER = 'https://appleid.apple.com';
 const APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys';
 
-// MARK: - Sign in with Apple
+// MARK: - Identity tokens (Sign in with Apple, Sign in with Google)
 
-let keyCache = { at: 0, keys: [] };
+const PROVIDERS = {
+  apple: { name: 'Apple', keysUrl: 'https://appleid.apple.com/auth/keys', issuers: ['https://appleid.apple.com'] },
+  google: { name: 'Google', keysUrl: 'https://www.googleapis.com/oauth2/v3/certs', issuers: ['https://accounts.google.com', 'accounts.google.com'] },
+};
+const keyCache = new Map(); // provider -> { at, keys }
 
-async function appleKeys(fetchImpl, force = false) {
-  if (!force && Date.now() - keyCache.at < 60 * 60_000 && keyCache.keys.length) return keyCache.keys;
-  const res = await fetchImpl(APPLE_KEYS_URL);
-  if (!res.ok) fail(502, 'Could not reach Apple to check the sign-in');
-  keyCache = { at: Date.now(), keys: (await res.json()).keys ?? [] };
-  return keyCache.keys;
+async function signingKeys(provider, fetchImpl, force = false) {
+  const cached = keyCache.get(provider.keysUrl);
+  if (!force && cached && Date.now() - cached.at < 60 * 60_000 && cached.keys.length) return cached.keys;
+  const res = await fetchImpl(provider.keysUrl);
+  if (!res.ok) fail(502, `Could not reach ${provider.name} to check the sign-in`);
+  const keys = (await res.json()).keys ?? [];
+  keyCache.set(provider.keysUrl, { at: Date.now(), keys });
+  return keys;
 }
 
 const b64json = part => JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
 
 /**
- * Verify an Apple identity token (a JWT signed RS256 by one of Apple's keys)
- * and return its claims. Checks signature, issuer, audience and expiry.
+ * Verify an identity token (a JWT signed RS256 by one of the provider's
+ * published keys) and return its claims. Checks signature, issuer, audience
+ * (any of `audiences`) and expiry.
  */
-export async function verifyAppleToken(token, audience, { fetchImpl = fetch, now = Date.now() } = {}) {
+async function verifyIdentityToken(provider, token, audiences, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (typeof token !== 'string' || token.split('.').length !== 3) fail(401, 'Sign-in token is malformed');
   const [h, p, s] = token.split('.');
   let header, claims;
   try { header = b64json(h); claims = b64json(p); } catch { fail(401, 'Sign-in token is malformed'); }
   if (header.alg !== 'RS256') fail(401, 'Sign-in token uses an unexpected algorithm');
-  let jwk = (await appleKeys(fetchImpl)).find(k => k.kid === header.kid);
-  if (!jwk) jwk = (await appleKeys(fetchImpl, true)).find(k => k.kid === header.kid);
+  let jwk = (await signingKeys(provider, fetchImpl)).find(k => k.kid === header.kid);
+  if (!jwk) jwk = (await signingKeys(provider, fetchImpl, true)).find(k => k.kid === header.kid);
   if (!jwk) fail(401, 'Sign-in token was signed by an unknown key');
   const ok = verify('RSA-SHA256', Buffer.from(`${h}.${p}`), createPublicKey({ key: jwk, format: 'jwk' }), Buffer.from(s, 'base64url'));
   if (!ok) fail(401, 'Sign-in token signature is invalid');
-  if (claims.iss !== APPLE_ISSUER) fail(401, 'Sign-in token has the wrong issuer');
+  if (!provider.issuers.includes(claims.iss)) fail(401, 'Sign-in token has the wrong issuer');
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!aud.includes(audience)) fail(401, 'Sign-in token is for another app');
+  const wanted = (Array.isArray(audiences) ? audiences : [audiences]).filter(Boolean);
+  if (!aud.some(a => wanted.includes(a))) fail(401, 'Sign-in token is for another app');
   if (typeof claims.exp !== 'number' || claims.exp * 1000 < now - 60_000) fail(401, 'Sign-in token has expired');
   if (typeof claims.sub !== 'string' || !claims.sub) fail(401, 'Sign-in token has no subject');
+  return claims;
+}
+
+/** An Apple identity token, from the iPhone app (bundle id) or the web flow Android uses (Services ID). */
+export const verifyAppleToken = (token, audiences, opts) => verifyIdentityToken(PROVIDERS.apple, token, audiences, opts);
+
+/** A Google ID token from Android's Credential Manager; its audience is the server's web client id. */
+export async function verifyGoogleToken(token, audiences, opts) {
+  const claims = await verifyIdentityToken(PROVIDERS.google, token, audiences, opts);
+  if (claims.email && claims.email_verified !== true && claims.email_verified !== 'true') delete claims.email;
   return claims;
 }
 
@@ -71,12 +89,23 @@ export function setUpClient(db, clientId, coachId) {
 
 const isCoachEmail = (config, email) => !!email && config.coachEmails.includes(email.toLowerCase());
 
-/** Find or create the account for an Apple identity. Coaches come from COACH_EMAILS. */
-export function upsertAppleUser(db, config, claims, fullName) {
+/**
+ * Find or create the account for an Apple or Google identity. Coaches come
+ * from COACH_EMAILS. A Google sign-in whose verified email matches an existing
+ * account joins that account, so a person (or the coach) who signed in with
+ * Apple on an iPhone gets the same account on Android.
+ */
+export function upsertIdentityUser(db, config, provider, claims, fullName) {
+  const column = provider === 'google' ? 'google_sub' : 'apple_sub';
   const email = typeof claims.email === 'string' ? claims.email.toLowerCase() : null;
-  const existing = db.prepare('SELECT * FROM users WHERE apple_sub = ?').get(claims.sub);
+  let existing = db.prepare(`SELECT * FROM users WHERE ${column} = ?`).get(claims.sub);
+  if (!existing && provider === 'google' && email) {
+    existing = db.prepare(`SELECT * FROM users WHERE lower(email)=? AND google_sub IS NULL AND is_demo=0 ORDER BY created_at LIMIT 1`).get(email);
+    if (existing) db.prepare('UPDATE users SET google_sub=? WHERE id=?').run(claims.sub, existing.id);
+  }
   if (existing) {
-    if (email && existing.email !== email) db.prepare('UPDATE users SET email=? WHERE id=?').run(email, existing.id);
+    if (email && existing.email !== email && provider === 'apple') db.prepare('UPDATE users SET email=? WHERE id=?').run(email, existing.id);
+    if (!existing.email && email) db.prepare('UPDATE users SET email=? WHERE id=?').run(email, existing.id);
     if (existing.role === 'client' && isCoachEmail(config, email)) db.prepare("UPDATE users SET role='coach', coach_id=NULL WHERE id=?").run(existing.id);
     return db.prepare('SELECT * FROM users WHERE id=?').get(existing.id);
   }
@@ -87,7 +116,7 @@ export function upsertAppleUser(db, config, claims, fullName) {
   const id = newId('u');
   const user = tx(db, () => {
     const coachId = role === 'client' ? primaryCoachId(db, config) : null;
-    db.prepare('INSERT INTO users (id, apple_sub, email, name, role, coach_id, created_at) VALUES (?,?,?,?,?,?,?)')
+    db.prepare(`INSERT INTO users (id, ${column}, email, name, role, coach_id, created_at) VALUES (?,?,?,?,?,?,?)`)
       .run(id, claims.sub, email, name, role, coachId, nowIso());
     if (role === 'client') setUpClient(db, id, coachId);
     return db.prepare('SELECT * FROM users WHERE id=?').get(id);
@@ -96,6 +125,8 @@ export function upsertAppleUser(db, config, claims, fullName) {
   if (role === 'client') startJoinFlows(db, config, user);
   return user;
 }
+
+export const upsertAppleUser = (db, config, claims, fullName) => upsertIdentityUser(db, config, 'apple', claims, fullName);
 
 // MARK: - Sessions
 
