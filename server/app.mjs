@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { accountRoutes } from './account.mjs';
+import { androidRoutes } from './android.mjs';
 import { autoflowRoutes } from './autoflows.mjs';
 import { sessionUser } from './auth.mjs';
 import { bookingRoutes } from './bookings.mjs';
@@ -21,7 +22,7 @@ const JSON_LIMIT = 1024 * 1024;
 
 export function createApp(db, config) {
   const router = createRouter();
-  for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes, pushRoutes, formRoutes, autoflowRoutes]) add(router);
+  for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes, pushRoutes, formRoutes, autoflowRoutes, androidRoutes]) add(router);
 
   return createServer(async (req, res) => {
     const started = Date.now();

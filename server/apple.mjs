@@ -1,6 +1,7 @@
 import { createPrivateKey, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import http2 from 'node:http2';
+import { fcmSend } from './fcm.mjs';
 
 /**
  * One Apple key (.p8, ES256) does two jobs:
@@ -82,25 +83,30 @@ function apnsSend(config, device, payload) {
   });
 }
 
-/** Send one notification to one device: `{status, reason}`; never throws. */
+/** Send one notification to one device (APNs, or FCM for Android): `{status, reason}`; never throws. */
 export function pushTo(config, device, payload) {
   if (config.pushTransport) return Promise.resolve(config.pushTransport(device, payload));
+  if (device.platform === 'android') {
+    if (!config.fcmServiceAccountFile) return Promise.resolve({ status: 0, reason: 'Android push is not configured' });
+    return fcmSend(config, device, payload);
+  }
   if (!config.apple) return Promise.resolve({ status: 0, reason: 'push is not configured' });
   return apnsSend(config, device, payload);
 }
 
 // MARK: - Sign in with Apple tokens
 
-function clientSecret(config, now = Date.now()) {
+// The client id is the app's bundle id, or the Services ID for the web flow Android uses.
+function clientSecret(config, clientId, now = Date.now()) {
   const iat = Math.floor(now / 1000);
-  return jwt(config.apple, { iss: config.apple.teamId, iat, exp: iat + 300, aud: APPLE_ID, sub: config.appleAudience });
+  return jwt(config.apple, { iss: config.apple.teamId, iat, exp: iat + 300, aud: APPLE_ID, sub: clientId });
 }
 
-async function applePost(config, path, fields) {
+async function applePost(config, path, fields, clientId = config.appleAudience) {
   return config.fetchImpl(`${APPLE_ID}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: config.appleAudience, client_secret: clientSecret(config), ...fields }),
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret(config, clientId), ...fields }),
     signal: AbortSignal.timeout(8000),
   });
 }
@@ -110,10 +116,10 @@ async function applePost(config, path, fields) {
  * sign-in has already been verified by the identity token, so a failure here
  * only means this sign-in leaves nothing to revoke later.
  */
-export async function exchangeAppleCode(config, code) {
+export async function exchangeAppleCode(config, code, { clientId = config.appleAudience, redirectUri } = {}) {
   if (!config.apple || typeof code !== 'string' || !code || code.length > 512) return null;
   try {
-    const res = await applePost(config, '/auth/token', { code, grant_type: 'authorization_code' });
+    const res = await applePost(config, '/auth/token', { code, grant_type: 'authorization_code', ...(redirectUri ? { redirect_uri: redirectUri } : {}) }, clientId);
     const body = await res.json().catch(() => ({}));
     if (!res.ok || typeof body.refresh_token !== 'string') {
       console.warn(`Apple code exchange: ${res.status} ${body.error ?? ''}`);
@@ -127,10 +133,10 @@ export async function exchangeAppleCode(config, code) {
 }
 
 /** Revoke a Sign in with Apple refresh token. Best effort; returns whether Apple said yes. */
-export async function revokeApple(config, refreshToken) {
+export async function revokeApple(config, refreshToken, clientId = config.appleAudience) {
   if (!config.apple || !refreshToken) return false;
   try {
-    const res = await applePost(config, '/auth/revoke', { token: refreshToken, token_type_hint: 'refresh_token' });
+    const res = await applePost(config, '/auth/revoke', { token: refreshToken, token_type_hint: 'refresh_token' }, clientId);
     if (!res.ok) console.warn(`Apple revoke: ${res.status}`);
     return res.ok;
   } catch (e) {

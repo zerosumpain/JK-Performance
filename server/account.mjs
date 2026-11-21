@@ -26,7 +26,7 @@ async function signInApple(_req, ctx) {
   const user = upsertAppleUser(ctx.db, ctx.config, claims, ctx.body.fullName);
   // Kept only so deleting the account can revoke Sign in with Apple; the newest wins.
   const refresh = await exchangeAppleCode(ctx.config, ctx.body.authorizationCode);
-  if (refresh) ctx.db.prepare('UPDATE users SET apple_refresh=? WHERE id=?').run(refresh, user.id);
+  if (refresh) ctx.db.prepare('UPDATE users SET apple_refresh=?, apple_refresh_client=NULL WHERE id=?').run(refresh, user.id);
   return { token: issueSession(ctx.db, user.id), me: meOut(ctx.db, user) };
 }
 
@@ -100,7 +100,7 @@ function endWebSessions(_req, ctx) {
 function logout(req, ctx) {
   // The phone's push token goes too, so a signed-out phone hears nothing.
   if (ctx.user && typeof ctx.body.pushToken === 'string') {
-    ctx.db.prepare('DELETE FROM push_tokens WHERE token=? AND user_id=?').run(ctx.body.pushToken.toLowerCase(), ctx.user.id);
+    ctx.db.prepare('DELETE FROM push_tokens WHERE token IN (?,?) AND user_id=?').run(ctx.body.pushToken, ctx.body.pushToken.toLowerCase(), ctx.user.id);
   }
   endSession(ctx.db, req);
   return { ok: true };
@@ -129,7 +129,7 @@ async function deleteMe(_req, ctx) {
     ctx.db.prepare('DELETE FROM users WHERE id=?').run(u.id);
   });
   // The account is gone either way; Apple is told so the app no longer shows as signed in with Apple.
-  const appleRevoked = await revokeApple(ctx.config, u.apple_refresh);
+  const appleRevoked = await revokeApple(ctx.config, u.apple_refresh, u.apple_refresh_client || undefined);
   return { ok: true, appleRevoked };
 }
 
@@ -159,7 +159,7 @@ function exportMe(_req, ctx) {
     healthSamples: all('SELECT kind, date, start, end, value FROM health_samples WHERE user_id=? ORDER BY start', user.id),
     healthActivities: all('SELECT type, date, start, end, minutes, kcal, distance_km, avg_hr, source FROM health_activities WHERE user_id=? ORDER BY start', user.id),
     weeklyFeedback: all('SELECT week, summary, wins, focus, published_at FROM reports WHERE client_id=? AND published_at IS NOT NULL ORDER BY week', user.id),
-    notificationDevices: all('SELECT env, created_at, updated_at FROM push_tokens WHERE user_id=?', user.id),
+    notificationDevices: all('SELECT platform, env, created_at, updated_at FROM push_tokens WHERE user_id=?', user.id),
     challenges: all('SELECT c.title, m.joined_at FROM challenge_members m JOIN challenges c ON c.id=m.challenge_id WHERE m.user_id=?', user.id),
   };
   return raw(200, {

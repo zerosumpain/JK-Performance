@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Account › Export your data writes here before handing the file to the share sheet. -->
+<paths>
+    <cache-path name="export" path="export/" />
+</paths>

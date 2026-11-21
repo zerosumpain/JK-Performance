@@ -19,6 +19,11 @@ The contract between `server/` and the iPhone app. Change both sides together.
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | `/api/auth/apple` | `{identityToken, authorizationCode?, fullName?: {givenName?, familyName?}}` | `Session`. The code is swapped for an Apple refresh token, kept only to revoke on deletion |
+| POST | `/api/auth/google` | `{idToken}` (Android: a Google ID token for one of `GOOGLE_CLIENT_IDS`) | `Session`. A verified email that matches an existing account joins it, so the coach and anyone moving from iPhone keep their account |
+| GET | `/api/auth/apple/web?state=` | – | 302 to Apple (Android's Sign in with Apple, Services ID `APPLE_SERVICES_ID`) |
+| POST | `/api/auth/apple/callback` | Apple's form post | an HTML page that opens `jkperformance://auth?code=…&state=…` (or `?error=…`) |
+| POST | `/api/auth/apple/finish` | `{code}` (single use, 2 minutes) | `Session` |
+| GET | `/api/android/config` | – | `{google, googleClientId, apple}`: which sign-in buttons the Android app shows |
 | POST | `/api/auth/code` | `{code}` (App Review demo / local testing; 404 when unset) | `Session` |
 | POST | `/api/auth/logout` | `{pushToken?}` (that phone's push token is removed too) | `{ok:true}` |
 | POST | `/api/auth/demo-client` (coach) | – | `Session` as the demo client (preview the client side) |
@@ -319,7 +324,7 @@ Only the token's hash is stored. Single events are added on the phone with Event
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| PUT | `/api/push/token` | `{token: hex APNs token, env: "production"\|"sandbox"}` | `{ok:true, enabled}` (`enabled` false when the server has no Apple key) |
+| PUT | `/api/push/token` | `{token, platform?: "ios"\|"android", env?: "production"\|"sandbox"}`: an APNs token in hex, or an FCM registration token (case kept) | `{ok:true, enabled}` (`enabled` false when the server can't push to that platform) |
 | DELETE | `/api/push/token?token=` | – | `{ok:true}`; no `token` removes all of the caller's phones |
 
 Sent (never to demo accounts; never waits on Apple): a message → the other side; first publish of weekly feedback → the client;
@@ -327,7 +332,9 @@ first check-in of the week → the coach; a 1:1 booked or cancelled → the othe
 `kind` (`message`/`report`/`checkin`/`booking`), `id?`, `clientId?`. Apple's 410 / BadDeviceToken drops the token.
 
 Server env: `APPLE_KEY_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_FILE` (the .p8, mounted read-only). Without them push is off and
-deletion skips the Apple revoke.
+deletion skips the Apple revoke. Android goes through Firebase Cloud Messaging (HTTP v1): `FCM_SERVICE_ACCOUNT_FILE` (the
+Firebase service account JSON, mounted read-only); the same payload arrives as a notification plus `data {kind, id?, clientId?}`.
+FCM's 404 / UNREGISTERED drops the token.
 
 ## Demo accounts
 
@@ -336,5 +343,7 @@ separate demo world with five other clients and a few weeks of history. Demo acc
 
 ## Pages (HTML)
 
+`/android/<ANDROID_DOWNLOAD_TOKEN>` (private download page for the Android APK while there's no Play Store listing; the
+file is `<DATA_DIR>/android/jk-performance.apk` + `version.json`, put there by `scripts/android-publish.sh`),
 `/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach desk: a
 browser app over this API; sign in with a link code from the app).

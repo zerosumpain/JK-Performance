@@ -156,6 +156,15 @@ export function openStore(path) {
   addColumn(db, 'sessions', 'kind', "TEXT NOT NULL DEFAULT 'app'");
   // Sign in with Apple refresh token, kept only so deleting the account can revoke it (Apple requires that).
   addColumn(db, 'users', 'apple_refresh', 'TEXT');
+  // Android signs in with Google (or Apple on the web); see auth.mjs.
+  addColumn(db, 'users', 'google_sub', 'TEXT');
+  addColumn(db, 'users', 'apple_refresh_client', 'TEXT'); // the Services ID when Apple sign-in came from the web flow
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub)');
+  // Which push service a device token belongs to.
+  addColumn(db, 'push_tokens', 'platform', "TEXT NOT NULL DEFAULT 'ios'");
+  db.exec(`CREATE TABLE IF NOT EXISTS auth_handoffs (
+    hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL, created_at TEXT NOT NULL)`);
   return db;
 }
 
