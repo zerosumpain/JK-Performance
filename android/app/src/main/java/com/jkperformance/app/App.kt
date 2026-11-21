@@ -84,6 +84,7 @@ class JKApplication : Application() {
         Outbox.init(this)
         Push.init(this)
         HealthSync.init(this)
+        Reminders.init(this)
         val scope = MainScope()
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
