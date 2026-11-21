@@ -7,8 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import com.jkperformance.app.design.JKTheme
 import androidx.lifecycle.lifecycleScope
 import com.jkperformance.app.net.Push
 import com.jkperformance.app.net.SignIn
@@ -31,14 +30,7 @@ class MainActivity : ComponentActivity() {
         // A recreated activity (rotation) carries the intent it was first opened with: handled already.
         if (savedInstanceState == null) handle(intent)
         setContent {
-            MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = androidx.compose.ui.graphics.Color.White,
-                    onPrimary = androidx.compose.ui.graphics.Color.Black,
-                    background = androidx.compose.ui.graphics.Color.Black,
-                    surface = androidx.compose.ui.graphics.Color.Black,
-                ),
-            ) { RootView() }
+            JKTheme { RootView() }
         }
     }
 

@@ -3,7 +3,7 @@
 
 package com.jkperformance.app.net
 
-import com.jkperformance.app.Fmt
+import com.jkperformance.app.design.Fmt
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException

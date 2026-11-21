@@ -1,5 +1,7 @@
 package com.jkperformance.app
 
+import com.jkperformance.app.design.BrandIntro
+
 import android.app.Application
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
@@ -142,7 +144,7 @@ fun RootView() {
     }
     LaunchedEffect(Unit) {
         if (!intro) return@LaunchedEffect
-        delay(if (reduceMotion) 400 else ((BrandIntroDuration + 0.3) * 1000).toLong())
+        delay(if (reduceMotion) 400 else ((BrandIntro.duration + 0.3) * 1000).toLong())
         intro = false
     }
 }
