@@ -3,9 +3,11 @@
  *   node server/admin.mjs users
  *   node server/admin.mjs make-coach <email>     (a signed-in account becomes a coach)
  *   node server/admin.mjs assign <client-email> <coach-email>
+ *   node server/admin.mjs test-clients add <coach-email> | remove   (made-up clients to rehearse with)
  */
 import { join } from 'node:path';
 import { openStore } from './store.mjs';
+import { addTestClients, removeTestClients } from './testclients.mjs';
 
 const db = openStore(join(process.env.DATA_DIR ?? './data', 'jk.sqlite'));
 const [cmd, a, b] = process.argv.slice(2);
@@ -30,7 +32,15 @@ if (cmd === 'users') {
   if (coach.role !== 'coach') { console.error(`${b} is not a coach`); process.exit(1); }
   db.prepare('UPDATE users SET coach_id=? WHERE id=?').run(coach.id, client.id);
   console.log(`${client.name} now belongs to ${coach.name}.`);
+} else if (cmd === 'test-clients' && a === 'add') {
+  const coach = byEmail(b);
+  if (coach.role !== 'coach') { console.error(`${b} is not a coach`); process.exit(1); }
+  for (const c of addTestClients(db, coach.id)) console.log(`${c.id}  ${c.name}`);
+  console.log(`Added made-up clients for ${coach.name}. Remove with: test-clients remove`);
+} else if (cmd === 'test-clients' && a === 'remove') {
+  const r = removeTestClients(db);
+  console.log(`Removed ${r.users} made-up clients and ${r.classes} of their bookings and classes.`);
 } else {
-  console.error('Usage: admin.mjs users | make-coach <email> | assign <client-email> <coach-email>');
+  console.error('Usage: admin.mjs users | make-coach <email> | assign <client-email> <coach-email> | test-clients add <coach-email> | test-clients remove');
   process.exit(2);
 }
