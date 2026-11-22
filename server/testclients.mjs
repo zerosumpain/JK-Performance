@@ -2,6 +2,7 @@ import { recordPlan } from './account.mjs';
 import { setUpClient } from './auth.mjs';
 import { WELCOME_MESSAGE, exerciseId } from './catalogue.mjs';
 import { FORM_TEMPLATES } from './forms.mjs';
+import { ICON_KEY_SF } from './daily.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, mondayOf } from './time.mjs';
 
@@ -68,7 +69,7 @@ const PEOPLE = [
     goal: 'First powerlifting meet in March', checkin: [5, 4, [], 'Felt strong all week. Bench is flying.'], unread: 'Can we talk peaking for the meet at our next session?' },
   { name: 'Marcus Reid', plan: 'performance', routine: 'hypertrophy', days: [0, 2, 4, 5], time: '18:30', adherence: 0.8, weight: [82.0, 83.4], shares: true, oneToOne: [3, '19:30', 'inperson'], fortnightly: true,
     checkin: [4, 3, [], 'Work was mad Thursday so I skipped legs. Back on it.'] },
-  { name: 'Hannah Okafor', plan: 'elite', routine: 'fatLoss', poorSleep: true, days: [1, 3, 5], time: '12:15', adherence: 0.75, weight: [78.5, 75.9], shares: true, oneToOne: [5, '09:00', 'inperson'],
+  { name: 'Hannah Okafor', plan: 'elite', routine: 'fatLoss', poorSleep: true, days: [1, 3, 5], time: '12:15', adherence: 0.75, weight: [78.5, 75.9], shares: true, oneToOne: [5, '09:00', 'inperson'], restDays: [[3, 'Baby unwell, no sleep']],
     checkin: [3, 2, [], 'Down again on the scales! Sleep is rubbish with the baby teething.'], unread: 'Is it OK to swap Thursday for Friday this week?' },
   { name: 'Daniel Price', plan: 'performance', routine: 'running', days: [1, 3, 6], time: '06:30', adherence: 0.9, weight: [71.3, 70.4], shares: true, oneToOne: [2, '17:00', 'video'], fortnightly: true, runner: true,
     checkin: [4, 4, ['Calf'], 'Right calf tight after the intervals, eased off by Sunday.'] },
@@ -85,6 +86,32 @@ const PEOPLE = [
   { name: 'Tom Ashworth', plan: 'performance', routine: 'strength', days: [1, 3, 5], time: '07:30', adherence: 0.7, weight: [79.9, 79.6], shares: false, oneToOne: [5, '11:00', 'inperson'], fortnightly: true, isNew: true,
     checkin: [3, 3, ['Shoulder'], 'Left shoulder pinches on overhead press. Not painful, just there.'] },
 ];
+
+/** The first of March after `today` (at least a month away): the date "by March" means. */
+const nextMarch = today => {
+  const y = Number(today.slice(0, 4));
+  return `${today.slice(5) < '02-01' ? y : y + 1}-03-01`;
+};
+const round25 = v => Math.round(v / 2.5) * 2.5;
+
+/** A sensible active goal for a made-up person: their own (p.goalSpec), or one that fits their training. */
+function goalFor(p, { joined, today, rich }) {
+  const targetDate = addDays(joined, 7 * 16) > addDays(today, 21) ? addDays(joined, 7 * 16) : addDays(today, 7 * 8);
+  if (p.goalSpec) return { targetDate: p.goalSpec.targetDate ?? nextMarch(today), ...p.goalSpec };
+  const [w0, w1] = p.weight;
+  switch (p.routine) {
+    case 'strength': {
+      const baseline = rich ? round25(100 * 0.85) : 100;
+      return { title: `Squat ${round25(baseline * 1.2)} kg`, metric: 'record', exerciseId: exerciseId('Back Squat'), unit: 'kg', baseline, target: round25(baseline * 1.2), targetDate };
+    }
+    case 'fatLoss': return { title: `Down to ${Math.round(w0 - 6)} kg`, metric: 'weight', unit: 'kg', baseline: w0, target: Math.round(w0 - 6), targetDate };
+    case 'hypertrophy': return { title: `Up to ${Math.round(w1 + 2)} kg, and leaner`, metric: 'weight', unit: 'kg', baseline: w0, target: Math.round(w1 + 2), targetDate };
+    case 'running': return { title: 'Half marathon under 1:40', metric: 'custom', unit: 'min', baseline: 108, target: 100, current: 103, targetDate };
+    case 'hybrid': return { title: 'Hyrox under 1:20', metric: 'custom', unit: 'min', baseline: 92, target: 80, current: 85, targetDate };
+    case 'rehab': return { title: 'Stairs without knee pain', metric: 'custom', unit: '', baseline: 6, target: 0, current: 3, why: 'Back to running with the kids.', targetDate };
+    default: return { title: 'Five pain-free desk days a week', metric: 'custom', unit: 'days', baseline: 1, target: 5, current: 3, targetDate };
+  }
+}
 
 /** Deterministic noise so a re-run gives the same people the same week. */
 function rng(seed) {
@@ -166,7 +193,8 @@ export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [
         .run(wid, id, date, title, p.time, p.routine === 'running' && /Run|Intervals/.test(title) ? 'Outdoors' : 'Studio 2',
           /Intervals/.test(title) ? '90 s easy jog between reps.' : '', draft ? 0 : 1, draft ? null : at(addDays(date, -6)),
           at(addDays(date, -6)), 'coach', done ? at(date, p.time) : null,
-          done && r() < 0.25 ? ['Felt strong today.', 'Bit tired, kept it honest.', 'Last set was a grind.', 'Great session!'][Math.floor(r() * 4)] : null, coachId);
+          done && r() < 0.25 ? ['Felt strong today.', 'Bit tired, kept it honest.', 'Last set was a grind.', 'Good session.'][Math.floor(r() * 4)] : null, coachId);
+      if (done) db.prepare('UPDATE workouts SET feel=? WHERE id=?').run(2 + Math.floor(r() * 3), wid);
       items.forEach(([name, sets, reps, kg], position) => {
         const lifts = /(Squat|Deadlift|Bench|Press|Row|Thrust)/.test(name);
         const kgNow = rich ? (lifts ? Math.max(2.5, Math.round((kg * share) / 2.5) * 2.5) : kg) : Math.round((kg + (lifts ? progress : 0)) * 2) / 2;
@@ -199,14 +227,31 @@ export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [
     measure(kind, today, range[1]);
   }
 
-  // Habits: ticked in line with how they train.
-  for (const h of db.prepare('SELECT id, kind, target, health_kind FROM habits WHERE client_id=?').all(id)) {
+  // Habits: the person's own set if they have one, introduced when they joined, ticked in line with how they train.
+  if (p.habits) {
+    db.prepare('DELETE FROM habits WHERE client_id=?').run(id);
+    p.habits.forEach(([name, kind, target, unit, iconKey, healthKind, step], i) => db.prepare(`INSERT INTO habits (id, client_id, name, kind, target, unit, icon, health_kind, position, created_at, icon_key, step, introduced_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(newId('h'), id, name, kind, target, unit, ICON_KEY_SF[iconKey], healthKind ?? null, i, at(joined), iconKey, step ?? null, at(joined)));
+  }
+  db.prepare('UPDATE habits SET introduced_at=?, created_at=? WHERE client_id=?').run(at(joined), at(joined), id);
+  const restDays = new Set();
+  for (const [daysAgo, reason] of p.restDays ?? []) {
+    const d = addDays(today, -daysAgo);
+    restDays.add(d);
+    db.prepare('INSERT OR REPLACE INTO rest_days (client_id, date, reason, granted_by, created_at) VALUES (?,?,?,?,?)').run(id, d, reason, coachId, at(addDays(d, -2)));
+  }
+  for (const h of db.prepare('SELECT id, kind, target, health_kind FROM habits WHERE client_id=? ORDER BY position').all(id)) {
     if (h.health_kind) continue;
     for (let i = 1; i <= Math.max(21, rich ? weeksBack * 7 : 0); i++) {
       const day = addDays(today, -i);
-      if (day < joined || r() > p.adherence) continue;
+      if (day < joined || restDays.has(day) || r() > p.adherence) continue;
       db.prepare('INSERT INTO habit_days (habit_id, date, value, done) VALUES (?,?,?,1)').run(h.id, day, h.kind === 'count' ? h.target : 1);
     }
+  }
+  // Today, part-way through: the first manual habits ticked (for Sam this reads "3 of 5" with Health's steps or sleep).
+  for (const [i, h] of db.prepare('SELECT id, kind, target FROM habits WHERE client_id=? AND health_kind IS NULL ORDER BY position').all(id).entries()) {
+    if (i > 1 || r() > p.adherence) continue;
+    db.prepare('INSERT OR REPLACE INTO habit_days (habit_id, date, value, done) VALUES (?,?,?,1)').run(h.id, today, h.kind === 'count' ? h.target : 1);
   }
 
   // Apple Health for those who share: steps, sleep, resting HR, workouts.
@@ -243,18 +288,25 @@ export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [
     'Slept better this week.', 'Missed one session, family stuff. Back on it.', 'Feeling stronger on the big lifts.', 'Energy dipped midweek, ate better at the weekend.'];
   const REPLIES = ['Thanks, all noted. Keep going.', 'Good week. Same plan, small load increases.', 'Nice. Protect that sleep.',
     'Noted, we\'ll keep Thursday lighter.', 'Great work, the numbers show it.', 'Missed sessions happen. The trend is what counts.'];
+  const WINS = ['Got every session in.', 'Hit protein four days running.', 'Slept 7 hours most nights.', 'Squats felt fast.', 'Walked every lunchtime.', 'Said no to the work drinks.'];
+  const STRUGGLES = ['Wednesday slipped with work.', 'Late nights midweek.', 'Ate badly at the weekend.', 'Legs sore early in the week.', 'Low energy Thursday.', 'Hard to fit in steps.'];
+  // Rich: every week up to last, plus this week's from Friday (when it is due), still waiting for its letter.
+  const firstW = rich && today >= addDays(monday, 4) ? 0 : 1;
   if (p.checkin) {
     const [energy, sleep, pain, note] = p.checkin;
-    for (let w = rich ? weeksBack : 3; w >= 1; w--) {
+    for (let w = rich ? weeksBack : 3; w >= firstW; w--) {
       const week = addDays(monday, -7 * w);
       if (week < joined) continue;
-      const latest = w === 1;
-      db.prepare('INSERT INTO checkins (id, client_id, week, energy, sleep, pain, note, submitted_at, reviewed_at, reply) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      const latest = w === firstW;
+      const submitted = at(addDays(week, 4), '18:20') > nowIso() ? nowIso() : at(addDays(week, 4), '18:20');
+      db.prepare('INSERT INTO checkins (id, client_id, week, energy, sleep, pain, note, submitted_at, reviewed_at, reply, stress, win, struggle, photo_ids) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
         .run(newId('c'), id, week, latest ? energy : Math.min(5, Math.max(1, energy + (r() < 0.5 ? -1 : 0))),
           latest ? sleep : Math.min(5, Math.max(1, sleep + (r() < 0.5 ? 1 : 0) - (rich && w > weeksBack / 2 ? 1 : 0))), JSON.stringify(latest ? pain : []),
-          latest ? note : rich ? NOTES[w % NOTES.length] : 'Solid week overall.', at(addDays(week, 4), '18:20'),
+          latest ? note : rich ? NOTES[w % NOTES.length] : 'Solid week overall.', submitted,
           latest && !p.latestReviewed ? null : at(addDays(week, 6), '10:00'),
-          latest && !p.latestReviewed ? null : rich ? REPLIES[w % REPLIES.length] : 'Thanks, all noted. Keep going.');
+          latest && !p.latestReviewed ? null : rich ? REPLIES[w % REPLIES.length] : 'Thanks, all noted. Keep going.',
+          Math.min(5, Math.max(1, (latest ? 6 - energy : 2) + (r() < 0.4 ? 1 : 0))), latest && p.win ? p.win : WINS[(w + idx) % WINS.length],
+          latest && p.struggle ? p.struggle : STRUGGLES[(w + idx) % STRUGGLES.length], '[]');
     }
   }
 
@@ -262,16 +314,36 @@ export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [
   const weeks = rich ? Array.from({ length: weeksBack }, (_, i) => weeksBack - i) : [3, 2];
   const FOCUS = ['Same plan, small load increases where the last set felt easy.', 'Protect the midweek session: it\'s the one that slips.',
     'Ten minutes of mobility before every lower session.', 'Hit protein at breakfast; it makes the rest of the day easy.', 'Lights out by 22:30 four nights this week.'];
+  const HEADLINES = ['A steady week, and steady wins.', 'The midweek session held.', 'Good, honest week.', 'Sleep is starting to pay off.', 'Your numbers are moving.', 'Consistency is doing the work.'];
+  const KEEPS = ['Every session done, and logged properly.', 'Protein at breakfast four days out of seven.', 'Your steps held above 9,000 all week.', 'You moved Wednesday instead of skipping it.', 'Loads up 2.5 kg on the big lifts.'];
+  const QUESTIONS = ['What got in the way on Thursday?', 'Which session did you enjoy most?', 'What would make Wednesday easier?', 'How did the new exercises feel?', 'What time did you get to bed on work nights?'];
+  const ANSWERS = ['Work ran late, I will move it to the morning.', 'The lower session, by a mile.', 'Packing my kit the night before.', 'Good once I got the depth right.', 'About 11, trying for 10:30.'];
   for (const w of weeks) {
     const week = addDays(monday, -7 * w);
     if (week < joined || p.quiet) continue;
-    db.prepare('INSERT INTO reports (id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
-      newId('r'), id, coachId, week,
-      `Good week, ${first}. ${p.adherence > 0.8 ? 'Every session done and the numbers are moving.' : 'Most sessions done; let\'s protect the midweek one.'}`,
-      p.goal ? `On track for: ${p.goal.toLowerCase()}.` : 'Consistent habits and honest logging.',
-      rich ? FOCUS[w % FOCUS.length] : FOCUS[0],
-      at(addDays(week, 7), '08:00'), w === 1 && rich ? null : w === 3 || rich ? at(addDays(week, 7), '12:00') : null, at(addDays(week, 7), '07:30'), at(addDays(week, 7), '08:00'));
+    const own = p.letters?.[w - 1];
+    const headline = own?.headline ?? HEADLINES[(w + idx) % HEADLINES.length];
+    const keep = own?.keep ?? KEEPS[(w + idx) % KEEPS.length];
+    const adjust = own?.adjust ?? (rich ? FOCUS[w % FOCUS.length] : FOCUS[(w + idx) % FOCUS.length]);
+    const question = own?.question ?? QUESTIONS[(w + idx) % QUESTIONS.length];
+    // Answered and read, except the newest rich one; delivered the Monday after the week at 07:00.
+    const unreadNewest = w === 1 && rich;
+    const answer = own?.answer !== undefined ? own.answer : !unreadNewest && w % 2 === 0 ? ANSWERS[(w + idx) % ANSWERS.length] : null;
+    const deliverAt = at(addDays(week, 7), '07:00');
+    const readAt = unreadNewest ? null : w === 3 || rich ? at(addDays(week, 7), '12:00') : null;
+    db.prepare(`INSERT INTO reports (id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at,
+      kind, headline, keep, adjust, question, answer, answered_at, deliver_at, delivered_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'weekly',?,?,?,?,?,?,?,?)`).run(
+      newId('r'), id, coachId, week, `${headline} ${keep}`, keep, adjust,
+      at(addDays(week, 6), '20:00'), readAt, at(addDays(week, 6), '19:30'), at(addDays(week, 6), '20:00'),
+      headline, keep, adjust, question, answer, answer ? at(addDays(week, 7), '12:30') : null, deliverAt, deliverAt);
+    db.prepare("UPDATE checkins SET reviewed_at=COALESCE(reviewed_at, ?), reply=COALESCE(reply, ?) WHERE client_id=? AND week=?").run(at(addDays(week, 6), '20:00'), headline, id, week);
   }
+
+  // Their goal, active, from when they joined.
+  const g = goalFor(p, { joined, today, rich });
+  db.prepare(`INSERT INTO goals (id, client_id, title, metric, exercise_id, unit, baseline, target, current_value, start_date, target_date, why, status, chapter_name, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'active',?,?,?)`).run(newId('g'), id, g.title, g.metric, g.exerciseId ?? null, g.unit, g.baseline, g.target, g.current ?? null,
+    joined, g.targetDate, g.why ?? null, g.chapterName ?? null, at(joined), at(joined));
 
   // Messages: a thread (the spec's own when it has one); some end with a question you haven't read.
   const msg = (role, text, hoursAgo, read = true) => db.prepare('INSERT INTO messages (id, client_id, from_id, from_role, text, at, read_at) VALUES (?,?,?,?,?,?,?)')

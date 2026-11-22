@@ -119,8 +119,7 @@ export function openStore(path) {
       id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       coach_id TEXT REFERENCES users(id) ON DELETE SET NULL, week TEXT NOT NULL,
       summary TEXT NOT NULL DEFAULT '', wins TEXT NOT NULL DEFAULT '', focus TEXT NOT NULL DEFAULT '',
-      published_at TEXT, read_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-      UNIQUE (client_id, week));
+      published_at TEXT, read_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS link_codes (
       hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at INTEGER NOT NULL, created_at TEXT NOT NULL);
@@ -178,7 +177,168 @@ export function openStore(path) {
   // was already here counts as onboarded, so only new sign-ups see the flow.
   if (addColumn(db, 'users', 'onboarded_at', 'TEXT')) db.exec('UPDATE users SET onboarded_at = created_at');
   addColumn(db, 'users', 'profile', 'TEXT');
+  atelierSchema(db);
+  if (path !== ':memory:') backupBeforeMigration(db, path);
+  migrateAtelier(db);
   return db;
+}
+
+/**
+ * The Atelier redesign (docs/design/atelier-spec.md, "Server and data
+ * changes"): goals, rest days, media, letters on reports, and the habit,
+ * check-in, message, workout and booking columns. Everything is additive.
+ */
+function atelierSchema(db) {
+  // Weekly reports used to be one per client and week; milestone letters can share a week, so
+  // the table loses that constraint and a partial index keeps it for weekly letters only.
+  const reportsSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='reports'").get()?.sql ?? '';
+  if (/UNIQUE\s*\(client_id,\s*week\)/.test(reportsSql)) {
+    tx(db, () => {
+      db.exec(`CREATE TABLE reports_new (
+        id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        coach_id TEXT REFERENCES users(id) ON DELETE SET NULL, week TEXT NOT NULL,
+        summary TEXT NOT NULL DEFAULT '', wins TEXT NOT NULL DEFAULT '', focus TEXT NOT NULL DEFAULT '',
+        published_at TEXT, read_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        INSERT INTO reports_new (id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at)
+          SELECT id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at FROM reports;
+        DROP TABLE reports;
+        ALTER TABLE reports_new RENAME TO reports;`);
+    });
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL, metric TEXT NOT NULL CHECK (metric IN ('weight','waist','measurement','record','habit','custom')),
+      exercise_id TEXT, measure_key TEXT, habit_id TEXT, unit TEXT NOT NULL DEFAULT '',
+      baseline REAL, target REAL, current_value REAL, start_date TEXT, target_date TEXT, why TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','reached','paused')),
+      chapter_name TEXT, suggestion TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS goals_client ON goals(client_id, status);
+    CREATE TABLE IF NOT EXISTS rest_days (
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, date TEXT NOT NULL,
+      reason TEXT, granted_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL,
+      PRIMARY KEY (client_id, date));
+    CREATE TABLE IF NOT EXISTS media (
+      id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('audio','video','image')), mime TEXT NOT NULL, ext TEXT NOT NULL,
+      bytes INTEGER NOT NULL, duration_sec REAL, purpose TEXT, created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS media_owner ON media(owner_id);
+    CREATE INDEX IF NOT EXISTS media_client ON media(client_id);`);
+  // Per-client coaching settings, the client's own preferences, and (for a coach) their settings as JSON.
+  addColumn(db, 'users', 'day_minimum', 'INTEGER');
+  addColumn(db, 'users', 'letter_rhythm', 'TEXT');
+  addColumn(db, 'users', 'coach_line', 'TEXT');
+  addColumn(db, 'users', 'coach_line_at', 'TEXT');
+  addColumn(db, 'users', 'notifications_on', 'INTEGER NOT NULL DEFAULT 1');
+  addColumn(db, 'users', 'evening_reminder', 'TEXT');
+  addColumn(db, 'users', 'coach_settings', 'TEXT');
+  addColumn(db, 'habits', 'icon_key', 'TEXT');
+  addColumn(db, 'habits', 'step', 'REAL');
+  addColumn(db, 'habits', 'introduced_at', 'TEXT');
+  for (const [col, ddl] of [['kind', "TEXT NOT NULL DEFAULT 'weekly'"], ['headline', 'TEXT'], ['keep', 'TEXT'], ['adjust', 'TEXT'], ['question', 'TEXT'],
+    ['answer', 'TEXT'], ['answered_at', 'TEXT'], ['media_id', 'TEXT'], ['media_kind', 'TEXT'], ['duration_sec', 'REAL'], ['goal_id', 'TEXT'],
+    ['deliver_at', 'TEXT'], ['delivered_at', 'TEXT'], ['focus_override', 'TEXT'], ['milestone_key', 'TEXT']]) addColumn(db, 'reports', col, ddl);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS reports_weekly ON reports(client_id, week) WHERE kind='weekly'");
+  addColumn(db, 'checkins', 'stress', 'INTEGER');
+  addColumn(db, 'checkins', 'win', 'TEXT');
+  addColumn(db, 'checkins', 'struggle', 'TEXT');
+  addColumn(db, 'checkins', 'photo_ids', 'TEXT');
+  addColumn(db, 'messages', 'kind', "TEXT NOT NULL DEFAULT 'text'");
+  addColumn(db, 'messages', 'report_id', 'TEXT');
+  addColumn(db, 'messages', 'exercise_id', 'TEXT');
+  addColumn(db, 'messages', 'media_id', 'TEXT');
+  addColumn(db, 'workouts', 'feel', 'INTEGER');
+  addColumn(db, 'bookings', 'meeting_url', 'TEXT');
+}
+
+const MIGRATION = 'atelier_v1';
+
+/** A copy of the database file before the one-time Atelier migration touches existing rows. */
+function backupBeforeMigration(db, path) {
+  if (db.prepare('SELECT 1 FROM meta WHERE key=?').get(MIGRATION)) return;
+  if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) return;
+  const file = `${path}.pre-${MIGRATION}-${Date.now()}.bak`;
+  db.exec(`VACUUM INTO '${file.replaceAll("'", "''")}'`);
+  try { chmodSync(file, 0o600); } catch { /* best effort */ }
+}
+
+/** SF Symbol names the apps stored for habits before IconKey, mapped to the closed catalogue. */
+export const SF_TO_ICON_KEY = {
+  drop: 'water', 'drop.fill': 'water', 'waterbottle': 'water', 'waterbottle.fill': 'water',
+  moon: 'sleep', 'moon.fill': 'sleep', 'bed.double': 'sleep', 'bed.double.fill': 'sleep', 'moon.zzz': 'sleep', 'moon.zzz.fill': 'sleep',
+  'shoeprints.fill': 'steps', 'figure.walk': 'steps', 'figure.walk.circle': 'steps',
+  'fork.knife': 'protein', 'fork.knife.circle': 'protein', 'takeoutbag.and.cup.and.straw': 'protein', 'carrot': 'protein', 'carrot.fill': 'protein',
+  pills: 'supplement', 'pills.fill': 'supplement', 'pill': 'supplement', 'pill.fill': 'supplement', 'cross.vial': 'supplement',
+  bolt: 'energy', 'bolt.fill': 'energy', 'bolt.heart': 'energy', 'flame': 'energy', 'flame.fill': 'energy',
+  'figure.flexibility': 'mobility', 'figure.yoga': 'mobility', 'figure.cooldown': 'mobility',
+  leaf: 'mindfulness', 'leaf.fill': 'mindfulness', 'brain.head.profile': 'mindfulness', 'wind': 'mindfulness',
+  book: 'reading', 'book.fill': 'reading', 'book.closed': 'reading', 'text.book.closed': 'reading',
+  sunrise: 'sunlight', 'sunrise.fill': 'sunlight', 'sun.max': 'sunlight', 'sun.max.fill': 'sunlight',
+};
+export const iconKeyFor = sf => SF_TO_ICON_KEY[sf] ?? 'custom';
+
+const FIRST_SENTENCE = /^(.+?[.!?])(\s|$)/s;
+export const firstSentence = text => {
+  const t = (text ?? '').trim();
+  if (!t) return '';
+  const m = FIRST_SENTENCE.exec(t);
+  return (m ? m[1] : t.split('\n')[0]).slice(0, 140);
+};
+
+/** Words for onboarding goal tags, used to title a draft goal. */
+const GOAL_WORDS = { strength: 'Get stronger', muscle: 'Build muscle', fatloss: 'Fat loss', fitness: 'Get fitter', performance: 'Perform at your sport', mobility: 'Move better', health: 'Better health' };
+const GOAL_METRIC = { fatloss: ['weight', 'kg'], muscle: ['weight', 'kg'] };
+
+/**
+ * One-time data changes for the redesign (runs when meta key atelier_v1 is
+ * absent, after a backup of the file): habit IconKeys from the old SF names,
+ * letter fields from old reports (headline = first sentence of summary,
+ * keep = wins, adjust = focus; the old fields stay), and a draft goal for
+ * every client without one, from their onboarding goals and intake answer.
+ * The day rule needs no stored recompute: it is worked out on every read.
+ */
+export function migrateAtelier(db) {
+  if (db.prepare('SELECT 1 FROM meta WHERE key=?').get(MIGRATION)) return false;
+  tx(db, () => {
+    for (const h of db.prepare('SELECT id, icon FROM habits WHERE icon_key IS NULL').all()) {
+      db.prepare('UPDATE habits SET icon_key=? WHERE id=?').run(iconKeyFor(h.icon), h.id);
+    }
+    db.prepare('UPDATE habits SET introduced_at=created_at WHERE introduced_at IS NULL').run();
+    for (const r of db.prepare('SELECT * FROM reports WHERE headline IS NULL').all()) {
+      db.prepare('UPDATE reports SET headline=?, keep=?, adjust=?, deliver_at=COALESCE(deliver_at, published_at), delivered_at=COALESCE(delivered_at, published_at) WHERE id=?')
+        .run(firstSentence(r.summary), r.wins, r.focus, r.id);
+    }
+    for (const c of db.prepare("SELECT * FROM users WHERE role='client' AND id NOT IN (SELECT client_id FROM goals)").all()) {
+      createDraftGoal(db, c);
+    }
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(MIGRATION, nowIso());
+  });
+  return true;
+}
+
+/**
+ * A draft goal for JK to set, from the onboarding goal tags and the intake
+ * form's free-text goal. Returns the new goal's id, or null when there is
+ * nothing to suggest from.
+ */
+export function createDraftGoal(db, client) {
+  let tags = [];
+  try { tags = JSON.parse(client.profile ?? 'null')?.goals ?? []; } catch { /* no profile */ }
+  let intake = null;
+  for (const r of db.prepare("SELECT answers FROM form_requests WHERE client_id=? AND name='Intake' AND answers IS NOT NULL ORDER BY submitted_at DESC").all(client.id)) {
+    try { intake = JSON.parse(r.answers).goal ?? null; } catch { /* ignore */ }
+    if (intake) break;
+  }
+  if (!tags.length && !intake) return null;
+  const suggestion = tags.length ? tags.map(t => GOAL_WORDS[t] ?? t).join(', ') : null;
+  const title = (typeof intake === 'string' && intake.trim() ? intake.trim() : GOAL_WORDS[tags[0]] ?? 'Your goal').slice(0, 120);
+  const [metric, unit] = GOAL_METRIC[tags[0]] ?? ['custom', ''];
+  const latestWeight = metric === 'weight' ? db.prepare("SELECT value FROM measurements WHERE user_id=? AND kind='weight' ORDER BY date DESC LIMIT 1").get(client.id)?.value ?? null : null;
+  const id = newId('g');
+  const now = nowIso();
+  db.prepare(`INSERT INTO goals (id, client_id, title, metric, unit, baseline, status, suggestion, why, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,'draft',?,?,?,?)`).run(id, client.id, title, metric, unit, latestWeight, suggestion ?? title, null, now, now);
+  return id;
 }
 
 function addColumn(db, table, column, ddl) {

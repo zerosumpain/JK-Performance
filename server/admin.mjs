@@ -5,8 +5,12 @@
  *   node server/admin.mjs assign <client-email> <coach-email>
  *   node server/admin.mjs test-clients add <coach-email> | remove   (made-up clients to rehearse with)
  *   node server/admin.mjs test-clients more <coach-email>   (programs, forms, autoflows for clients added before them)
+ *   node server/admin.mjs coach-portrait <email-or-user-id> <file.jpg|png>   (JK's portrait, shown to his clients)
  */
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { storeMedia } from './media.mjs';
+import { coachSettings, saveCoachSettings } from './settings.mjs';
 import { openStore } from './store.mjs';
 import { addTestClients, addTestExtras, removeTestClients } from './testclients.mjs';
 
@@ -45,7 +49,15 @@ if (cmd === 'users') {
 } else if (cmd === 'test-clients' && a === 'remove') {
   const r = removeTestClients(db);
   console.log(`Removed ${r.users} made-up clients, ${r.classes} of their bookings and classes, and ${r.library} programs, forms, autoflows and challenges made for them.`);
+} else if (cmd === 'coach-portrait') {
+  const coach = db.prepare("SELECT * FROM users WHERE (id=? OR lower(email)=lower(?)) AND role='coach'").get(a ?? '', a ?? '');
+  if (!coach) { console.error(`No coach with id or email ${a}`); process.exit(1); }
+  if (!b) { console.error('Give the image file'); process.exit(2); }
+  const bytes = readFileSync(b);
+  const m = storeMedia(db, { dataDir: process.env.DATA_DIR ?? './data' }, { ownerId: coach.id, bytes, mime: bytes[0] === 0x89 ? 'image/png' : 'image/jpeg', purpose: 'avatar' });
+  saveCoachSettings(db, coach.id, { ...coachSettings(db, coach.id), avatarMediaId: m.id });
+  console.log(`${coach.name}'s portrait is now ${m.id} (${m.bytes} bytes).`);
 } else {
-  console.error('Usage: admin.mjs users | make-coach <email> | assign <client-email> <coach-email> | test-clients add|more <coach-email> | test-clients remove');
+  console.error('Usage: admin.mjs users | make-coach <email> | assign <client-email> <coach-email> | test-clients add|more <coach-email> | test-clients remove | coach-portrait <email-or-user-id> <file>');
   process.exit(2);
 }

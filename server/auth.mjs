@@ -77,8 +77,8 @@ export function primaryCoachId(db, config) {
 
 /** A new client's starting kit: default habits, nutrition targets, the welcome message. */
 export function setUpClient(db, clientId, coachId) {
-  const insert = db.prepare('INSERT INTO habits (id, client_id, name, kind, target, unit, icon, health_kind, position, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
-  DEFAULT_HABITS.forEach((h, i) => insert.run(newId('h'), clientId, h.name, h.kind, h.target, h.unit, h.icon, h.healthKind, i, nowIso()));
+  const insert = db.prepare('INSERT INTO habits (id, client_id, name, kind, target, unit, icon, health_kind, position, created_at, icon_key, introduced_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  DEFAULT_HABITS.forEach((h, i) => insert.run(newId('h'), clientId, h.name, h.kind, h.target, h.unit, h.icon, h.healthKind, i, nowIso(), h.iconKey, nowIso()));
   db.prepare('INSERT OR IGNORE INTO nutrition_targets (client_id, kcal, protein, carbs, fat) VALUES (?,?,?,?,?)')
     .run(clientId, DEFAULT_TARGETS.kcal, DEFAULT_TARGETS.protein, DEFAULT_TARGETS.carbs, DEFAULT_TARGETS.fat);
   if (coachId) {

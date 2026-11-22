@@ -4,6 +4,9 @@ import { day, fail, num, oneOf, str } from './http.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay } from './time.mjs';
 
+/** How a session felt, as the words the apps show (no numbers on client screens). */
+export const FEEL_WORDS = { 1: 'Easy', 2: 'Steady', 3: 'Hard', 4: 'Very hard', 5: 'Max' };
+
 // MARK: - Exercises
 
 const exerciseOut = r => ({ id: r.id, name: r.name, equipment: r.equipment, pattern: r.pattern, category: r.category, videoUrl: r.video_url ?? null });
@@ -61,6 +64,7 @@ export function workoutOut(db, w, { withItems = true } = {}) {
     id: w.id, clientId: w.client_id, date: w.date, title: w.title, startsAt: w.starts_at, location: w.location,
     notes: w.notes, published: !!w.published, publishedAt: w.published_at, editedAt: w.edited_at, editedBy: w.edited_by,
     completedAt: w.completed_at, completionNote: w.completion_note, createdBy: w.created_by,
+    feel: w.feel ?? null, feelWord: w.feel ? FEEL_WORDS[w.feel] : null,
   };
   const items = itemRows(db, w.id);
   const logsOf = db.prepare('SELECT number, load, reps, rpe, at FROM set_logs WHERE item_id=? ORDER BY number');
@@ -233,8 +237,8 @@ function deleteSet(_req, ctx) {
 function completeWorkout(_req, ctx) {
   requireMember(ctx);
   const w = loggable(ctx);
-  ctx.db.prepare('UPDATE workouts SET completed_at=?, completion_note=? WHERE id=?')
-    .run(nowIso(), str(ctx.body.note, 'note', { max: 500, optional: true, min: 0 }), w.id);
+  ctx.db.prepare('UPDATE workouts SET completed_at=?, completion_note=?, feel=? WHERE id=?')
+    .run(nowIso(), str(ctx.body.note, 'note', { max: 500, optional: true, min: 0 }), num(ctx.body.feel, 'feel', { min: 1, max: 5, int: true, optional: true }), w.id);
   return workoutOut(ctx.db, ctx.db.prepare('SELECT * FROM workouts WHERE id=?').get(w.id));
 }
 

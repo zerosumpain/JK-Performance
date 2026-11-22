@@ -46,10 +46,10 @@ export function seedCatalogue(db) {
 
 /** Every new client starts with these; the coach edits them per person. */
 export const DEFAULT_HABITS = [
-  { name: 'Water', kind: 'count', target: 3, unit: 'L', icon: 'drop', healthKind: null },
-  { name: 'Sleep 7h+', kind: 'check', target: 7, unit: 'h', icon: 'moon', healthKind: 'sleep' },
-  { name: 'Steps', kind: 'count', target: 10000, unit: 'steps', icon: 'shoeprints.fill', healthKind: 'steps' },
-  { name: 'Creatine', kind: 'check', target: 1, unit: '', icon: 'bolt', healthKind: null },
+  { name: 'Water', kind: 'count', target: 3, unit: 'L', icon: 'drop', iconKey: 'water', healthKind: null },
+  { name: 'Sleep 7h+', kind: 'check', target: 7, unit: 'h', icon: 'moon', iconKey: 'sleep', healthKind: 'sleep' },
+  { name: 'Steps', kind: 'count', target: 10000, unit: 'steps', icon: 'shoeprints.fill', iconKey: 'steps', healthKind: 'steps' },
+  { name: 'Creatine', kind: 'check', target: 1, unit: '', icon: 'bolt', iconKey: 'energy', healthKind: null },
 ];
 
 export const DEFAULT_TARGETS = { kcal: 2500, protein: 170, carbs: 260, fat: 80 };
@@ -70,3 +70,23 @@ export const GUIDES = {
     { id: 't-checkin', title: 'Reply to every check-in', minutes: 1, tags: ['Retention'], body: 'A two-line reply on Sunday night is the cheapest retention tool you have.' },
   ],
 };
+
+/**
+ * JK's guides for clients: short reads on training, food, sleep and recovery.
+ * Every plan includes 'guides' (it is the main thing Free offers). The coach
+ * tips in GUIDES above are for the coach; these are written to the client.
+ */
+export const CLIENT_GUIDES = [
+  { id: 'cg-first-weeks', title: 'Your first four weeks', summary: 'What to expect while we find your numbers, and why the first weeks feel easy.', minutes: 3, tags: ['Training'],
+    body: 'The first block is about finding your numbers, not chasing them. Loads will feel light on purpose: we want every rep clean and every session logged, so the second block can be built on what you actually did.\n\nLog every set, even the bad ones. A missed rep tells me more than a perfect week.\n\nIf something hurts, as opposed to feeling hard, tell me the same day. We change the exercise, not your plan.' },
+  { id: 'cg-protein', title: 'Protein without the maths', summary: 'Four meals, a palm of protein at each, and why breakfast matters most.', minutes: 2, tags: ['Food'],
+    body: 'Most people eat enough protein at dinner and almost none at breakfast. Start there.\n\nAim for a palm-sized portion at each meal: eggs, Greek yoghurt, chicken, fish, tofu or a scoop of whey. Four of those and you are close to where you need to be without weighing anything.\n\nIf you only change one thing this month, make it breakfast.' },
+  { id: 'cg-sleep', title: 'Sleep is training', summary: 'The one habit that makes every other one easier.', minutes: 3, tags: ['Recovery'],
+    body: 'You get stronger between sessions, not during them, and most of that happens asleep.\n\nPick a lights-out time and keep it five nights a week. Keep the phone out of the bedroom. A cool, dark room helps more than any supplement.\n\nA short night happens. Two in a row and we lighten the next session; tell me in your check-in.' },
+  { id: 'cg-missed', title: 'When you miss a day', summary: 'A miss lowers the count; it never wipes it out. Here is how to get back on.', minutes: 2, tags: ['Habits'],
+    body: 'A day counts once you hit my minimum, not every habit. Miss one and the count dips; it does not reset.\n\nThe only rule is not to miss twice. The morning after a miss, do the easiest habit first and the rest follows.\n\nIf you are travelling or ill, message me and I will give you a rest day. Rest days are neither done nor missed.' },
+  { id: 'cg-steps', title: 'Steps, not cardio', summary: 'Why walking is the quiet engine of fat loss and recovery.', minutes: 2, tags: ['Training', 'Food'],
+    body: 'Walking burns more over a week than most cardio sessions, and it does not eat into your recovery.\n\nAdd a ten-minute walk after two meals a day. Take calls on your feet. Your steps fill in from your phone, so there is nothing to log.' },
+  { id: 'cg-checkin', title: 'Getting the most from your check-in', summary: 'One minute on Sunday shapes your letter on Monday.', minutes: 1, tags: ['Coaching'],
+    body: 'Your check-in is how I write your letter. Be honest about energy and stress; a low week is information, not a failure.\n\nThe win and the struggle matter most. One line each is plenty.' },
+];
