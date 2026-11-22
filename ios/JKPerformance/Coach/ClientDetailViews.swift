@@ -23,6 +23,7 @@ struct ClientDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                if let detail { ClientAboutCard(profile: detail.profile) }
                 Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
                 switch tab {
                 case .plan: CoachPlanTab(clientId: clientId, clientName: detail?.client.name ?? name)

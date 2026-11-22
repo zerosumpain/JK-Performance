@@ -223,6 +223,7 @@ struct BusinessView: View {
                             ForEach(plans, id: \.id) { p in StatTile(label: p.name, value: "\(p.members)") }
                         }
                     }
+                    PlansPricesLink()
                     Eyebrow(text: "Needs attention", trailing: "Auto-flagged")
                     if b.attention.isEmpty {
                         EmptyCard(systemName: "checkmark.seal", title: "Everyone's on track")
@@ -298,6 +299,27 @@ struct BusinessView: View {
         } catch {
             if !error.isCancellation { self.error = error.readable }
         }
+    }
+}
+
+/// The row into Plans & prices, on Business and the coach's Account.
+struct PlansPricesLink: View {
+    var body: some View {
+        NavigationLink {
+            PlansPricesView()
+        } label: {
+            HStack(spacing: 12) {
+                IconTile(systemName: "tag")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plans & prices").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Names, prices, credits and what each plan includes").font(.caption2).foregroundStyle(JK.tertiary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            }
+            .jkCard(padding: 12)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1011,6 +1033,7 @@ struct CoachAccountView: View {
                         }
                         .jkCard(padding: 12)
                     }
+                    PlansPricesLink()
                     CoachNotificationsRow()
                     CalendarSubscribeCard()
                     WebSessionsRow()
