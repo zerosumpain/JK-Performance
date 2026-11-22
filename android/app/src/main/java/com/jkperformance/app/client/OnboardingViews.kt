@@ -191,7 +191,7 @@ fun OnboardingFlow() {
 
             OnboardingStep.goals -> StepScaffold(
                 title = "What are you training for?",
-                subtitle = "Pick as many as you like.",
+                subtitle = "Pick as many as you like. JK will turn this into your goal at your first session.",
                 primary = "Continue",
                 onPrimary = { next() },
                 step = position, count = total,
@@ -271,9 +271,15 @@ fun OnboardingFlow() {
                     onSecondary = { next() },
                 ) {
                     Column(Modifier.jkSurface(padding = 4.dp)) {
-                        ReasonRow(IconKey.messages, "Coach replies", "When ${coachName ?: "your coach"} answers a message")
+                        ReasonRow(IconKey.messages, "JK's replies", "When ${coachName ?: "JK"} answers a message")
                         ReasonRow(IconKey.week, "Session reminders", "An hour before each session")
-                        ReasonRow(IconKey.letter, "Your weekly report", "When your feedback and next week's plan are ready")
+                        ReasonRow(IconKey.letter, "JK's letter", "When your letter for the week arrives")
+                    }
+                    if (!HealthSync.optedIn && session.me?.demo != true) {
+                        Text(
+                            "Steps and sleep can fill your habits in by themselves: connect Health Connect in Account, from your initials on Today.",
+                            style = JKType.caption, color = JKColors.textSecondary,
+                        )
                     }
                     if (alreadyOn) Text("Notifications are on.", style = JKType.caption, color = JKColors.textTertiary)
                 }
@@ -306,6 +312,7 @@ fun OnboardingFlow() {
                                     FeatureRow(id, f?.title ?: id, f?.detail)
                                 }
                             }
+                            SecondaryButton("Take the tour", onClick = { showTour = true }, enabled = !saving)
                         }
                         else -> {
                             reply.plans.filter { !it.isFree }.forEach { p -> PlanSummaryCard(p, compact = true) }

@@ -10,6 +10,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.semantics
+import com.jkperformance.app.net.Preferences
+import com.jkperformance.app.net.TabRouter
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -71,32 +81,56 @@ import com.jkperformance.app.design.components.*
 
 
 
-// MARK: - Account (client tab root)
+// MARK: - Account sheet
 
+private enum class AccountRoute { membership, health, notifications, privacy }
+
+/**
+ * Account is a sheet from the avatar on Today (atelier-spec.md, IA): one
+ * inset grouped list of eight rows. Membership and the plan tour live only
+ * here. Shown in a [Sheet]; TabRouter.showMembership opens it at Membership.
+ */
 @Composable
-fun AccountView() {
+fun AccountSheet() {
     val session = AppSession
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
+    val dismiss = LocalDismiss.current
+    val nav = LocalNav.current
     val scope = rememberCoroutineScope()
     var editingName by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var exportFile by remember { mutableStateOf<File?>(null) }
     var exporting by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Mirrors Reminders.enabled, re-read after every change made here.
-    var remindersOn by remember { mutableStateOf(Reminders.enabled) }
+
+    fun open(route: AccountRoute) = nav.push {
+        when (route) {
+            AccountRoute.membership -> MembershipView()
+            AccountRoute.health -> HealthDevicesView()
+            AccountRoute.notifications -> NotificationsView()
+            AccountRoute.privacy -> PrivacyView()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (TabRouter.showMembership) {
+            TabRouter.showMembership = false
+            open(AccountRoute.membership)
+        }
+    }
 
     val healthDetail = when {
         !HealthSync.optedIn -> "Not connected"
-        session.me?.healthSharing == true -> "Connected · shared with ${session.me?.coach?.name ?: "your coach"}"
+        session.me?.healthSharing == true -> "Connected · shared with JK"
         else -> "Connected · only you"
     }
     val membershipDetail = session.me?.membership?.takeIf { it.isActive }?.let { m ->
         m.renewsOn?.let { "${m.displayName} · renews ${Fmt.dayMonth(it)}" } ?: m.displayName
-    } ?: "No plan"
+    } ?: "No plan · Guides from JK"
+    val notificationsDetail = if (!Reminders.enabled) "Off" else Reminders.eveningTime?.let { "On · evening reminder $it" } ?: "On"
 
     suspend fun saveName() {
         val trimmed = name.trim()
@@ -132,6 +166,7 @@ fun AccountView() {
         deleting = true
         try {
             session.deleteAccount()
+            dismiss()
         } catch (e: Exception) {
             if (e.isCancellation) throw e
             error = e.readable
@@ -140,99 +175,53 @@ fun AccountView() {
         }
     }
 
-    JKRefreshable(onRefresh = { session.refreshMe() }, modifier = Modifier.jkScreen()) {
+    Column(Modifier.jkScreen()) {
+        TopBar(title = "Account", leading = {}) { BarButton("Done", bold = true) { dismiss() } }
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(JKSpace.gutter),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.xxl),
         ) {
-            ScreenHeader(eyebrow = "Account", title = session.me?.name ?: "Account") {
-                Box(
-                    Modifier
-                        .size(JKSize.touchTarget)
-                        .clip(CircleShape)
-                        .clickable {
-                            name = session.me?.name ?: ""
-                            editingName = true
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Glyph(IconKey.edit, tint = JKColors.text, contentDescription = "Edit name")
-                }
-            }
-            session.me?.email?.let { Text(it, style = JKType.caption, color = JKColors.textTertiary) }
             if (session.canReturnToCoach) {
-                PrimaryButton(onClick = { scope.launch { session.returnToCoach() } }) {
-                    IconLabel("Back to coach", icon = IconKey.undo, style = LocalTextStyle.current, color = JKColors.primaryLabel)
-                }
-                Text("You're looking round as the demo client. Nothing here is a real client's data.",
-                    style = JKType.caption, color = JKColors.textTertiary)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AccountLink(title = "Membership", detail = membershipDetail, systemName = "creditcard") { MembershipView() }
-                AccountLink(title = "Health Connect", detail = healthDetail, systemName = "heart") { HealthDevicesView() }
-                Row(
-                    Modifier.jkSurface(padding = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RowGlyph(IconKey.notifications)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Notifications", style = JKType.callout.semibold(), color = JKColors.text)
-                        Text("Replies and feedback · an hour before sessions · Friday check-in",
-                            style = JKType.caption, color = JKColors.textTertiary)
-                    }
-                    IOSSwitch(remindersOn) { on ->
-                        remindersOn = on
-                        scope.launch {
-                            if (on) {
-                                if (!Reminders.enable()) {
-                                    error = "Notifications are off for JK Performance. Turn them on in Settings › Notifications."
-                                }
-                            } else {
-                                Reminders.disable()
-                            }
-                            remindersOn = Reminders.enabled
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                    Text("You're looking round as the demo client. Nothing here is a real client's data.",
+                        style = JKType.caption, color = JKColors.textSecondary)
+                    SecondaryButton("Back to coach", onClick = { scope.launch { session.returnToCoach() } })
                 }
             }
-
-            Label(text = "Your data")
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
+                AccountRowLabel(IconKey.settings, "Name", session.me?.name ?: "", chevron = false) {
+                    name = session.me?.name ?: ""
+                    editingName = true
+                }
+                GroupDivider()
+                AccountRowLabel(IconKey.goal, "Membership", membershipDetail) { open(AccountRoute.membership) }
+                GroupDivider()
+                AccountRowLabel(IconKey.fromHealth, "Health Connect", healthDetail) { open(AccountRoute.health) }
+                GroupDivider()
+                AccountRowLabel(IconKey.reply, "Notifications", notificationsDetail) { open(AccountRoute.notifications) }
+                GroupDivider()
                 val file = exportFile
                 if (file != null) {
-                    RowLabel(
-                        title = "Share your export", detail = file.name, systemName = "square.and.arrow.up",
-                        trailing = "square.and.arrow.up",
-                        modifier = Modifier.clickable { shareFile(context, file) },
-                    )
+                    AccountRowLabel(IconKey.photos, "Your data", "Share ${file.name}", chevron = false) { shareFile(context, file) }
                 } else {
-                    RowLabel(
-                        title = "Export your data",
-                        detail = if (exporting) "Preparing…" else "Everything stored about you, as JSON",
-                        systemName = "arrow.down.doc",
-                        trailing = if (exporting) null else "chevron.right",
-                        modifier = Modifier.clickable(enabled = !exporting) { scope.launch { export() } },
-                    )
+                    AccountRowLabel(
+                        IconKey.photos, "Your data", if (exporting) "Preparing…" else "Download a copy, as JSON",
+                        chevron = false, enabled = !exporting,
+                    ) { scope.launch { export() } }
                 }
-                RowLabel(
-                    title = "Privacy policy", detail = "What we store and why", systemName = "hand.raised",
-                    trailing = "arrow.up.right",
-                    modifier = Modifier.clickable { uriHandler.openUri(APIClient.privacyURL) },
-                )
-                AccountLink(
-                    title = "Acknowledgements", detail = "The Newsreader typeface, under the SIL Open Font Licence",
-                    systemName = "doc.text",
-                ) { AcknowledgementsView() }
-                RowLabel(
-                    title = "Delete account", detail = "Erases your account, workouts and photos",
-                    systemName = "trash", trailing = if (deleting) null else "chevron.right",
-                    modifier = Modifier.clickable(enabled = !deleting) { confirmDelete = true },
-                )
+                GroupDivider()
+                AccountRowLabel(IconKey.lock, "Privacy", "What we store and why") { open(AccountRoute.privacy) }
             }
-
+            Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
+                AccountRowLabel(IconKey.chevron, "Sign out", null, chevron = false) { confirmSignOut = true }
+                GroupDivider()
+                AccountRowLabel(
+                    IconKey.chevron, "Delete account",
+                    if (deleting) "Deleting…" else "Erases your account, sessions and photos",
+                    chevron = false, enabled = !deleting,
+                ) { confirmDelete = true }
+            }
             error?.let { ErrorBanner(it) }
-            SecondaryButton("Sign out", onClick = { scope.launch { session.signOut() } }, modifier = Modifier.padding(top = 20.dp))
         }
     }
 
@@ -247,6 +236,19 @@ fun AccountView() {
             },
         )
     }
+    if (confirmSignOut) {
+        ConfirmationDialog(
+            title = "Sign out?",
+            message = "You can sign back in at any time.",
+            destructive = "Sign out",
+            onConfirm = {
+                confirmSignOut = false
+                dismiss()
+                scope.launch { session.signOut() }
+            },
+            onDismiss = { confirmSignOut = false },
+        )
+    }
     if (confirmDelete) {
         ConfirmationDialog(
             title = "Delete your account?",
@@ -257,6 +259,163 @@ fun AccountView() {
                 scope.launch { deleteAccount() }
             },
             onDismiss = { confirmDelete = false },
+        )
+    }
+}
+
+/** A pushed Account screen: the inline bar, then a scrolling column on the gutter. */
+@Composable
+private fun AccountScreen(spacing: Dp, title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.jkScreen()) {
+        TopBar(title = title)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(JKSpace.gutter),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            content = content,
+        )
+    }
+}
+
+/** One row of the Account sheet: glyph, title, one quiet line. */
+@Composable
+fun AccountRowLabel(
+    icon: IconKey,
+    title: String,
+    detail: String?,
+    chevron: Boolean = true,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = JKSize.touchTarget)
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics(mergeDescendants = true) {}
+            .padding(horizontal = JKSpace.l, vertical = JKSpace.m),
+        horizontalArrangement = Arrangement.spacedBy(JKSpace.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Glyph(icon, tint = JKColors.textSecondary)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+            Text(title, style = JKType.body, color = JKColors.text)
+            if (!detail.isNullOrEmpty()) Text(detail, style = JKType.caption, color = JKColors.textSecondary)
+        }
+        if (chevron) Glyph(IconKey.chevron, size = JKSize.iconSmall, tint = JKColors.textSecondary)
+    }
+}
+
+// MARK: - Notifications
+
+/** On or off, plus one evening reminder time. Never countdown copy. */
+@Composable
+fun NotificationsView() {
+    val session = AppSession
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val saved = session.me?.preferences?.eveningReminderTime ?: Reminders.eveningTime
+    var on by remember { mutableStateOf(Reminders.enabled) }
+    var evening by remember { mutableStateOf(saved != null) }
+    var time by remember { mutableStateOf(saved ?: "20:30") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    suspend fun save() {
+        val hhmm = if (evening) time else null
+        Reminders.setEveningTime(hhmm)
+        Reminders.refresh(session.gate, Preferences(notificationsOn = Reminders.enabled, eveningReminderTime = hhmm))
+        // A null time switches the evening reminder off, so it is sent explicitly.
+        val body = buildJsonObject {
+            put("notificationsOn", Reminders.enabled)
+            put("eveningReminderTime", hhmm?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
+        if (runCatching { APIClient.send<Preferences, JsonObject>("PUT", "/api/me/preferences", body) }.isSuccess) {
+            session.refreshMe()
+        }
+    }
+
+    suspend fun setOn(value: Boolean) {
+        if (value) {
+            if (!Reminders.enable(checkIn = session.gate.checkin)) {
+                error = "Notifications are off for JK Performance. Turn them on in Settings › Notifications."
+                on = Reminders.enabled
+                return
+            }
+        } else {
+            Reminders.disable()
+        }
+        on = Reminders.enabled
+        error = null
+        save()
+    }
+
+    AccountScreen(spacing = JKSpace.xxl, title = "Notifications") {
+        Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
+            SwitchRow("Notifications", "JK's replies and letters, and an hour before each session", on) { scope.launch { setOn(it) } }
+            if (on) {
+                GroupDivider()
+                SwitchRow("An evening reminder", null, evening) {
+                    evening = it
+                    scope.launch { save() }
+                }
+                if (evening) {
+                    GroupDivider()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = JKSize.touchTarget)
+                            .clickable {
+                                val (h, m) = time.split(":").let { (it.getOrNull(0)?.toIntOrNull() ?: 20) to (it.getOrNull(1)?.toIntOrNull() ?: 30) }
+                                android.app.TimePickerDialog(context, { _, hour, minute ->
+                                    time = "%02d:%02d".format(hour, minute)
+                                    scope.launch { save() }
+                                }, h, m, true).show()
+                            }
+                            .padding(JKSpace.l),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Time", style = JKType.body, color = JKColors.text, modifier = Modifier.weight(1f))
+                        Text(time, style = JKType.body.monospacedDigit(), color = JKColors.textSecondary)
+                    }
+                }
+            }
+        }
+        error?.let { ErrorBanner(it) }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, detail: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = JKSize.touchTarget).padding(JKSpace.l),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(JKSpace.m),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+            Text(title, style = JKType.body, color = JKColors.text)
+            if (detail != null) Text(detail, style = JKType.caption, color = JKColors.textSecondary)
+        }
+        JKSwitch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+// MARK: - Privacy
+
+@Composable
+fun PrivacyView() {
+    val uriHandler = LocalUriHandler.current
+    AccountScreen(spacing = JKSpace.l, title = "Privacy") {
+        Text(
+            "Your account, sessions, habits, check-ins, messages and photos are stored so JK can coach you. " +
+                "Health Connect data is read only with your permission and shared with JK only if you say so. " +
+                "Photos are private to you and JK.",
+            style = JKType.body, color = JKColors.text,
+        )
+        TextButton("Read the privacy policy", onClick = { runCatching { uriHandler.openUri(APIClient.privacyURL) } })
+        Text(
+            "Acknowledgements",
+            style = JKType.callout,
+            color = JKColors.text,
+            modifier = Modifier.heightIn(min = JKSize.touchTarget).navLink { AcknowledgementsView() }.padding(vertical = JKSpace.m),
         )
     }
 }
@@ -765,6 +924,7 @@ fun MembershipView(preselect: String? = null) {
     val scope = rememberCoroutineScope()
     var billing by remember { mutableStateOf(Billing.monthly) }
     var plans by remember { mutableStateOf<List<Plan>?>(null) }
+    var featureNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var picked by remember { mutableStateOf(preselect) }
     var showTour by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -782,6 +942,7 @@ fun MembershipView(preselect: String? = null) {
         try {
             val reply: PlansResponse = APIClient.get("/api/plans")
             plans = reply.plans
+            featureNames = reply.features.associate { it.id to it.title }
             error = null
         } catch (e: Exception) {
             if (e.isCancellation) throw e
@@ -815,13 +976,21 @@ fun MembershipView(preselect: String? = null) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(
-                    Modifier.size(44.dp).border(1.dp, JKColors.textSecondary, JKShape.control),
-                    contentAlignment = Alignment.Center,
-                ) { Text("JK", style = JKType.headline, color = JKColors.text) }
-                Text("Choose your plan", style = JKType.display, color = JKColors.text)
-                Text("Testing build: switching plans takes no payment.", style = JKType.caption, color = JKColors.textTertiary)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+                Text("Membership", style = JKType.display, color = JKColors.text)
+                Text("Testing build: switching plans takes no payment.", style = JKType.caption, color = JKColors.textSecondary)
+            }
+            // Your plan, JK's rhythm for it in one quiet line, and what it includes.
+            Column(Modifier.fillMaxWidth().jkSurface(padding = JKSpace.l), verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                Text(session.me?.membership?.displayName ?: "No plan", style = JKType.headline, color = JKColors.text)
+                Text(membershipRhythm(current), style = quoteStyle(inSheet = true), color = JKColors.text)
+                val plan = plans?.firstOrNull { it.id == current }
+                if (plan != null && plan.featureIds.isNotEmpty()) {
+                    Text(
+                        plan.featureIds.mapNotNull { id -> featureNames[id] }.joinToString(" · "),
+                        style = JKType.caption, color = JKColors.textSecondary,
+                    )
+                }
             }
 
             Row(
@@ -928,6 +1097,14 @@ private fun PlanCard(p: Plan, billing: Billing, current: String, selected: Boole
     }
 }
 
+/** JK's rhythm for each plan (decisions.md). */
+fun membershipRhythm(plan: String): String = when (plan) {
+    "elite" -> "A weekly letter from JK, with a voice or video note"
+    "performance" -> "A weekly written letter from JK"
+    "foundation" -> "Messages with JK, any day"
+    else -> "Guides from JK"
+}
+
 // MARK: - Acknowledgements
 
 /** Privacy › Acknowledgements: the licence texts the app must carry (Newsreader, OFL 1.1). */
@@ -935,7 +1112,7 @@ private fun PlanCard(p: Plan, billing: Billing, current: String, selected: Boole
 fun AcknowledgementsView() {
     val context = LocalContext.current
     val ofl = remember { context.resources.openRawResource(R.raw.newsreader_ofl).bufferedReader().use { it.readText() } }
-    PushedScreen(spacing = JKSpace.l, title = "Acknowledgements") {
+    AccountScreen(spacing = JKSpace.l, title = "Acknowledgements") {
         Text("Newsreader", style = JKType.title, color = JKColors.text)
         Text(
             "The serif for your coach's words is Newsreader by Production Type, used under the SIL Open Font Licence 1.1.",
