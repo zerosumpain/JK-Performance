@@ -18,6 +18,7 @@ import com.jkperformance.app.design.JKSize
 import com.jkperformance.app.design.JKSpace
 import com.jkperformance.app.design.JKType
 import com.jkperformance.app.design.monospacedDigit
+import com.jkperformance.app.design.quoteStyle
 
 /** What the client is working towards. */
 sealed interface GoalLineState {
@@ -36,15 +37,13 @@ fun GoalLine(state: GoalLineState, modifier: Modifier = Modifier) {
         when (state) {
             is GoalLineState.Set -> {
                 Text(state.sentence, style = JKType.title, color = JKColors.text)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JKSpace.m)) {
-                    Box(Modifier.weight(1f).height(JKSize.rule).background(JKColors.track, JKShape.pill)) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(state.progress.coerceIn(0f, 1f)).background(JKColors.accent, JKShape.pill))
-                    }
-                    Text(state.toGo, style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary)
+                Box(Modifier.fillMaxWidth().height(JKSize.rule).background(JKColors.track, JKShape.pill)) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(state.progress.coerceIn(0f, 1f)).background(JKColors.accent, JKShape.pill))
                 }
+                if (state.toGo.isNotEmpty()) Text(state.toGo, style = JKType.numberTile, color = JKColors.text)
             }
             GoalLineState.NotSet -> {
-                Text("JK will set your goal with you.", style = JKType.title, color = JKColors.textSecondary)
+                Text("JK will set your goal with you this week.", style = quoteStyle(), color = JKColors.text)
             }
             is GoalLineState.Reached -> {
                 Text(state.sentence, style = JKType.title, color = JKColors.text)

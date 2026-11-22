@@ -34,7 +34,7 @@ class WeekDay(val letter: String, val state: DotState, val spoken: String)
  * and the coach grid.
  */
 @Composable
-fun WeekDots(days: List<WeekDay>, modifier: Modifier = Modifier, onTap: ((Int) -> Unit)? = null) {
+fun WeekDots(days: List<WeekDay>, modifier: Modifier = Modifier, showLetters: Boolean = true, onTap: ((Int) -> Unit)? = null) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         days.forEachIndexed { i, day ->
             Column(
@@ -46,7 +46,9 @@ fun WeekDots(days: List<WeekDay>, modifier: Modifier = Modifier, onTap: ((Int) -
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(JKSpace.s, Alignment.CenterVertically),
             ) {
-                Text(day.letter, style = JKType.caption, color = if (day.state == DotState.Today) JKColors.text else JKColors.textSecondary)
+                if (showLetters) {
+                    Text(day.letter, style = JKType.caption, color = if (day.state == DotState.Today) JKColors.text else JKColors.textSecondary)
+                }
                 WeekDot(day.state)
             }
         }
