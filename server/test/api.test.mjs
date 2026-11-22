@@ -181,6 +181,10 @@ describe('Bookings and credits', () => {
     assert.ok(coachView.bookings.some(x => x.id === b.id));
     const kimView = await ok('GET', `/api/bookings?from=${londonDay()}&to=${addDays(londonDay(), 20)}`, { token: kim.token });
     assert.ok(!kimView.bookings.some(x => x.id === b.id));
+    // A client's Sessions tab in the apps asks for 30 days back and 60 ahead at once.
+    const sessionsTab = await ok('GET', `/api/bookings?clientId=${sam.me.id}&from=${addDays(londonDay(), -30)}&to=${addDays(londonDay(), 60)}`, { token: coach.token });
+    assert.ok(sessionsTab.bookings.some(x => x.id === b.id));
+    assert.equal((await call('GET', `/api/bookings?from=${londonDay()}&to=${addDays(londonDay(), 120)}`, { token: coach.token })).status, 400, 'still a limit');
     // Cancelling a week ahead refunds it and frees the slot.
     const cancel = await ok('DELETE', `/api/bookings/${b.id}`, { token: sam.token });
     assert.equal(cancel.refunded, true);
