@@ -4,34 +4,17 @@
  * CalendarSubscribeCard), with the client account's export and delete.
  */
 import {
-  ApiError, api, apiBlob, avatar, busy, button, card, confirmBox, errorLine, eyebrow, fill, fmtRelative, h, icon,
-  loading, readDraft, route, screenHeader, sheet, state, toast, todayLondon, writeDraft, clearDraft,
+  ApiError, api, apiBlob, apiUpload, avatar, busy, button, card, confirmBox, errorLine, eyebrow, field, fill, fmtRelative, h, icon,
+  loading, mediaImage, monogram, plans, readDraft, route, screenHeader, sheet, state, switchRow, toast, todayLondon, writeDraft, clearDraft,
 } from './core.js';
 
 // MARK: - Local icons (SF Symbols the core set doesn't have)
 
-const SVG = 'http://www.w3.org/2000/svg';
-const EXTRA_ICONS = {
-  lightbulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z',
-  book: 'M3 5c3-1 6-1 9 1 3-2 6-2 9-1v14c-3-1-6-1-9 1-3-2-6-2-9-1zM12 6v14',
-  desktop: 'M3 4h18v12H3zM8 20h8M12 16v4',
-  hand: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 10V4a1.5 1.5 0 0 1 3 0v7M14 10V5.5a1.5 1.5 0 0 1 3 0V13M17 11a1.5 1.5 0 0 1 3 0v3a7 7 0 0 1-7 7h-1a7 7 0 0 1-5.5-2.7L3.8 15a1.5 1.5 0 0 1 2.4-1.8L8 15',
-  download: 'M12 3v12M7 10l5 5 5-5M4 20h16',
-  external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
-  calendarPlus: 'M4 5h16v15H4zM4 9h16M9 3v4M15 3v4M12 12v5M9.5 14.5h5',
-};
-/** Like core's icon(), for the few extra symbols these screens draw. */
-function xicon(name, size = 18) {
-  const svg = document.createElementNS(SVG, 'svg');
-  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, String(v));
-  svg.classList.add('icon');
-  const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', EXTRA_ICONS[name] || 'M12 12h.01');
-  svg.append(path);
-  return svg;
-}
+/** The few extra symbols these screens draw, as Material Symbols (core icon()). */
+const EXTRA = { lightbulb: 'lightbulb', book: 'guide', desktop: 'desktop_windows', hand: 'front_hand', download: 'download', external: 'open_in_new', calendarPlus: 'calendarFeed' };
+const xicon = (name, size = 20) => icon(EXTRA[name] ?? name, size);
 /** The iPhone's IconTile: a symbol in a raised rounded square. */
-const iconTile = (svg, size = 38) => h('span', { class: 'icon-tile', style: { width: `${size}px`, height: `${size}px` } }, svg);
+const iconTile = svg => h('span', { class: 'icon-tile' }, svg);
 /** A row card: tile, title and detail, something on the right. */
 const rowCard = (tile, title, detail, trailing, attrs = {}) => h(attrs.href ? 'a' : 'div', { ...attrs, class: 'row-card' + (attrs.class ? ` ${attrs.class}` : '') },
   tile, h('div', { class: 'grow' }, h('div', { class: 'strong' }, title), detail ? h('div', { class: 'tiny faint' }, detail) : null), trailing || null);
@@ -58,7 +41,7 @@ function featuredCard(g) {
 
 function tipCard(tip) {
   return h('button', { class: 'tip-card', type: 'button', onclick: () => openGuide(tip) },
-    iconTile(xicon('lightbulb', 15), 32),
+    iconTile(xicon('lightbulb', 18), 32),
     h('div', { class: 'grow' }, h('div', { class: 'strong' }, tip.title), h('div', { class: 'tiny faint clamp3' }, tip.body)));
 }
 
@@ -210,8 +193,105 @@ async function deleteAccount(btn, status) {
   });
 }
 
+// MARK: - Coach settings (the phone app's Account: portrait, reply lines, rhythm, toggles)
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png'];
+
+/** Portrait or signature: the current image (or the monogram) and an upload. */
+function imageSetting(label, purpose, mediaId, onSaved, hint) {
+  const status = h('div');
+  const preview = mediaId
+    ? mediaImage(`/api/media/${encodeURIComponent(mediaId)}`, label, { class: purpose === 'avatar' ? 'set-portrait' : 'set-signature' })
+    : (purpose === 'avatar' ? h('span', { class: 'set-portrait empty' }, monogram(40, { label: 'JK monogram' })) : h('span', { class: 'set-signature empty small muted' }, 'None yet'));
+  const file = h('input', { type: 'file', accept: IMAGE_TYPES.join(','), 'aria-label': `Upload ${label.toLowerCase()}` });
+  file.addEventListener('change', () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    if (!IMAGE_TYPES.includes(f.type)) { fill(status, errorLine('Choose a JPEG or PNG image.')); return; }
+    busy(file, status, async () => {
+      await apiUpload(`/api/media?purpose=${purpose}`, f, f.type);
+      toast(`${label} updated.`);
+      onSaved();
+    });
+  });
+  return h('div', { class: 'set-image' }, preview, h('div', { class: 'grow' }, h('div', { class: 'strong' }, label), h('div', { class: 'small muted' }, hint), file, status));
+}
+
+async function coachSettingsSection(box, view) {
+  fill(box, loading());
+  let s, p;
+  try {
+    [s, p] = await Promise.all([api('GET', '/api/coach/settings'), plans().catch(() => null)]);
+  } catch (err) {
+    if (view.fresh()) fill(box, errorLine(err));
+    return;
+  }
+  if (!view.fresh()) return;
+  const again = () => coachSettingsSection(box, view);
+  const status = h('div');
+  const patch = async (body, okText) => {
+    try {
+      s = await api('PATCH', '/api/coach/settings', body);
+      if (okText) toast(okText);
+      return true;
+    } catch (err) { fill(status, errorLine(err)); return false; }
+  };
+
+  const room = h('input', { type: 'url', value: s.defaultMeetingUrl || '', placeholder: 'https://meet.example.com/jk', maxlength: '500' });
+  const std = h('input', { value: s.replyExpectation.standard, maxlength: '60' });
+  const pri = h('input', { value: s.replyExpectation.priority, maxlength: '60' });
+  const saveText = button('Save', async () => {
+    await busy(saveText, status, async () => {
+      fill(status);
+      if (await patch({ defaultMeetingUrl: room.value.trim() || null, replyExpectation: { standard: std.value.trim(), priority: pri.value.trim() } }, 'Saved.')) again();
+    });
+  }, { kind: 'primary' });
+
+  const planRows = (p?.plans ?? []).filter(pl => s.letterRhythm[pl.id]);
+  const rhythmRow = pl => {
+    const r = s.letterRhythm[pl.id];
+    const lettersOn = pl.features.includes('checkin');
+    const every = h('select', { 'aria-label': `${pl.name} letter rhythm`, disabled: !lettersOn,
+      onchange: e => patch({ letterRhythm: { [pl.id]: { every: e.target.value } } }, `${pl.name}: ${e.target.value === 'none' ? 'no letters' : `${e.target.value} letters`}.`) },
+    [['weekly', 'Weekly'], ['fortnightly', 'Fortnightly'], ['none', 'None']].map(([v, l]) => h('option', { value: v, selected: r.every === v }, l)));
+    const media = h('input', { type: 'checkbox', checked: r.media, disabled: !lettersOn, 'aria-label': `${pl.name} letters carry a voice or video note`,
+      onchange: e => patch({ letterRhythm: { [pl.id]: { media: e.target.checked } } }, e.target.checked ? `${pl.name} letters carry a note.` : `${pl.name} letters are written.`) });
+    return h('div', { class: 'set-rhythm' },
+      h('div', { class: 'grow' }, h('div', null, pl.name), h('div', { class: 'small muted' }, lettersOn ? 'Includes the weekly check-in' : 'No check-in on this plan, so no letters')),
+      every, h('label', { class: 'set-media' }, media, 'With a note'));
+  };
+
+  const toggle = (key, text, detail) => switchRow(text, !!s[key], async (on, input) => {
+    if (!await patch({ [key]: on }, null)) input.checked = !on;
+  }, { detail });
+
+  fill(box,
+    h('div', { class: 'account-grid' },
+      h('section', null,
+        h('h2', { class: 'set-h' }, 'You, as clients see you'),
+        card({ class: 'flush' },
+          imageSetting('Portrait', 'avatar', s.avatarMediaId, again, 'On the JK tab and your letters. Without one, clients see the JK monogram.'),
+          imageSetting('Signature', 'signature', s.signatureMediaId, again, 'Signs every letter. A PNG on a clear background works best.')),
+        h('h2', { class: 'set-h' }, 'Replies and calls'),
+        card(null,
+          field('Reply line', std, 'Shown to clients on standard plans.'),
+          field('Priority reply line', pri, 'Shown to clients on plans with priority replies.'),
+          field('Meeting room', room, 'Video calls without their own link use this one.'),
+          status, h('div', { class: 'row end' }, saveText))),
+      h('section', null,
+        h('h2', { class: 'set-h' }, 'Letter rhythm'),
+        card({ class: 'flush' }, planRows.length ? planRows.map(rhythmRow) : h('p', { class: 'muted pad' }, 'Plans could not load.')),
+        h('p', { class: 'small muted' }, 'Letters arrive on Monday at 07:00. A client can be moved to fortnightly from their letter.'),
+        h('h2', { class: 'set-h' }, 'On the phone'),
+        card({ class: 'flush' },
+          toggle('studioTools', 'Show studio tools', 'Programs, Forms, Autoflows, Plans & prices, Business and availability in the phone app. They are always here on the desk.'),
+          toggle('formChecks', 'Form checks', 'Clients can send a video of a lift.'),
+          toggle('mealPhotos', 'Meal photos', 'Clients can send a photo of a meal.'),
+          toggle('challenges', 'Challenges', 'Show challenges on clients’ Progress.')))));
+}
+
 route('/account', async (el, _params, view) => {
-  el.append(screenHeader(null, 'Account'));
+  el.append(screenHeader(null, 'Account and settings'));
   const body = h('div', null, loading());
   el.append(body);
   let me;
@@ -225,28 +305,31 @@ route('/account', async (el, _params, view) => {
   if (!view.fresh()) return;
   const status = h('div');
   const exportBtn = h('button', { class: 'row-card row-btn', type: 'button', onclick: e => exportData(e.currentTarget, status) },
-    iconTile(xicon('download')), h('div', { class: 'grow' }, h('div', { class: 'strong' }, 'Export your data'), h('div', { class: 'tiny faint' }, 'Everything stored about you, as JSON')), icon('chevron', 14));
+    iconTile(xicon('download')), h('div', { class: 'grow' }, h('div', { class: 'strong' }, 'Export your data'), h('div', { class: 'tiny faint' }, 'Everything stored about you, as JSON')), icon('chevron', 18));
   const deleteBtn = h('button', { class: 'row-card row-btn', type: 'button', onclick: e => deleteAccount(e.currentTarget, status) },
-    iconTile(icon('trash')), h('div', { class: 'grow' }, h('div', { class: 'strong' }, 'Delete account'), h('div', { class: 'tiny faint' }, 'Erases your account and everything stored about you')), icon('chevron', 14));
+    iconTile(icon('trash')), h('div', { class: 'grow' }, h('div', { class: 'strong' }, 'Delete account'), h('div', { class: 'tiny faint' }, 'Erases your account and everything stored about you')), icon('chevron', 18));
 
+  const settingsBox = h('div');
   fill(body,
-    h('div', { class: 'row nowrap account-id' }, avatar(me.name || 'Coach', 48),
+    h('div', { class: 'row nowrap account-id' }, avatar(me.name || 'Coach', 48, { photo: me.coachSettings?.avatarMediaId ? `/api/media/${encodeURIComponent(me.coachSettings.avatarMediaId)}` : null, coach: true }),
       h('div', null, h('h2', null, me.name || 'Coach'), h('div', { class: 'small faint' }, me.email || 'Coach account'))),
     h('p', { class: 'small muted' }, 'Signed in as the coach. Clients who sign up are assigned to you.'),
+    settingsBox,
     h('div', { class: 'account-grid' },
       h('section', null,
-        eyebrow('Settings'),
-        rowCard(iconTile(xicon('hand')), 'Privacy policy', null, h('span', { class: 'faint' }, xicon('external', 14)),
+        h('h2', { class: 'set-h' }, 'Desk and calendar'),
+        rowCard(iconTile(xicon('hand')), 'Privacy policy', null, h('span', { class: 'faint' }, xicon('external', 18)),
           { href: '/privacy', target: '_blank', rel: 'noopener', class: 'row-link' }),
         me.isDemo ? null : calendarCard(me),
         webSessionsRow()),
       h('section', null,
-        eyebrow('Your data'),
+        h('h2', { class: 'set-h' }, 'Your data'),
         exportBtn,
         deleteBtn,
         status,
         button('Sign out', async () => {
           if (await confirmBox('Sign out?', { ok: 'Sign out', danger: true })) window.dispatchEvent(new Event('jk:signout'));
-        }, { kind: 'primary' }),
-        h('p', { class: 'tiny faint' }, 'To see the client side, use the iPhone app: Guides › View the app as a client.'))));
+        }),
+        h('p', { class: 'tiny faint' }, 'To see the client side, use the iPhone app: Account › Preview as client.'))));
+  coachSettingsSection(settingsBox, view);
 });
