@@ -49,12 +49,12 @@ struct MyCalendarView: View {
                         Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
                         Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
                     }
-                    .foregroundStyle(JK.secondary)
+                    .foregroundStyle(JK.textSecondary)
                 }
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(Array(weekdays.enumerated()), id: \.offset) { _, d in
-                        Text(d).font(.caption2).foregroundStyle(JK.tertiary)
+                        Text(d).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 30) }
                     ForEach(monthDays, id: \.self) { day in
@@ -65,12 +65,12 @@ struct MyCalendarView: View {
                         } label: {
                             VStack(spacing: 2) {
                                 Text("\(Day.calendar.component(.day, from: day))")
-                                    .font(.subheadline.weight(on ? .bold : .regular))
-                                    .foregroundStyle(on ? Color.black : (past ? JK.tertiary : JK.text))
+                                    .font(.jkCallout.weight(on ? .bold : .regular))
+                                    .foregroundStyle(on ? JK.onPrimary : (past ? JK.textTertiary : JK.text))
                                     .frame(width: 30, height: 30)
-                                    .background(on ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(Color.clear), in: Circle())
+                                    .background(on ? AnyShapeStyle(JK.primaryFill) : AnyShapeStyle(Color.clear), in: Circle())
                                 Circle()
-                                    .fill(markedDays.contains(Day.string(day)) ? JK.secondary : .clear)
+                                    .fill(markedDays.contains(Day.string(day)) ? JK.textSecondary : .clear)
                                     .frame(width: 4, height: 4)
                             }
                         }
@@ -87,29 +87,29 @@ struct MyCalendarView: View {
                 } else {
                     if let error { ErrorBanner(message: error) }
                     if events.isEmpty {
-                        Text("Nothing on this day.").font(.caption).foregroundStyle(JK.tertiary)
+                        Text("Nothing on this day.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     ForEach(events) { event in
                         HStack(alignment: .top, spacing: 12) {
-                            Text(event.time).font(.caption2).foregroundStyle(JK.tertiary).frame(width: 36, alignment: .leading)
+                            Text(event.time).font(.jkCaption).foregroundStyle(JK.textTertiary).frame(width: 36, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
-                                    Text(event.title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                                    Text(event.title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                                     Spacer()
                                     if let draft = event.draft {
                                         Button { calendarDraft = draft } label: {
-                                            Image(systemName: "calendar.badge.plus").font(.caption).foregroundStyle(JK.secondary)
+                                            Image(systemName: "calendar.badge.plus").font(.jkCaption).foregroundStyle(JK.textSecondary)
                                         }
                                         .buttonStyle(.plain)
                                         .accessibilityLabel("Add \(event.title) to Calendar")
                                     }
                                     Text(event.tag)
-                                        .font(.system(size: 9, weight: .semibold))
+                                        .font(.jkMicro.weight(.semibold))
                                         .padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(JK.cardRaised, in: Capsule())
-                                        .foregroundStyle(JK.secondary)
+                                        .background(JK.raised, in: Capsule())
+                                        .foregroundStyle(JK.textSecondary)
                                 }
-                                Text(event.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                                Text(event.detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                             }
                             .jkCard(padding: 12)
                             .contextMenu {
@@ -139,14 +139,14 @@ struct MyCalendarView: View {
                 }
                 NavigationLink { BookSessionView(initialDay: max(selected, Day.start(Date()))) } label: {
                     Label("Request a session", systemImage: "plus")
-                        .font(.subheadline)
-                        .foregroundStyle(JK.secondary)
+                        .font(.jkCallout)
+                        .foregroundStyle(JK.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                        .overlay(RoundedRectangle(cornerRadius: JK.Radius.card).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
                 }
                 Text("Tap \(Image(systemName: "calendar.badge.plus")) to put a session in your calendar. Press and hold a session to cancel it, or a class to join or leave. Cancelling 24 h or more ahead refunds the credit.")
-                    .font(.caption2).foregroundStyle(JK.tertiary)
+                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 CalendarSubscribeCard()
             }
             .padding(16)
@@ -270,16 +270,16 @@ struct BookSessionView: View {
                 if let client {
                     HStack(spacing: 10) {
                         Avatar(initials: client.displayInitials, size: 34)
-                        Text("Booking for \(client.name)").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        Text("Booking for \(client.name)").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     }
                     .jkCard()
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         Eyebrow(text: "Session credits")
-                        (Text("\(membership?.creditsLeft ?? 0)").font(.largeTitle.weight(.semibold))
-                            + Text(" of \(membership?.creditsTotal ?? 0) left").font(.caption).foregroundColor(JK.secondary))
+                        (Text("\(membership?.creditsLeft ?? 0)").font(.jkNumberHero)
+                            + Text(" of \(membership?.creditsTotal ?? 0) left").font(.jkCaption).foregroundColor(JK.textSecondary))
                             .foregroundStyle(JK.text)
-                        Text(creditLine).font(.caption2).foregroundStyle(JK.tertiary)
+                        Text(creditLine).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     .jkCard()
                 }
@@ -287,11 +287,11 @@ struct BookSessionView: View {
                 HStack {
                     Button { day = max(Day.start(Date()), Day.add(-7, to: day)) } label: { Image(systemName: "chevron.left") }
                     Spacer()
-                    Text("Week of \(Fmt.dayMonth(Day.weekStart(day)))").font(.caption).foregroundStyle(JK.secondary)
+                    Text("Week of \(Fmt.dayMonth(Day.weekStart(day)))").font(.jkCaption).foregroundStyle(JK.textSecondary)
                     Spacer()
                     Button { day = Day.add(7, to: day) } label: { Image(systemName: "chevron.right") }
                 }
-                .foregroundStyle(JK.secondary)
+                .foregroundStyle(JK.textSecondary)
                 DayStrip(days: Day.week(of: day), selected: $day)
                 Segmented(options: Kind.allCases, selection: $kind) { $0.label }
 
@@ -309,15 +309,15 @@ struct BookSessionView: View {
                                     chosen = slot
                                 } label: {
                                     Text(Fmt.time(slot.start))
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(.jkCallout.weight(.semibold))
                                         .strikethrough(!slot.open)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .foregroundStyle(on ? Color.black : (slot.open ? JK.text : JK.tertiary))
-                                        .background(on ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.card),
-                                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: slot.open ? [] : [3])))
+                                        .foregroundStyle(on ? JK.onPrimary : (slot.open ? JK.text : JK.textTertiary))
+                                        .background(on ? AnyShapeStyle(JK.primaryFill) : AnyShapeStyle(JK.surface),
+                                                    in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous)
+                                            .strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: slot.open ? [] : [3])))
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(!slot.open)
@@ -331,15 +331,15 @@ struct BookSessionView: View {
                 VStack(spacing: 10) {
                     HStack {
                         Text(chosen.map { "\(Fmt.shortDay($0.start)) · \(Fmt.time($0.start))–\(Fmt.time($0.end))" } ?? "Pick a time")
-                            .font(.caption)
+                            .font(.jkCaption)
                         Spacer()
-                        Text(chosen?.location ?? kind.label).font(.caption)
+                        Text(chosen?.location ?? kind.label).font(.jkCaption)
                     }
-                    Divider().overlay(JK.stroke)
+                    Divider().overlay(JK.hairline)
                     HStack {
-                        Text("Uses 1 credit").font(.caption).foregroundStyle(JK.tertiary)
+                        Text("Uses 1 credit").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         Spacer()
-                        Text(kind.label).font(.caption).foregroundStyle(JK.tertiary)
+                        Text(kind.label).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                 }
                 .foregroundStyle(JK.text)
@@ -349,13 +349,13 @@ struct BookSessionView: View {
                 Button {
                     Task { await book() }
                 } label: {
-                    if booking { ProgressView().tint(.black) } else { Text("Confirm booking") }
+                    if booking { ProgressView().tint(JK.onPrimary) } else { Text("Confirm booking") }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(chosen == nil || booking)
                 Text("Free cancellation up to 24h before")
-                    .font(.caption2)
-                    .foregroundStyle(JK.tertiary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textTertiary)
                     .frame(maxWidth: .infinity)
             }
             .padding(16)

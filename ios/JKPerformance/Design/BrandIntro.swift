@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The opening animation: a weight plate draws itself in, the JK tile traces
-/// its edge and fills, a chrome sheen crosses it, then PERFORMANCE settles
-/// and the tagline appears. About two seconds. Plays when the app opens
+/// The opening animation: a weight plate draws itself in bone, a champagne
+/// ring traces round the hub and the JK monogram settles inside it, then
+/// PERFORMANCE settles and the tagline appears. No sheen, no glow: Atelier
+/// keeps to bone and champagne on the warm off-black. About two seconds. Plays when the app opens
 /// (over the signed-in tabs) and behind the Welcome screen. With Reduce
 /// Motion on it shows the finished frame at once.
 struct BrandIntro: View {
@@ -42,16 +43,13 @@ struct BrandIntro: View {
     private func scene(t: Double, size: CGSize) -> some View {
         let c = CGPoint(x: size.width / 2, y: size.height * centerY)
         return ZStack {
-            Color.black
-            RadialGradient(colors: [Color(white: 0.12), .black], center: UnitPoint(x: 0.5, y: centerY - 0.06),
-                           startRadius: 0, endRadius: size.height * 0.65)
-                .opacity(ease(t, 0, 0.9))
+            JK.bg
 
             // Plate rims, drawn round from staggered starting points.
             ForEach(rings.indices, id: \.self) { i in
                 Circle()
                     .trim(from: 0, to: ease(t, 0.04 + Double(i) * 0.06, 0.62 + Double(i) * 0.06))
-                    .stroke(Color.white.opacity(i < 4 ? 0.2 : 0.11), lineWidth: 0.7)
+                    .stroke(JK.text.opacity(i < 4 ? 0.2 : 0.11), lineWidth: 0.7)
                     .rotationEffect(.degrees(-100 + Double(i) * 40))
                     .frame(width: rings[i] * 2, height: rings[i] * 2)
                     .position(c)
@@ -60,8 +58,8 @@ struct BrandIntro: View {
             // Grip cut-outs.
             ForEach([-55.0, 68.0, 172.0], id: \.self) { angle in
                 PlateSegment(center: angle, span: 26, inner: 120, outer: 146)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
-                    .background(PlateSegment(center: angle, span: 26, inner: 120, outer: 146).fill(Color.white.opacity(0.025)))
+                    .stroke(JK.text.opacity(0.2), lineWidth: 0.8)
+                    .background(PlateSegment(center: angle, span: 26, inner: 120, outer: 146).fill(JK.text.opacity(0.025)))
                     .frame(width: 300, height: 300)
                     .position(c)
                     .opacity(ease(t, 0.5, 0.95))
@@ -72,7 +70,7 @@ struct BrandIntro: View {
                 ForEach(arcText.indices, id: \.self) { i in
                     Text(String(arcText[i]))
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.42))
+                        .foregroundStyle(JK.text.opacity(0.42))
                         .offset(y: -166)
                         .rotationEffect(.degrees(-52 + Double(i) * 3.4))
                 }
@@ -83,7 +81,7 @@ struct BrandIntro: View {
             // Hub circle behind the tile.
             Circle()
                 .trim(from: 0, to: ease(t, 0.3, 0.75))
-                .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
+                .stroke(JK.text.opacity(0.16), lineWidth: 0.8)
                 .rotationEffect(.degrees(90))
                 .frame(width: 112, height: 112)
                 .position(x: c.x, y: c.y + 8)
@@ -100,38 +98,26 @@ struct BrandIntro: View {
 
             Text("Coaching, programming and accountability.")
                 .font(.footnote)
-                .foregroundStyle(JK.secondary)
+                .foregroundStyle(JK.textSecondary)
                 .opacity(ease(t, 1.4, 1.8))
                 .fixedSize()
                 .position(x: c.x, y: c.y + 118)
         }
     }
 
+    /// The monogram inside a champagne ring that traces itself round.
     private func tile(t: Double) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        let sheen = linear(t, 1.05, 1.5)
-        return ZStack {
-            shape.fill(Color(white: 0.06)).opacity(ease(t, 0.55, 1.0))
-            Text("JK")
-                .font(.system(size: 36, weight: .semibold))
-                .foregroundStyle(JK.text)
+        ZStack {
+            Circle().fill(JK.bg).opacity(ease(t, 0.55, 1.0))
+            Circle()
+                .trim(from: 0, to: ease(t, 0.3, 0.85))
+                .stroke(JK.accent, lineWidth: 1.2)
+                .rotationEffect(.degrees(-90))
+            Monogram(size: 64)
                 .opacity(ease(t, 0.7, 1.05))
                 .scaleEffect(0.94 + 0.06 * ease(t, 0.7, 1.05))
-            if sheen > 0 && sheen < 1 {
-                LinearGradient(colors: [.clear, Color.white.opacity(0.85), Color(white: 0.75).opacity(0.6), .clear],
-                               startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 70, height: 220)
-                    .rotationEffect(.degrees(28))
-                    .offset(x: -150 + 300 * sheen)
-                    .blendMode(.plusLighter)
-                    .mask(shape)
-            }
-            shape
-                .trim(from: 0, to: ease(t, 0.3, 0.85))
-                .stroke(Color.white.opacity(0.85), lineWidth: 1.2)
         }
         .frame(width: 104, height: 104)
-        .shadow(color: .white.opacity(0.08 * ease(t, 0.9, 1.4)), radius: 24)
     }
 
     // MARK: Timing

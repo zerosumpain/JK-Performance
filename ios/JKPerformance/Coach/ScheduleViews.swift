@@ -36,25 +36,25 @@ struct ScheduleView: View {
                             Button { editingAvailability = true } label: {
                                 Image(systemName: "clock.badge.checkmark")
                                     .frame(width: 30, height: 30)
-                                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.stroke, lineWidth: 1))
+                                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.chip).stroke(JK.hairline, lineWidth: 1))
                             }
                             .foregroundStyle(JK.text)
                             .accessibilityLabel("Availability")
                             Button { booking = true } label: { Label("Book", systemImage: "plus") }
-                                .font(.caption.weight(.semibold))
+                                .font(.jkCaption.weight(.semibold))
                                 .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(JK.chrome, in: Capsule())
-                                .foregroundStyle(.black)
+                                .background(JK.primaryFill, in: Capsule())
+                                .foregroundStyle(JK.onPrimary)
                         }
                     }
                     HStack {
                         Button { anchor = Day.add(-7, to: anchor) } label: { Image(systemName: "chevron.left") }
                         Spacer()
-                        Button("This week") { anchor = Day.start(Date()) }.font(.caption)
+                        Button("This week") { anchor = Day.start(Date()) }.font(.jkCaption)
                         Spacer()
                         Button { anchor = Day.add(7, to: anchor) } label: { Image(systemName: "chevron.right") }
                     }
-                    .foregroundStyle(JK.secondary)
+                    .foregroundStyle(JK.textSecondary)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(Filter.allCases, id: \.self) { f in
@@ -72,7 +72,7 @@ struct ScheduleView: View {
                         grid
                         legend
                         Text("Tap a block for details. The clock button edits your weekly availability.")
-                            .font(.caption2).foregroundStyle(JK.tertiary)
+                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                 }
                 .padding(16)
@@ -98,9 +98,9 @@ struct ScheduleView: View {
     private var grid: some View {
         HStack(alignment: .top, spacing: 3) {
             VStack(spacing: 0) {
-                Text(" ").font(.system(size: 9)).frame(height: 24)
+                Text(" ").font(.jkMicro).frame(height: 24) // lint-design: allow hour-grid spacer must match the grid
                 ForEach(hours, id: \.self) { h in
-                    Text("\(h)").font(.system(size: 9)).foregroundStyle(JK.tertiary).frame(height: rowHeight, alignment: .top)
+                    Text("\(h)").font(.jkMicro).foregroundStyle(JK.textTertiary).frame(height: rowHeight, alignment: .top) // lint-design: allow hour labels sit on the fixed hour grid
                 }
             }
             .frame(width: 18)
@@ -108,33 +108,33 @@ struct ScheduleView: View {
                 let today = Day.same(day, Date())
                 VStack(spacing: 0) {
                     Text("\(Fmt.weekday(day).prefix(2)) \(Day.calendar.component(.day, from: day))")
-                        .font(.system(size: 9, weight: today ? .bold : .regular))
-                        .foregroundStyle(today ? Color.black : JK.tertiary)
+                        .font(.jkMicro.weight(today ? .bold : .regular))
+                        .foregroundStyle(today ? JK.onPrimary : JK.textTertiary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 20)
-                        .background(today ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 5))
+                        .background(today ? AnyShapeStyle(JK.primaryFill) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                         .padding(.bottom, 4)
                     ZStack(alignment: .top) {
                         VStack(spacing: 0) {
                             ForEach(hours, id: \.self) { _ in
-                                Rectangle().fill(JK.stroke).frame(height: 1).frame(height: rowHeight, alignment: .top)
+                                Rectangle().fill(JK.hairline).frame(height: 1).frame(height: rowHeight, alignment: .top)
                             }
                         }
                         ForEach(blocks(on: day)) { b in
                             let start = hourOf(b.start), length = max(0.5, b.end.timeIntervalSince(b.start) / 3600)
                             Button { openBooking = b } label: {
                                 Text(label(b))
-                                    .font(.system(size: 8, weight: .semibold))
+                                    .font(.jkMicro.weight(.semibold))
                                     .foregroundStyle(JK.text)
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
                                     .padding(3)
                                     .frame(height: rowHeight * CGFloat(length) - 2, alignment: .top)
-                                    .background(JK.slot(b.kind).opacity(0.24), in: RoundedRectangle(cornerRadius: 4))
+                                    .background(JK.slot(b.kind).opacity(0.24), in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                                     .overlay(alignment: .leading) {
                                         UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 4)
                                             .fill(JK.slot(b.kind)).frame(width: 2)
                                     }
-                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(JK.slot(b.kind).opacity(0.55), lineWidth: 1))
+                                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.chip).stroke(JK.slot(b.kind).opacity(0.55), lineWidth: 1))
                             }
                             .buttonStyle(.plain)
                             .offset(y: rowHeight * CGFloat(start - Double(hours[0])))
@@ -152,8 +152,8 @@ struct ScheduleView: View {
         HStack(spacing: 14) {
             ForEach([("inperson", "1:1 in person"), ("video", "Video call"), ("group", "Group class")], id: \.0) { item in
                 HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 2).fill(JK.slot(item.0)).frame(width: 10, height: 10)
-                    Text(item.1).font(.caption2).foregroundStyle(JK.secondary)
+                    RoundedRectangle(cornerRadius: JK.Radius.chip).fill(JK.slot(item.0)).frame(width: 10, height: 10)
+                    Text(item.1).font(.jkCaption).foregroundStyle(JK.textSecondary)
                 }
             }
         }
@@ -220,9 +220,9 @@ private struct CoachBookSheet: View {
                                     } label: {
                                         HStack(spacing: 10) {
                                             Avatar(initials: c.displayInitials, size: 28)
-                                            Text(c.name).font(.subheadline).foregroundStyle(JK.text)
+                                            Text(c.name).font(.jkCallout).foregroundStyle(JK.text)
                                             Spacer()
-                                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                                            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                                         }
                                         .padding(10)
                                     }
@@ -237,21 +237,21 @@ private struct CoachBookSheet: View {
                     } else {
                         JKField(label: "Title", text: $title)
                         DatePicker("Starts", selection: $start, in: Date()...)
-                            .font(.subheadline).foregroundStyle(JK.text)
+                            .font(.jkCallout).foregroundStyle(JK.text)
                         Stepper("\(minutes) minutes", value: $minutes, in: 15...180, step: 15)
-                            .font(.subheadline).foregroundStyle(JK.text)
+                            .font(.jkCallout).foregroundStyle(JK.text)
                         Stepper("Capacity \(capacity)", value: $capacity, in: 1...50)
-                            .font(.subheadline).foregroundStyle(JK.text)
+                            .font(.jkCallout).foregroundStyle(JK.text)
                         JKField(label: "Location", text: $location)
                         if let error { ErrorBanner(message: error) }
                         Button {
                             Task { await createClass() }
                         } label: {
-                            if saving { ProgressView().tint(.black) } else { Text("Create class") }
+                            if saving { ProgressView().tint(JK.onPrimary) } else { Text("Create class") }
                         }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty)
-                        Text("Clients see every class you create and join for free.").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Clients see every class you create and join for free.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                 }
                 .padding(16)
@@ -326,7 +326,7 @@ private struct AvailabilitySheet: View {
                                         self.rules?.removeAll { $0.localId == rule.localId }
                                     } label: { Image(systemName: "trash") }
                                         .buttonStyle(.plain)
-                                        .foregroundStyle(JK.tertiary)
+                                        .foregroundStyle(JK.textTertiary)
                                 }
                                 HStack(spacing: 8) {
                                     JKField(label: "Start", text: $rule.start, prompt: "07:00", keyboard: .numbersAndPunctuation)
@@ -349,15 +349,15 @@ private struct AvailabilitySheet: View {
                                                                 end: last?.end ?? "19:00", kind: last?.kind ?? "inperson",
                                                                 slotMinutes: last?.slotMinutes ?? 60, location: last?.location))
                         } label: { Label("Add hours", systemImage: "plus") }
-                            .buttonStyle(GhostButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                         Button {
                             Task { await save() }
                         } label: {
-                            if saving { ProgressView().tint(.black) } else { Text("Save availability") }
+                            if saving { ProgressView().tint(JK.onPrimary) } else { Text("Save availability") }
                         }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(saving)
-                        Text("Times are Europe/London. Existing bookings stay put.").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Times are Europe/London. Existing bookings stay put.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     } else {
                         LoadingCard()
                     }

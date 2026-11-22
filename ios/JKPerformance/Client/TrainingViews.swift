@@ -73,7 +73,7 @@ struct WorkoutPlanView: View {
     private func headerIcon(_ name: String) -> some View {
         Image(systemName: name)
             .frame(width: 30, height: 30)
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.stroke, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: JK.Radius.chip).stroke(JK.hairline, lineWidth: 1))
     }
 
     private func loadWeek(force: Bool) async {
@@ -152,23 +152,23 @@ struct WorkoutBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(workout.title).font(.headline).foregroundStyle(JK.text)
+                Text(workout.title).font(.jkHeadline).foregroundStyle(JK.text)
                 Spacer()
                 if workout.editedBy == "coach", let at = workout.editedAt {
-                    Label("Coach · \(Fmt.relative(at))", systemImage: "person.2").font(.caption2).foregroundStyle(JK.tertiary)
+                    Label("Coach · \(Fmt.relative(at))", systemImage: "person.2").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 } else {
-                    Label("Shared with Coach", systemImage: "person.2").font(.caption2).foregroundStyle(JK.tertiary)
+                    Label("Shared with Coach", systemImage: "person.2").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
             }
             Text(([workout.startsAt, workout.location].compactMap { $0 }.filter { !$0.isEmpty }
                   + ["\(workout.items.count) exercises"]).joined(separator: " · "))
-                .font(.caption2).foregroundStyle(JK.tertiary)
+                .font(.jkCaption).foregroundStyle(JK.textTertiary)
             HStack {
                 ThinBar(fraction: workout.items.isEmpty ? 0 : Double(workout.doneCount) / Double(workout.items.count))
-                Text("\(workout.doneCount) of \(workout.items.count) done").font(.caption2).foregroundStyle(JK.tertiary)
+                Text("\(workout.doneCount) of \(workout.items.count) done").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             if let notes = workout.notes, !notes.isEmpty {
-                Label(notes, systemImage: "text.bubble").font(.caption2).foregroundStyle(JK.secondary)
+                Label(notes, systemImage: "text.bubble").font(.jkCaption).foregroundStyle(JK.textSecondary)
             }
         }
         .jkCard()
@@ -186,17 +186,17 @@ struct WorkoutBody: View {
         if let error { ErrorBanner(message: error) }
         if let done = workout.completedAt {
             Label("Completed \(Fmt.relative(done))", systemImage: "checkmark.seal")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(JK.secondary)
+                .font(.jkCallout.weight(.semibold))
+                .foregroundStyle(JK.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
         } else if !workout.items.isEmpty {
             Button {
                 Task { await complete() }
             } label: {
-                if completing { ProgressView().tint(.black) } else { Label("Complete workout", systemImage: "checkmark") }
+                if completing { ProgressView().tint(JK.onPrimary) } else { Label("Complete workout", systemImage: "checkmark") }
             }
-            .buttonStyle(ChromeButtonStyle())
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(completing)
         }
     }
@@ -219,39 +219,6 @@ struct WorkoutBody: View {
     }
 }
 
-struct DayStrip: View {
-    let days: [Date]
-    @Binding var selected: Date
-    /// "YYYY-MM-DD" days to underline with a dot.
-    var marked: Set<String> = []
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(days, id: \.self) { d in
-                let on = Day.same(d, selected)
-                Button {
-                    selected = Day.start(d)
-                } label: {
-                    VStack(spacing: 2) {
-                        Text(Fmt.weekday(d)).font(.system(size: 10))
-                        Text("\(Day.calendar.component(.day, from: d))").font(.subheadline.weight(.semibold))
-                        Circle()
-                            .fill(marked.contains(Day.string(d)) ? (on ? Color.black : JK.secondary) : .clear)
-                            .frame(width: 4, height: 4)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(on ? Color.black : JK.text)
-                    .background(on ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.card),
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(JK.stroke, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
 private struct PlanExerciseCard: View {
     let item: WorkoutItem
 
@@ -259,12 +226,12 @@ private struct PlanExerciseCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 CheckCircle(on: item.isDone)
-                Text(item.exercise.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(item.exercise.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                 Spacer()
                 if !item.logged.isEmpty && !item.isDone {
-                    Text("\(item.logged.count)/\(item.sets)").font(.caption2).foregroundStyle(JK.tertiary)
+                    Text("\(item.logged.count)/\(item.sets)").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             HStack(spacing: 8) {
                 PrescriptionCell(label: "Sets", value: "\(item.sets)")
@@ -272,7 +239,7 @@ private struct PlanExerciseCard: View {
                 PrescriptionCell(label: "Load", value: item.load.isEmpty ? "–" : item.load)
             }
             if let note = item.note, !note.isEmpty {
-                Label(note, systemImage: "text.bubble").font(.caption2).foregroundStyle(JK.tertiary)
+                Label(note, systemImage: "text.bubble").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
         .jkCard()
@@ -285,12 +252,12 @@ private struct PrescriptionCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 9)).foregroundStyle(JK.tertiary)
-            Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+            Text(label).font(.jkMicro).foregroundStyle(JK.textSecondary)
+            Text(value).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
-        .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip, style: .continuous))
     }
 }
 
@@ -324,7 +291,7 @@ struct ExercisesView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ScreenHeader(eyebrow: "Library", title: "Exercises")
                 HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(JK.tertiary)
+                    Image(systemName: "magnifyingglass").foregroundStyle(JK.textTertiary)
                     TextField("Search exercises", text: $query)
                         .foregroundStyle(JK.text)
                         .autocorrectionDisabled()
@@ -375,20 +342,20 @@ private struct ExerciseTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
-                Rectangle().fill(JK.cardRaised).frame(height: 84)
+                Rectangle().fill(JK.raised).frame(height: 84)
                 Image(systemName: exercise.videoUrl == nil ? "figure.strengthtraining.traditional" : "play.circle")
-                    .foregroundStyle(JK.secondary)
+                    .foregroundStyle(JK.textSecondary)
                     .padding(6)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-                Text("\(exercise.equipment) · \(exercise.pattern)").font(.system(size: 10)).foregroundStyle(JK.tertiary)
+                Text(exercise.name).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
+                Text("\(exercise.equipment) · \(exercise.pattern)").font(.jkMicro).foregroundStyle(JK.textTertiary)
             }
             .padding(10)
         }
-        .background(JK.card)
+        .background(JK.surface)
         .clipShape(RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.hairline, lineWidth: 1))
     }
 }
 
@@ -406,7 +373,7 @@ struct ExercisePickerSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Image(systemName: "magnifyingglass").foregroundStyle(JK.tertiary)
+                        Image(systemName: "magnifyingglass").foregroundStyle(JK.textTertiary)
                         TextField("Search exercises", text: $query).autocorrectionDisabled()
                     }
                     .jkCard(padding: 10)
@@ -428,13 +395,13 @@ struct ExercisePickerSheet: View {
                                     dismiss()
                                 } label: {
                                     HStack(spacing: 12) {
-                                        IconTile(systemName: "dumbbell", size: 34)
+                                        Glyph(systemName: "dumbbell", size: 34)
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(exercise.name).font(.subheadline.weight(.medium)).foregroundStyle(JK.text)
-                                            Text("\(exercise.equipment) · \(exercise.pattern)").font(.caption2).foregroundStyle(JK.tertiary)
+                                            Text(exercise.name).font(.jkCallout.weight(.medium)).foregroundStyle(JK.text)
+                                            Text("\(exercise.equipment) · \(exercise.pattern)").font(.jkCaption).foregroundStyle(JK.textTertiary)
                                         }
                                         Spacer()
-                                        Image(systemName: "plus").foregroundStyle(JK.tertiary)
+                                        Image(systemName: "plus").foregroundStyle(JK.textTertiary)
                                     }
                                     .padding(10)
                                     .contentShape(Rectangle())
@@ -514,14 +481,14 @@ struct WorkoutLoggerView: View {
                             Button {
                                 itemId = ordered[index + 1].id
                             } label: { Label("Next exercise", systemImage: "forward") }
-                                .buttonStyle(GhostButtonStyle())
+                                .buttonStyle(SecondaryButtonStyle())
                         }
                         Button {
                             if let n = nextSet { Task { await log(n) } }
                         } label: {
                             Text(nextSet.map { "Log set \($0)" } ?? "All sets logged")
                         }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(nextSet == nil || busy != nil || workout.completedAt != nil)
                     }
                 } else {
@@ -535,7 +502,7 @@ struct WorkoutLoggerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Text("\(index + 1) of \(ordered.count)").font(.caption2).foregroundStyle(JK.tertiary)
+                Text("\(index + 1) of \(ordered.count)").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
         .task(id: resting) {
@@ -629,43 +596,43 @@ struct WorkoutLoggerView: View {
     private func demo(_ item: WorkoutItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
-                Rectangle().fill(JK.cardRaised).frame(height: 150)
+                Rectangle().fill(JK.raised).frame(height: 150)
                 if let url = item.exercise.videoUrl.flatMap(URL.init(string:)) {
                     Link(destination: url) {
                         Image(systemName: "play.fill")
                             .foregroundStyle(JK.text)
                             .frame(width: 44, height: 44)
-                            .background(JK.card, in: Circle())
+                            .background(JK.surface, in: Circle())
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     Text("Coach demo")
-                        .font(.caption2)
+                        .font(.jkCaption)
                         .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(JK.card, in: Capsule())
-                        .foregroundStyle(JK.secondary)
+                        .background(JK.surface, in: Capsule())
+                        .foregroundStyle(JK.textSecondary)
                         .padding(10)
                 } else {
                     Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: 40))
-                        .foregroundStyle(JK.tertiary)
+                        .font(.largeTitle)
+                        .foregroundStyle(JK.textTertiary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(height: 150)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.exercise.name).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text(item.exercise.name).font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                 Text(["\(item.sets) × \(item.reps)", item.load.isEmpty ? nil : item.load,
                       item.rpe.map { "RPE \($0)" }].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(JK.tertiary)
+                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 if let note = item.note, !note.isEmpty {
-                    Text(note).font(.caption2).foregroundStyle(JK.secondary).padding(.top, 4)
+                    Text(note).font(.jkCaption).foregroundStyle(JK.textSecondary).padding(.top, 4)
                 }
             }
             .padding(14)
         }
-        .background(JK.card)
+        .background(JK.surface)
         .clipShape(RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.hairline, lineWidth: 1))
     }
 
     private func setTable(_ item: WorkoutItem) -> some View {
@@ -677,37 +644,37 @@ struct WorkoutLoggerView: View {
                 Text("REPS").frame(width: 44)
                 Spacer().frame(width: 28)
             }
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(JK.tertiary)
+            .font(.jkMicro.weight(.semibold))
+            .foregroundStyle(JK.textTertiary)
             .padding(.horizontal, 12).padding(.vertical, 10)
 
             ForEach(Array(1...max(item.sets, 1)), id: \.self) { n in
                 let done = logged(n) != nil
                 HStack {
                     HStack(spacing: 3) {
-                        Text("\(n)").font(.subheadline.weight(.semibold))
+                        Text("\(n)").font(.jkCallout.weight(.semibold))
                         if done && Outbox.shared.isPending("PUT", setPath(item, n)) {
                             Image(systemName: "icloud.and.arrow.up")
-                                .font(.system(size: 9))
-                                .foregroundStyle(JK.tertiary)
+                                .font(.jkMicro)
+                                .foregroundStyle(JK.textTertiary)
                                 .accessibilityLabel("Waiting to send")
                         }
                     }
                     .frame(width: 34, alignment: .leading)
-                    Text(item.previous ?? "–").font(.caption).foregroundStyle(JK.tertiary)
+                    Text(item.previous ?? "–").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     TextField("kg", text: loadBinding(n, item))
-                        .font(.subheadline.weight(.semibold))
+                        .font(.jkCallout.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .frame(width: 56, height: 28)
-                        .background(done ? Color.clear : JK.cardRaised, in: RoundedRectangle(cornerRadius: 6))
+                        .background(done ? Color.clear : JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                         .disabled(done)
                     TextField("–", text: repsBinding(n, item))
                         .keyboardType(.numberPad)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.jkCallout.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .frame(width: 36, height: 28)
-                        .background(done ? Color.clear : JK.cardRaised, in: RoundedRectangle(cornerRadius: 6))
+                        .background(done ? Color.clear : JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                         .frame(width: 44)
                         .disabled(done)
                     Button {
@@ -717,8 +684,8 @@ struct WorkoutLoggerView: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Image(systemName: done ? "checkmark.square.fill" : "square")
-                                .font(.title3)
-                                .foregroundStyle(done ? JK.text : JK.tertiary)
+                                .font(.jkHeadline)
+                                .foregroundStyle(done ? JK.text : JK.textTertiary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -734,9 +701,9 @@ struct WorkoutLoggerView: View {
 
     private var rpeRow: some View {
         HStack(spacing: 10) {
-            Text("RPE").font(.system(size: 9, weight: .semibold)).foregroundStyle(JK.tertiary)
-            Text(rpe.map { "\($0)" } ?? "–").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text).frame(minWidth: 20)
-            Text("optional, for the next set").font(.caption2).foregroundStyle(JK.tertiary)
+            Text("RPE").font(.jkMicro.weight(.semibold)).foregroundStyle(JK.textTertiary)
+            Text(rpe.map { "\($0)" } ?? "–").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text).frame(minWidth: 20)
+            Text("optional, for the next set").font(.jkCaption).foregroundStyle(JK.textTertiary)
             Spacer()
             Button("−") { rpe = rpe.map { $0 <= 1 ? nil : $0 - 1 } ?? nil }.buttonStyle(SmallPillStyle()).disabled(rpe == nil)
             Button("+") { rpe = min(10, (rpe ?? 6) + (rpe == nil ? 0 : 1)) }.buttonStyle(SmallPillStyle())
@@ -747,14 +714,13 @@ struct WorkoutLoggerView: View {
     private var restTimer: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().stroke(JK.track, lineWidth: 4)
-                Circle().trim(from: 0, to: min(1, Double(rest) / 90)).stroke(JK.text, style: StrokeStyle(lineWidth: 4, lineCap: .round)).rotationEffect(.degrees(-90))
+                Ring(fraction: min(1, Double(rest) / 90), lineWidth: 4)
             }
             .frame(width: 38, height: 38)
             VStack(alignment: .leading, spacing: 0) {
-                Text("REST").font(.system(size: 9, weight: .semibold)).foregroundStyle(JK.tertiary)
+                Text("REST").font(.jkMicro.weight(.semibold)).foregroundStyle(JK.textTertiary)
                 Text(String(format: "%d:%02d", rest / 60, rest % 60))
-                    .font(.title.weight(.semibold).monospacedDigit())
+                    .font(.jkNumberTile)
                     .foregroundStyle(JK.text)
             }
             Spacer()
@@ -769,18 +735,6 @@ struct WorkoutLoggerView: View {
             .buttonStyle(SmallPillStyle())
         }
         .jkCard()
-    }
-}
-
-struct SmallPillStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(JK.secondary)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(JK.cardRaised, in: Capsule())
-            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
-            .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 
@@ -804,12 +758,12 @@ struct OfflineBanner: View {
     var body: some View {
         if outbox.pendingCount > 0 {
             Label(text, systemImage: "icloud.slash")
-                .font(.caption2)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
-                .background(JK.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+                .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous).stroke(JK.hairline, lineWidth: 1))
         }
         if let error = outbox.lastError {
             ErrorBanner(message: error)

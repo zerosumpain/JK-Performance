@@ -24,10 +24,7 @@ struct ClientHomeView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(eyebrow: Fmt.longDay(Date()),
                                  title: "\(Fmt.greeting()), \(session.me?.firstName ?? "there")") {
-                        Text("JK")
-                            .font(.caption.weight(.bold))
-                            .frame(width: 30, height: 30)
-                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.secondary, lineWidth: 1))
+                        Monogram(size: 30)
                     }
 
                     if let error, !loaded {
@@ -68,12 +65,12 @@ struct ClientHomeView: View {
         if (session.me?.membership?.plan ?? "none") == "none" {
             VStack(alignment: .leading, spacing: 8) {
                 Eyebrow(text: "Coaching")
-                Text("See what coaching includes").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text("See what coaching includes").font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                 Text("A quick tour of each plan, from your programme to 1:1 sessions with \(coachName).")
-                    .font(.caption).foregroundStyle(JK.secondary)
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Take the tour") { touring = true }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .padding(.top, 4)
             }
             .jkCard()
@@ -137,33 +134,33 @@ struct ClientHomeView: View {
                     Spacer()
                     if let badge = w.completedAt != nil ? "Done" : starts.flatMap({ Fmt.countdown(to: $0) }) {
                         Text(badge)
-                            .font(.caption2)
+                            .font(.jkCaption)
                             .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(JK.cardRaised, in: Capsule())
-                            .foregroundStyle(JK.secondary)
+                            .background(JK.raised, in: Capsule())
+                            .foregroundStyle(JK.textSecondary)
                     }
                 }
-                Text(w.title).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text(w.title).font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                 Text([w.startsAt, w.location?.isEmpty == false ? w.location : nil].compactMap { $0 }.joined(separator: " · ")
                      + (w.completedAt == nil ? "" : " · \(w.doneCount) of \(w.itemCount) exercises"))
-                    .font(.caption).foregroundStyle(JK.secondary)
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
                 NavigationLink { WorkoutDetailLoader(workoutId: w.id) } label: {
                     Label(w.completedAt == nil ? "Start workout" : "View workout", systemImage: w.completedAt == nil ? "play.fill" : "checkmark")
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .padding(.top, 4)
-                if !weekLine.isEmpty { Text(weekLine).font(.caption2).foregroundStyle(JK.tertiary) }
+                if !weekLine.isEmpty { Text(weekLine).font(.jkCaption).foregroundStyle(JK.textTertiary) }
             }
             .jkCard()
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Eyebrow(text: "Today")
-                Text("Rest day").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text("Rest day").font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                 Text(nextWorkout.map { w in
                     "Next: \(w.title), \(Day.date(w.date).map { Fmt.weekday($0) } ?? w.date)" + (w.startsAt.map { " \($0)" } ?? "")
                 } ?? "Walk, recover and tick off your habits.")
-                    .font(.caption).foregroundStyle(JK.secondary)
-                if !weekLine.isEmpty { Text(weekLine).font(.caption2).foregroundStyle(JK.tertiary) }
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                if !weekLine.isEmpty { Text(weekLine).font(.jkCaption).foregroundStyle(JK.textTertiary) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .jkCard()
@@ -187,13 +184,13 @@ struct ClientHomeView: View {
         if let r = reports?.reports.first(where: \.isUnread), let id = r.id {
             NavigationLink { ReportDetailView(reportId: id) } label: {
                 HStack(spacing: 12) {
-                    IconTile(systemName: "text.bubble.fill")
+                    Glyph(systemName: "text.bubble.fill")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("New feedback from \(coachName)").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                        Text(r.weekLabel).font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("New feedback from \(coachName)").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                        Text(r.weekLabel).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                    Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 .jkCard(padding: 12)
             }
@@ -205,13 +202,13 @@ struct ClientHomeView: View {
         if !HealthSync.shared.optedIn, HealthSync.shared.available, session.me?.demo != true {
             NavigationLink { HealthDevicesView() } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "heart.fill").foregroundStyle(.red)
-                    Text("Connect Apple Health").font(.subheadline.weight(.medium)).foregroundStyle(JK.text)
+                    Icon(key: .fromHealth).foregroundStyle(JK.textSecondary)
+                    Text("Connect Apple Health").font(.jkCallout.weight(.medium)).foregroundStyle(JK.text)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                    Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.card).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
             }
         }
     }
@@ -232,60 +229,6 @@ struct ClientHomeView: View {
         guard let r = reports else { return "Weekly" }
         if r.unread > 0 { return r.unread == 1 ? "1 new" : "\(r.unread) new" }
         return r.reports.first.map { Fmt.dayMonth($0.week) } ?? "None yet"
-    }
-}
-
-struct UpcomingRow: View {
-    let weekday: String
-    let day: String
-    let title: String
-    let detail: String
-    var chevron = true
-
-    var body: some View {
-        HStack(spacing: 14) {
-            VStack(spacing: 0) {
-                Text(weekday.uppercased()).font(.system(size: 9, weight: .semibold)).foregroundStyle(JK.tertiary)
-                Text(day).font(.headline).foregroundStyle(JK.text)
-            }
-            .frame(width: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(JK.text)
-                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
-            }
-            Spacer()
-            if chevron { Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary) }
-        }
-        .padding(12)
-    }
-}
-
-/// A square door on Home: icon, name, one line of state.
-private struct HomeTile<Destination: View>: View {
-    let title: String
-    let value: String
-    let systemName: String
-    var highlight = false
-    @ViewBuilder var destination: () -> Destination
-
-    var body: some View {
-        NavigationLink {
-            destination()
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: systemName).font(.title3).foregroundStyle(JK.text)
-                    Spacer()
-                    if highlight { Circle().fill(JK.text).frame(width: 7, height: 7) }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(value).font(.caption2).foregroundStyle(highlight ? JK.text : JK.tertiary).lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .jkCard(padding: 14)
-        }
     }
 }
 
@@ -322,7 +265,7 @@ struct DailyHabitsView: View {
                             }
                         }
                         .padding(.horizontal, 40)
-                        Text("\(data.streak)-day habit streak").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("\(data.streak)-day habit streak").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -385,10 +328,10 @@ struct DailyHabitsView: View {
             }
         } label: {
             HStack(spacing: 12) {
-                IconTile(systemName: symbol(habit.icon))
+                Glyph(systemName: symbol(habit.icon))
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(habit.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(detail(habit)).font(.caption2).foregroundStyle(JK.tertiary)
+                    Text(habit.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(detail(habit)).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     ThinBar(fraction: habit.done ? 1 : (habit.target > 0 ? (habit.value ?? 0) / habit.target : 0))
                 }
                 CheckCircle(on: habit.done)
@@ -417,13 +360,11 @@ struct DailyHabitsView: View {
             Eyebrow(text: "Nutrition · Today", trailing: target == nil ? "No target set" : "Coach target")
             HStack(spacing: 16) {
                 ZStack {
-                    Circle().stroke(JK.track, lineWidth: 6)
-                    Circle().trim(from: 0, to: min(1, (target?.kcal ?? 0) > 0 ? n.totals.kcal / target!.kcal : 0))
-                        .stroke(JK.text, style: StrokeStyle(lineWidth: 6, lineCap: .round)).rotationEffect(.degrees(-90))
+                    Ring(fraction: min(1, (target?.kcal ?? 0) > 0 ? n.totals.kcal / target!.kcal : 0), lineWidth: 6)
                     VStack(spacing: 0) {
-                        Text(Fmt.number(n.totals.kcal, digits: 0)).font(.title3.weight(.semibold))
+                        Text(Fmt.number(n.totals.kcal, digits: 0)).font(.jkHeadline.weight(.semibold))
                         Text(target.map { "of \(Fmt.number($0.kcal, digits: 0))" } ?? "kcal")
-                            .font(.system(size: 9)).foregroundStyle(JK.tertiary)
+                            .font(.jkMicro).foregroundStyle(JK.textTertiary)
                     }
                     .foregroundStyle(JK.text)
                 }
@@ -438,13 +379,13 @@ struct DailyHabitsView: View {
                 VStack(spacing: 6) {
                     ForEach(n.entries) { entry in
                         HStack {
-                            Text(entry.name).font(.caption).foregroundStyle(JK.text)
+                            Text(entry.name).font(.jkCaption).foregroundStyle(JK.text)
                             Spacer()
-                            Text("\(Fmt.number(entry.kcal, digits: 0)) kcal").font(.caption2).foregroundStyle(JK.tertiary)
+                            Text("\(Fmt.number(entry.kcal, digits: 0)) kcal").font(.jkCaption).foregroundStyle(JK.textTertiary)
                             Button {
                                 Task { await deleteEntry(entry) }
                             } label: {
-                                Image(systemName: "xmark").font(.caption2).foregroundStyle(JK.tertiary)
+                                Image(systemName: "xmark").font(.jkCaption).foregroundStyle(JK.textTertiary)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Remove \(entry.name)")
@@ -457,7 +398,7 @@ struct DailyHabitsView: View {
                 Button { logging = true } label: { Label("Snap a meal", systemImage: "camera") }
                 Button { logging = true } label: { Label("Log food", systemImage: "magnifyingglass") }
             }
-            .buttonStyle(GhostButtonStyle())
+            .buttonStyle(SecondaryButtonStyle())
         }
         .jkCard()
     }
@@ -472,25 +413,6 @@ struct DailyHabitsView: View {
     }
 }
 
-private struct MacroRow: View {
-    let name: String
-    let value: Double
-    let target: Double?
-
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text(name).font(.caption2).foregroundStyle(JK.tertiary)
-                Spacer()
-                Text(target.map { "\(Fmt.number(value, digits: 0)) / \(Fmt.number($0, digits: 0)) g" }
-                     ?? "\(Fmt.number(value, digits: 0)) g")
-                    .font(.caption2).foregroundStyle(JK.secondary)
-            }
-            ThinBar(fraction: (target ?? 0) > 0 ? value / target! : 0)
-        }
-    }
-}
-
 /// Sets the value of a "count" habit (litres of water, minutes…).
 private struct HabitValueSheet: View {
     let habit: Habit
@@ -501,7 +423,7 @@ private struct HabitValueSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(habit.name).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+            Text(habit.name).font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
             JKField(label: "Today (\(habit.unit)) · target \(Fmt.number(habit.target))", text: $text,
                     prompt: "0", keyboard: .decimalPad)
             Button {
@@ -513,9 +435,9 @@ private struct HabitValueSheet: View {
                     dismiss()
                 }
             } label: {
-                if saving { ProgressView().tint(.black) } else { Text("Save") }
+                if saving { ProgressView().tint(JK.onPrimary) } else { Text("Save") }
             }
-            .buttonStyle(ChromeButtonStyle())
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(parseNumber(text) == nil || saving)
         }
         .padding(20)
@@ -552,9 +474,9 @@ struct FoodLogSheet: View {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text("Log food") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text("Log food") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(!valid || saving)
                 }
                 .padding(16)

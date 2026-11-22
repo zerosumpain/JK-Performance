@@ -25,13 +25,13 @@ struct TodayCards: View {
             } label: {
                 SummaryCard(systemName: "square.and.pencil", title: "Check-ins", count: today.checkinsToReview ?? 0,
                             detail: oldest(today.checkinClients).map { "Oldest \(Fmt.relative($0))" } ?? "All replied",
-                            tint: (today.checkinsToReview ?? 0) > 0 ? JK.waiting : nil)
+                            tint: (today.checkinsToReview ?? 0) > 0 ? JK.attention : nil)
             }
             .disabled((today.checkinsToReview ?? 0) == 0)
             NavigationLink { ProgramsView(initialTab: .forms) } label: {
                 SummaryCard(systemName: "doc.text", title: "Forms to read", count: today.formsToReview ?? 0,
                             detail: names(today.formClients?.map(\.name)) ?? "Nothing new",
-                            tint: (today.formsToReview ?? 0) > 0 ? JK.waiting : nil)
+                            tint: (today.formsToReview ?? 0) > 0 ? JK.attention : nil)
             }
             feedbackCard
             NavigationLink {
@@ -70,7 +70,7 @@ struct TodayCards: View {
 
         Eyebrow(text: "Sessions today", trailing: sessions.isEmpty ? nil : "\(upcomingSessions.count) to go")
         if sessions.isEmpty {
-            Text("Nothing booked today.").font(.caption).foregroundStyle(JK.tertiary)
+            Text("Nothing booked today.").font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         ForEach(sessions) { s in
             SessionRow(session: s, isNext: s.id == upcomingSessions.first?.id)
@@ -82,7 +82,7 @@ struct TodayCards: View {
     private func urgentCard(_ items: [AttentionItem]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(items.count == 1 ? "Needs you first" : "\(items.count) need you first", systemImage: "exclamationmark.triangle.fill")
-                .font(.caption.weight(.semibold))
+                .font(.jkCaption.weight(.semibold))
                 .foregroundStyle(JK.urgent)
                 .padding(.horizontal, 10).padding(.top, 8)
             ForEach(items, id: \.self) { item in
@@ -122,7 +122,7 @@ struct TodayCards: View {
         Button { TabRouter.shared.coach = .messages } label: {
             SummaryCard(systemName: "bubble.left", title: "Messages", count: today.unread,
                         detail: today.unreadClients?.first?.at.map { "Newest \(Fmt.relative($0)) · \(names(today.unreadClients?.map(\.name)) ?? "")" } ?? "No unread",
-                        tint: today.unread > 0 ? JK.waiting : nil, countLabel: "unread")
+                        tint: today.unread > 0 ? JK.attention : nil, countLabel: "unread")
         }
         .buttonStyle(.plain)
     }
@@ -134,7 +134,7 @@ struct TodayCards: View {
             if let due { FeedbackDueView(due: due) }
         } label: {
             SummaryCard(systemName: "text.bubble", title: "Feedback to write", count: count,
-                        detail: count == 0 ? "All published" : dueText(due), tint: count > 0 && isOverdue(due) ? JK.urgent : (count > 0 ? JK.waiting : nil))
+                        detail: count == 0 ? "All published" : dueText(due), tint: count > 0 && isOverdue(due) ? JK.urgent : (count > 0 ? JK.attention : nil))
         }
         .disabled(count == 0)
     }
@@ -151,11 +151,11 @@ struct TodayCards: View {
         HStack(spacing: 12) {
             Avatar(initials: p.displayInitials, size: 30)
             VStack(alignment: .leading, spacing: 1) {
-                Text(p.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                Text(reason).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2)
+                Text(p.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                Text(reason).font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(2)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         .padding(10)
     }
@@ -193,24 +193,24 @@ struct SummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: systemName).font(.caption).foregroundStyle(tint ?? JK.tertiary)
+                Image(systemName: systemName).font(.jkCaption).foregroundStyle(tint ?? JK.textTertiary)
                 Spacer()
                 if let tint { Dot(color: tint, size: 7) }
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value ?? "\(count ?? 0)")
-                    .font(.title2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle((count ?? 1) == 0 && value == nil ? JK.tertiary : JK.text)
+                    .font(.jkNumberTile)
+                    .foregroundStyle((count ?? 1) == 0 && value == nil ? JK.textTertiary : JK.text)
                     .lineLimit(1).minimumScaleFactor(0.6)
-                if let countLabel { Text(countLabel).font(.caption2).foregroundStyle(JK.tertiary) }
+                if let countLabel { Text(countLabel).font(.jkCaption).foregroundStyle(JK.textTertiary) }
             }
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-            Text(detail).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2, reservesSpace: true)
+            Text(title).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
+            Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(2, reservesSpace: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(JK.card, in: RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(tint?.opacity(0.4) ?? JK.stroke, lineWidth: 1))
+        .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(tint?.opacity(0.4) ?? JK.hairline, lineWidth: 1))
     }
 }
 
@@ -238,11 +238,11 @@ struct PeopleListView: View {
                         HStack(spacing: 12) {
                             Avatar(initials: row.person.displayInitials, size: 32)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(row.person.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                Text(row.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                                Text(row.person.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                                Text(row.detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         .jkCard(padding: 12)
                     }

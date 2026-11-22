@@ -15,16 +15,14 @@ struct CoachTodayView: View {
                     ScreenHeader(eyebrow: "Coach · \(Fmt.shortDay(Date()))", title: "Today") {
                         Button { showAccount = true } label: {
                             Image(systemName: "person.crop.circle")
-                                .font(.title3)
+                                .font(.jkHeadline)
                                 .frame(width: 30, height: 30)
                         }
                         .foregroundStyle(JK.text)
                         .accessibilityLabel("Account")
                         NavigationLink { BusinessView() } label: {
-                            Text("JK")
-                                .font(.caption.weight(.bold))
-                                .frame(width: 30, height: 30)
-                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.secondary, lineWidth: 1))
+                            Monogram(size: 30)
+                                .frame(width: JK.Size.touch, height: JK.Size.touch)
                         }
                         .foregroundStyle(JK.text)
                         .accessibilityLabel("Business")
@@ -65,9 +63,9 @@ struct FeedbackDueView: View {
                     NavigationLink { ClientDetailView(clientId: c.id, name: c.name, initialTab: .feedback) } label: {
                         HStack(spacing: 12) {
                             Avatar(initials: c.displayInitials, size: 32)
-                            Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Text(c.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                             Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         .jkCard(padding: 12)
                     }
@@ -93,11 +91,11 @@ struct SessionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(Fmt.time(session.start)).font(.caption2.weight(.semibold))
-                Text(Fmt.time(session.end)).font(.system(size: 9)).foregroundStyle(JK.tertiary)
+                Text(Fmt.time(session.start)).font(.jkCaption.weight(.semibold))
+                Text(Fmt.time(session.end)).font(.jkMicro).foregroundStyle(JK.textTertiary)
             }
             .frame(width: 38, alignment: .leading)
-            .foregroundStyle(done ? JK.tertiary : JK.text)
+            .foregroundStyle(done ? JK.textTertiary : JK.text)
             NavigationLink {
                 if let c = session.client {
                     ClientDetailView(clientId: c.id, name: c.name)
@@ -110,28 +108,28 @@ struct SessionRow: View {
                     Avatar(initials: session.client.map { $0.displayInitials } ?? "G", size: 28)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(session.isGroup ? "\(who) · \(session.attendeeCount ?? session.attendees?.count ?? 0) clients" : who)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.jkCallout.weight(.semibold))
                         Text([session.title, session.kindLabel].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption2).foregroundStyle(JK.tertiary)
+                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     Spacer()
                     if isNext {
                         Text("Next")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.jkMicro.weight(.semibold))
                             .padding(.horizontal, 7).padding(.vertical, 3)
                             .background(JK.text, in: Capsule())
-                            .foregroundStyle(.black)
+                            .foregroundStyle(JK.onPrimary)
                     } else if done {
-                        Image(systemName: "checkmark").font(.caption)
+                        Image(systemName: "checkmark").font(.jkCaption)
                     } else {
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                        Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                 }
-                .foregroundStyle(done ? JK.tertiary : JK.text)
+                .foregroundStyle(done ? JK.textTertiary : JK.text)
                 .padding(10)
-                .background(JK.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isNext ? JK.secondary : JK.stroke, lineWidth: 1))
+                .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous)
+                    .stroke(isNext ? JK.textSecondary : JK.hairline, lineWidth: 1))
             }
         }
     }
@@ -148,10 +146,10 @@ struct ClassDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(booking.title ?? booking.kindLabel).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(booking.title ?? booking.kindLabel).font(.jkDisplay).foregroundStyle(JK.text)
                     Text("\(Fmt.longDay(booking.start)) · \(Fmt.time(booking.start))–\(Fmt.time(booking.end))")
-                        .font(.caption).foregroundStyle(JK.secondary)
-                    if let location = booking.location { Text(location).font(.caption).foregroundStyle(JK.tertiary) }
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    if let location = booking.location { Text(location).font(.jkCaption).foregroundStyle(JK.textTertiary) }
                 }
                 Eyebrow(text: "Attendees", trailing: booking.capacity.map { "\(booking.attendeeCount ?? booking.attendees?.count ?? 0) of \($0)" })
                 let people = booking.attendees ?? (booking.client.map { [$0] } ?? [])
@@ -162,7 +160,7 @@ struct ClassDetailView: View {
                         ForEach(people) { p in
                             HStack(spacing: 10) {
                                 Avatar(initials: p.displayInitials, size: 28)
-                                Text(p.name).font(.subheadline).foregroundStyle(JK.text)
+                                Text(p.name).font(.jkCallout).foregroundStyle(JK.text)
                                 Spacer()
                             }
                             .padding(10)
@@ -173,7 +171,7 @@ struct ClassDetailView: View {
                 if let error { ErrorBanner(message: error) }
                 if booking.cancellable != false && booking.start > Date() {
                     Button(booking.isGroup ? "Cancel class" : "Cancel booking", role: .destructive) { confirm = true }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                 }
             }
             .padding(16)
@@ -234,11 +232,11 @@ struct BusinessView: View {
                                     HStack(spacing: 12) {
                                         Avatar(initials: item.client.displayInitials)
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.client.name).font(.subheadline.weight(.semibold))
-                                            Text(item.reason).font(.caption2).foregroundStyle(JK.tertiary)
+                                            Text(item.client.name).font(.jkCallout.weight(.semibold))
+                                            Text(item.reason).font(.jkCaption).foregroundStyle(JK.textTertiary)
                                         }
                                         Spacer()
-                                        Image(systemName: Self.icon(item.kind)).font(.caption).foregroundStyle(JK.secondary)
+                                        Image(systemName: Self.icon(item.kind)).font(.jkCaption).foregroundStyle(JK.textSecondary)
                                     }
                                     .foregroundStyle(JK.text)
                                     .padding(12)
@@ -273,15 +271,13 @@ struct BusinessView: View {
                 Spacer()
                 if let delta = b.mrrDeltaPct { DeltaBadge(text: "\(Fmt.delta(delta, digits: 0))%") }
             }
-            Text(Fmt.pounds(b.mrrPence)).font(.largeTitle.weight(.semibold)).foregroundStyle(JK.text)
+            Text(Fmt.pounds(b.mrrPence)).font(.jkNumberHero).foregroundStyle(JK.text)
             if points.count >= 2 {
                 let values = points.map(\.1)
                 let span = max((values.max() ?? 0) - (values.min() ?? 0), 1)
                 let low = (values.min() ?? 0) - span * 0.1, high = (values.max() ?? 0) + span * 0.1
                 Chart(points, id: \.0) { pt in
-                    AreaMark(x: .value("Day", pt.0), yStart: .value("£", low), yEnd: .value("£", pt.1))
-                        .foregroundStyle(LinearGradient(colors: [JK.text.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom))
-                    LineMark(x: .value("Day", pt.0), y: .value("£", pt.1)).foregroundStyle(JK.text)
+                    LineMark(x: .value("Day", pt.0), y: .value("£", pt.1)).foregroundStyle(JK.data)
                 }
                 .chartYScale(domain: low...high)
                 .chartXAxis(.hidden)
@@ -309,13 +305,13 @@ struct PlansPricesLink: View {
             PlansPricesView()
         } label: {
             HStack(spacing: 12) {
-                IconTile(systemName: "tag")
+                Glyph(systemName: "tag")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Plans & prices").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("Names, prices, credits and what each plan includes").font(.caption2).foregroundStyle(JK.tertiary)
+                    Text("Plans & prices").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Names, prices, credits and what each plan includes").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             .jkCard(padding: 12)
         }
@@ -337,14 +333,14 @@ struct ClientsView: View {
                     ScreenHeader(eyebrow: "Coach", title: "Clients") {
                         NavigationLink { ProgramsView() } label: {
                             Label("Programs", systemImage: "square.stack")
-                                .font(.caption.weight(.semibold))
+                                .font(.jkCaption.weight(.semibold))
                                 .padding(.horizontal, 10).padding(.vertical, 6)
-                                .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                                .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
                         }
                         .foregroundStyle(JK.text)
                     }
                     HStack {
-                        Image(systemName: "magnifyingglass").foregroundStyle(JK.tertiary)
+                        Image(systemName: "magnifyingglass").foregroundStyle(JK.textTertiary)
                         TextField("Search clients", text: $query).autocorrectionDisabled()
                     }
                     .jkCard(padding: 10)
@@ -408,20 +404,20 @@ private struct ClientRow: View {
         HStack(spacing: 12) {
             Avatar(initials: client.displayInitials, size: 34)
                 .overlay(alignment: .topTrailing) {
-                    if let tint = ClientText.tint(client) { Dot(color: tint, size: 9).overlay(Circle().stroke(JK.card, lineWidth: 2)) }
+                    if let tint = ClientText.tint(client) { Dot(color: tint, size: 9).overlay(Circle().stroke(JK.surface, lineWidth: 2)) }
                 }
             VStack(alignment: .leading, spacing: 2) {
-                Text(client.name).font(.subheadline.weight(.semibold))
+                Text(client.name).font(.jkCallout.weight(.semibold))
                 Text(ClientText.reason(client))
-                    .font(.caption2)
-                    .foregroundStyle(client.demand?.kind == "urgent" ? JK.urgent : JK.tertiary)
+                    .font(.jkCaption)
+                    .foregroundStyle(client.demand?.kind == "urgent" ? JK.urgent : JK.textTertiary)
                     .lineLimit(1)
             }
             Spacer()
             if let unread = client.unread, unread > 0 {
-                Image(systemName: "bubble.left.fill").font(.caption2).foregroundStyle(JK.secondary)
+                Image(systemName: "bubble.left.fill").font(.jkCaption).foregroundStyle(JK.textSecondary)
             }
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         .foregroundStyle(JK.text)
         .padding(12)
@@ -438,7 +434,7 @@ enum ClientText {
     static func tint(_ c: ClientSummary) -> Color? {
         switch c.demand?.kind {
         case "urgent": return JK.urgent
-        case "message", "form", "checkin": return JK.waiting
+        case "message", "form", "checkin": return JK.attention
         default: return nil
         }
     }
@@ -500,10 +496,10 @@ struct ProgramsView: View {
                 ScreenHeader(eyebrow: "Templates & automation", title: tab.rawValue) {
                     if tab == .programs {
                         Button { editing = ProgramDraft() } label: { Label("New", systemImage: "plus") }
-                            .font(.caption.weight(.semibold))
+                            .font(.jkCaption.weight(.semibold))
                             .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(JK.chrome, in: Capsule())
-                            .foregroundStyle(.black)
+                            .background(JK.primaryFill, in: Capsule())
+                            .foregroundStyle(JK.onPrimary)
                     }
                 }
                 Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
@@ -537,24 +533,24 @@ struct ProgramsView: View {
 
     private func programRow(_ p: Program) -> some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10).fill(JK.cardRaised).frame(width: 52, height: 52)
-                .overlay(Image(systemName: "chart.xyaxis.line").foregroundStyle(JK.tertiary))
+            RoundedRectangle(cornerRadius: JK.Radius.control).fill(JK.raised).frame(width: 52, height: 52)
+                .overlay(Image(systemName: "chart.xyaxis.line").foregroundStyle(JK.textSecondary))
             VStack(alignment: .leading, spacing: 4) {
-                Text(p.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(p.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                 Text("\(p.daysPerWeek) days / week · \(p.weeks) weeks · \(p.workouts.count) workouts")
-                    .font(.caption2).foregroundStyle(JK.tertiary)
+                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 Text(p.clientCount.map { $0 == 1 ? "1 client" : "\($0) clients" } ?? "Template")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.jkMicro.weight(.medium))
                     .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(JK.cardRaised, in: Capsule())
-                    .foregroundStyle(JK.secondary)
+                    .background(JK.raised, in: Capsule())
+                    .foregroundStyle(JK.textSecondary)
             }
             Spacer()
             Menu {
                 Button { editing = ProgramDraft(p) } label: { Label("Edit", systemImage: "pencil") }
                 Button { assigning = p } label: { Label("Assign to client", systemImage: "person.badge.plus") }
             } label: {
-                Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.secondary)
+                Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.textSecondary)
             }
         }
         .jkCard(padding: 12)
@@ -618,7 +614,7 @@ struct ProgramEditorSheet: View {
                         Stepper("\(draft.daysPerWeek) days / week", value: $draft.daysPerWeek, in: 1...7)
                         Stepper("\(draft.weeks) wk", value: $draft.weeks, in: 1...52)
                     }
-                    .font(.caption)
+                    .font(.jkCaption)
                     .foregroundStyle(JK.text)
 
                     Eyebrow(text: "Workouts", trailing: "Day offset from the start date")
@@ -627,7 +623,7 @@ struct ProgramEditorSheet: View {
                             HStack {
                                 JKField(label: "Title", text: $w.title, prompt: "Lower Body Strength")
                                 Stepper("Day \(w.dayOffset + 1)", value: $w.dayOffset, in: 0...(draft.weeks * 7 - 1))
-                                    .font(.caption).frame(width: 150)
+                                    .font(.jkCaption).frame(width: 150)
                             }
                             ItemsEditor(items: $w.items)
                             HStack {
@@ -646,19 +642,19 @@ struct ProgramEditorSheet: View {
                         let next = (draft.workouts.map(\.dayOffset).max() ?? -1) + 1
                         draft.workouts.append(ProgramWorkout(dayOffset: min(next, draft.weeks * 7 - 1), title: "Workout \(draft.workouts.count + 1)", items: []))
                     } label: { Label("Add workout", systemImage: "plus") }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
 
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await save() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text(draft.programId == nil ? "Create program" : "Save program") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text(draft.programId == nil ? "Create program" : "Save program") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
                     if draft.programId != nil {
                         Button("Delete program", role: .destructive) { confirmDelete = true }
-                            .buttonStyle(GhostButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                 }
                 .padding(16)
@@ -716,19 +712,19 @@ struct ItemsEditor: View {
 
     var body: some View {
         if items.isEmpty {
-            Text("No exercises yet.").font(.caption2).foregroundStyle(JK.tertiary)
+            Text("No exercises yet.").font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         ForEach(Array(items.enumerated()), id: \.element.localId) { index, item in
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(item.exerciseName.isEmpty ? item.exerciseId : item.exerciseName)
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     if item.id == nil {
                         Text("New")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.jkMicro.weight(.semibold))
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(JK.text, in: Capsule())
-                            .foregroundStyle(.black)
+                            .foregroundStyle(JK.onPrimary)
                     }
                     Spacer()
                     Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
@@ -737,8 +733,8 @@ struct ItemsEditor: View {
                         .disabled(index == items.count - 1)
                     Button(role: .destructive) { items.remove(at: index) } label: { Image(systemName: "trash") }
                 }
-                .font(.caption)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textSecondary)
                 .buttonStyle(.plain)
                 HStack(spacing: 6) {
                     JKField(label: "Sets", text: Binding(get: { "\(items[index].sets)" },
@@ -756,7 +752,7 @@ struct ItemsEditor: View {
                         prompt: "Cue for the client")
             }
             .padding(10)
-            .background(JK.cardRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(JK.raised.opacity(0.5), in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
         }
     }
 
@@ -782,9 +778,9 @@ struct AssignProgramSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(program.name).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(program.name).font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                     DatePicker("Start date", selection: $start, displayedComponents: .date)
-                        .font(.subheadline).foregroundStyle(JK.text)
+                        .font(.jkCallout).foregroundStyle(JK.text)
                     Eyebrow(text: "Client")
                     if let clients {
                         VStack(spacing: 0) {
@@ -792,7 +788,7 @@ struct AssignProgramSheet: View {
                                 Button { clientId = c.id } label: {
                                     HStack(spacing: 10) {
                                         Avatar(initials: c.displayInitials, size: 28)
-                                        Text(c.name).font(.subheadline).foregroundStyle(JK.text)
+                                        Text(c.name).font(.jkCallout).foregroundStyle(JK.text)
                                         Spacer()
                                         CheckCircle(on: clientId == c.id)
                                     }
@@ -808,15 +804,15 @@ struct AssignProgramSheet: View {
                     }
                     if let created {
                         Label("Created \(created) draft workouts. Publish them from the client's Plan tab.", systemImage: "checkmark.circle")
-                            .font(.caption).foregroundStyle(JK.secondary)
+                            .font(.jkCaption).foregroundStyle(JK.textSecondary)
                     }
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await assign() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text(created == nil ? "Assign" : "Done") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text(created == nil ? "Assign" : "Done") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || (created == nil && clientId == nil))
                 }
                 .padding(16)
@@ -887,7 +883,7 @@ struct GuidesView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(eyebrow: "Coach library", title: "Hints & guides")
                     HStack {
-                        Image(systemName: "magnifyingglass").foregroundStyle(JK.tertiary)
+                        Image(systemName: "magnifyingglass").foregroundStyle(JK.textTertiary)
                         TextField("Search guides and cues", text: $query)
                     }
                     .jkCard(padding: 10)
@@ -906,15 +902,15 @@ struct GuidesView: View {
                         Eyebrow(text: "Quick tips")
                         let tips = g.tips.filter(matches)
                         if tips.isEmpty {
-                            Text("Nothing matches.").font(.caption).foregroundStyle(JK.tertiary)
+                            Text("Nothing matches.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         ForEach(tips) { tip in
                             Button { open = tip } label: {
                                 HStack(alignment: .top, spacing: 12) {
-                                    IconTile(systemName: symbol(tip.icon ?? "lightbulb", fallback: "lightbulb"), size: 32)
+                                    Glyph(systemName: symbol(tip.icon ?? "lightbulb", fallback: "lightbulb"), size: 32)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(tip.title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                        Text(tip.body).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(3)
+                                        Text(tip.title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                                        Text(tip.body).font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(3)
                                             .multilineTextAlignment(.leading)
                                     }
                                     Spacer(minLength: 0)
@@ -927,10 +923,10 @@ struct GuidesView: View {
                     Button { showDesk = true } label: {
                         Label("Coach desk on the web", systemImage: "desktopcomputer")
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .padding(.top, 20)
                     Text("Write weekly feedback and plans from a computer.")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
                     Button {
                         Task {
                             do { try await session.switchToDemoClient() } catch { switchError = error.readable }
@@ -938,10 +934,10 @@ struct GuidesView: View {
                     } label: {
                         Label("View the app as a client (demo: Sam Carter)", systemImage: "arrow.left.arrow.right")
                     }
-                    .buttonStyle(GhostButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                     if let switchError { ErrorBanner(message: switchError) }
                     Button("Sign out") { Task { await session.signOut() } }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                 }
                 .padding(16)
             }
@@ -954,8 +950,8 @@ struct GuidesView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         Eyebrow(text: ([g.minutes.map { "\($0) min" }] + g.tags.map { Optional($0) }).compactMap { $0 }.joined(separator: " · "))
-                        Text(g.title).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                        Text(g.body).font(.body).foregroundStyle(JK.secondary)
+                        Text(g.title).font(.jkLetterHeadline).foregroundStyle(JK.text)
+                        Text(g.body).font(.jkBody).foregroundStyle(JK.textSecondary)
                     }
                     .padding(20)
                 }
@@ -968,27 +964,27 @@ struct GuidesView: View {
     private func featuredCard(_ g: Guide) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
-                Rectangle().fill(JK.cardRaised).frame(height: 110)
-                    .overlay(Image(systemName: "book.pages").font(.largeTitle).foregroundStyle(JK.tertiary))
+                Rectangle().fill(JK.raised).frame(height: 110)
+                    .overlay(Image(systemName: "book.pages").font(.largeTitle).foregroundStyle(JK.textTertiary))
                 if let first = g.tags.first {
                     Text(first)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.jkMicro.weight(.semibold))
                         .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(JK.card, in: Capsule())
-                        .foregroundStyle(JK.secondary)
+                        .background(JK.surface, in: Capsule())
+                        .foregroundStyle(JK.textSecondary)
                         .padding(8)
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
                 Eyebrow(text: "Featured guide" + (g.minutes.map { " · \($0) min" } ?? ""))
-                Text(g.title).font(.headline).foregroundStyle(JK.text).multilineTextAlignment(.leading)
-                Text(g.body).font(.caption).foregroundStyle(JK.tertiary).lineLimit(3).multilineTextAlignment(.leading)
+                Text(g.title).font(.jkHeadline).foregroundStyle(JK.text).multilineTextAlignment(.leading)
+                Text(g.body).font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(3).multilineTextAlignment(.leading)
             }
             .padding(14)
         }
-        .background(JK.card)
+        .background(JK.surface)
         .clipShape(RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.hairline, lineWidth: 1))
     }
 
     private func load() async {
@@ -1018,18 +1014,18 @@ struct CoachAccountView: View {
                     HStack(spacing: 12) {
                         Avatar(initials: initialsOf(session.me?.name ?? "Coach"), size: 48)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(session.me?.name ?? "Coach").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                            Text(session.me?.email ?? "Coach account").font(.caption).foregroundStyle(JK.tertiary)
+                            Text(session.me?.name ?? "Coach").font(.jkDisplay).foregroundStyle(JK.text)
+                            Text(session.me?.email ?? "Coach account").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                     }
                     Text("Signed in as the coach. Clients who sign up are assigned to you.")
-                        .font(.footnote).foregroundStyle(JK.secondary)
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
                     Link(destination: APIClient.shared.privacyURL) {
                         HStack(spacing: 12) {
-                            IconTile(systemName: "hand.raised")
-                            Text("Privacy policy").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            Glyph(systemName: "hand.raised")
+                            Text("Privacy policy").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                             Spacer()
-                            Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(JK.tertiary)
+                            Image(systemName: "arrow.up.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         .jkCard(padding: 12)
                     }
@@ -1038,10 +1034,10 @@ struct CoachAccountView: View {
                     CalendarSubscribeCard()
                     WebSessionsRow()
                     Button("Sign out") { confirmSignOut = true }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                         .padding(.top, 12)
                     Text("To see the client side, use Guides › View the app as a client.")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 .padding(16)
             }
@@ -1074,15 +1070,15 @@ private struct WebSessionsRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            IconTile(systemName: "desktopcomputer")
+            Glyph(systemName: "desktopcomputer")
             VStack(alignment: .leading, spacing: 2) {
-                Text("Coach desk on the web").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+                Text("Coach desk on the web").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             Spacer()
             if (sessions?.count ?? 0) > 0 {
                 Button("Sign out all") { Task { await endAll() } }
-                    .font(.caption.weight(.semibold))
+                    .font(.jkCaption.weight(.semibold))
                     .disabled(busy)
             }
         }
@@ -1115,7 +1111,7 @@ private struct CoachNotificationsRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
-                IconTile(systemName: "bell")
+                Glyph(systemName: "bell")
                 Toggle(isOn: Binding(get: { Reminders.shared.enabled }, set: { on in
                     Task {
                         if on {
@@ -1127,13 +1123,13 @@ private struct CoachNotificationsRow: View {
                     }
                 })) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Notifications").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                        Text("Client messages, check-ins and bookings").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Notifications").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                        Text("Client messages, check-ins and bookings").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                 }
-                .tint(.green)
+                .tint(JK.accentControl)
             }
-            if let error { Text(error).font(.caption2).foregroundStyle(JK.secondary) }
+            if let error { Text(error).font(.jkCaption).foregroundStyle(JK.textSecondary) }
         }
         .jkCard(padding: 12)
     }

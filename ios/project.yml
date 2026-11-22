@@ -26,6 +26,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
+        # Newsreader (SIL OFL 1.1, Resources/Fonts): the serif for JK's voice. Variable,
+        # opsz 6-72 and wght 200-800; PostScript names Newsreader16pt-Regular / -Italic.
+        UIAppFonts: [Newsreader-Roman.ttf, Newsreader-Italic.ttf]
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         # Portrait-only is refused at upload unless the app opts out of iPad multitasking.

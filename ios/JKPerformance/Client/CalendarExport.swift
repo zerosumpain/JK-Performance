@@ -77,13 +77,13 @@ struct CalendarSubscribeCard: View {
         if session.me?.demo != true {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
-                    IconTile(systemName: "calendar.badge.plus")
+                    Glyph(systemName: "calendar.badge.plus")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(active == true ? "In Apple Calendar" : "Add all to Apple Calendar")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                            .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                         Text(isCoach ? "Every booking and class, kept up to date"
                                      : "Your sessions, classes and timed workouts, kept up to date")
-                            .font(.caption2).foregroundStyle(JK.tertiary)
+                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     Spacer()
                 }
@@ -91,20 +91,20 @@ struct CalendarSubscribeCard: View {
                 if active == true {
                     HStack(spacing: 8) {
                         if let saved, let url = URL(string: saved) {
-                            Button("Open again") { openURL(url) }.buttonStyle(GhostButtonStyle())
+                            Button("Open again") { openURL(url) }.buttonStyle(SecondaryButtonStyle())
                         } else {
-                            Button("New link") { Task { await subscribe() } }.buttonStyle(GhostButtonStyle())
+                            Button("New link") { Task { await subscribe() } }.buttonStyle(SecondaryButtonStyle())
                         }
-                        Button("Stop") { Task { await stop() } }.buttonStyle(GhostButtonStyle())
+                        Button("Stop") { Task { await stop() } }.buttonStyle(SecondaryButtonStyle())
                     }
                     .disabled(busy)
                 } else {
                     Button {
                         Task { await subscribe() }
                     } label: {
-                        if busy { ProgressView().tint(.black) } else { Text("Subscribe in Calendar") }
+                        if busy { ProgressView().tint(JK.onPrimary) } else { Text("Subscribe in Calendar") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(busy || active == nil)
                 }
             }

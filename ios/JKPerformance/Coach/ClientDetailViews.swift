@@ -57,8 +57,8 @@ struct ClientDetailView: View {
             HStack(spacing: 12) {
                 Avatar(initials: detail?.client.displayInitials ?? Fmt.initials(name), size: 48)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(detail?.client.name ?? name).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(subtitle).font(.caption).foregroundStyle(JK.tertiary)
+                    Text(detail?.client.name ?? name).font(.jkDisplay).foregroundStyle(JK.text)
+                    Text(subtitle).font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
             }
             if let error { ErrorBanner(message: error) }
@@ -66,10 +66,10 @@ struct ClientDetailView: View {
                 HStack(spacing: 6) {
                     ForEach(chips, id: \.self) { t in
                         Text(t)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.jkMicro.weight(.medium))
                             .padding(.horizontal, 8).padding(.vertical, 4)
-                            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
-                            .foregroundStyle(JK.secondary)
+                            .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
+                            .foregroundStyle(JK.textSecondary)
                     }
                 }
             }
@@ -175,11 +175,11 @@ private struct CoachPlanTab: View {
         HStack {
             Button { day = Day.add(-7, to: day) } label: { Image(systemName: "chevron.left") }
             Spacer()
-            Text("Week of \(Fmt.dayMonth(Day.weekStart(day)))").font(.caption).foregroundStyle(JK.secondary)
+            Text("Week of \(Fmt.dayMonth(Day.weekStart(day)))").font(.jkCaption).foregroundStyle(JK.textSecondary)
             Spacer()
             Button { day = Day.add(7, to: day) } label: { Image(systemName: "chevron.right") }
         }
-        .foregroundStyle(JK.secondary)
+        .foregroundStyle(JK.textSecondary)
         DayStrip(days: Day.week(of: day), selected: $day, marked: Set((week ?? []).map(\.date)))
 
         if let error, week == nil {
@@ -225,8 +225,8 @@ private struct CoachPlanTab: View {
         let binding = Binding<WorkoutDraft>(get: { draft ?? current }, set: { draft = $0 })
         VStack(alignment: .leading, spacing: 2) {
             Text("\(Fmt.weekday(Day.date(current.date) ?? day)) · \(current.title.isEmpty ? "New workout" : current.title)")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-            Text(statusLine(current)).font(.caption2).foregroundStyle(JK.tertiary)
+                .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+            Text(statusLine(current)).font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         VStack(alignment: .leading, spacing: 8) {
             JKField(label: "Title", text: binding.title, prompt: "Lower Body Strength")
@@ -240,31 +240,31 @@ private struct CoachPlanTab: View {
         ItemsEditor(items: binding.items)
         Button { picking = true } label: {
             Label("Add exercise from the library", systemImage: "plus")
-                .font(.caption)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.card).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
         }
-        if let notice { Label(notice, systemImage: "checkmark.circle").font(.caption).foregroundStyle(JK.secondary) }
+        if let notice { Label(notice, systemImage: "checkmark.circle").font(.jkCaption).foregroundStyle(JK.textSecondary) }
         if let error { ErrorBanner(message: error) }
         HStack(spacing: 10) {
             Button("Save") { Task { await save(publish: false) } }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
                 .disabled(busy || !valid(current) || (current == saved))
             Button {
                 Task { await save(publish: true) }
             } label: {
-                if busy { ProgressView().tint(.black) } else {
+                if busy { ProgressView().tint(JK.onPrimary) } else {
                     Text(current.published && current == saved ? "Published" : "Publish to \(clientName.split(separator: " ").first.map(String.init) ?? clientName)")
                 }
             }
-            .buttonStyle(ChromeButtonStyle())
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(busy || !valid(current) || (current.published && current == saved))
         }
         if current.id != nil {
             Button("Delete workout", role: .destructive) { confirmDelete = true }
-                .font(.caption)
+                .font(.jkCaption)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -385,16 +385,16 @@ private struct CoachHabitsTab: View {
                 VStack(spacing: 0) {
                     ForEach(d.habits) { h in
                         HStack(spacing: 12) {
-                            IconTile(systemName: symbol(h.icon), size: 32)
+                            Glyph(systemName: symbol(h.icon), size: 32)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(h.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                                Text(h.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                                 Text(h.isCount ? "\(Fmt.number(h.value ?? 0)) / \(Fmt.number(h.target)) \(h.unit) today" : (h.done ? "Done today" : "Not done today"))
-                                    .font(.caption2).foregroundStyle(JK.tertiary)
+                                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
                             }
                             Spacer()
                             Button(role: .destructive) { Task { await remove(h) } } label: { Image(systemName: "trash") }
                                 .buttonStyle(.plain)
-                                .foregroundStyle(JK.tertiary)
+                                .foregroundStyle(JK.textTertiary)
                         }
                         .padding(10)
                     }
@@ -402,7 +402,7 @@ private struct CoachHabitsTab: View {
                 .jkCard(padding: 2)
             }
             Button { adding = true } label: { Label("Add habit", systemImage: "plus") }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
 
             Eyebrow(text: "Nutrition targets", trailing: "Today \(Fmt.number(d.nutrition.totals.kcal, digits: 0)) kcal logged")
             VStack(alignment: .leading, spacing: 8) {
@@ -414,13 +414,13 @@ private struct CoachHabitsTab: View {
                     JKField(label: "Carbs g", text: $carbs, prompt: "260", keyboard: .numberPad)
                     JKField(label: "Fat g", text: $fat, prompt: "80", keyboard: .numberPad)
                 }
-                if let notice { Text(notice).font(.caption2).foregroundStyle(JK.secondary) }
+                if let notice { Text(notice).font(.jkCaption).foregroundStyle(JK.textSecondary) }
                 Button {
                     Task { await saveTargets() }
                 } label: {
-                    if savingTargets { ProgressView().tint(.black) } else { Text("Save targets") }
+                    if savingTargets { ProgressView().tint(JK.onPrimary) } else { Text("Save targets") }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(savingTargets || [kcal, protein, carbs, fat].contains { parseNumber($0) == nil })
             }
             .jkCard()
@@ -503,8 +503,8 @@ private struct AddHabitSheet: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 8) {
                         ForEach(icons, id: \.self) { i in
                             Button { icon = i } label: {
-                                IconTile(systemName: i, size: 40)
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(icon == i ? JK.text : .clear, lineWidth: 1.5))
+                                Glyph(systemName: i, size: 40)
+                                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.control).stroke(icon == i ? JK.text : .clear, lineWidth: 1.5))
                             }
                             .buttonStyle(.plain)
                         }
@@ -515,15 +515,15 @@ private struct AddHabitSheet: View {
                     }
                     if healthKind != "none" {
                         Text("Filled from the client's Apple Health and done once the value reaches the target.")
-                            .font(.caption2).foregroundStyle(JK.tertiary)
+                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await save() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text("Add habit") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text("Add habit") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || (kind == "count" && parseNumber(target) == nil))
                 }
                 .padding(16)
@@ -577,15 +577,15 @@ private struct CoachSessionsTab: View {
             let upcoming = list.filter { $0.end >= Date() }.sorted { $0.start < $1.start }
             let past = list.filter { $0.end < Date() }.sorted { $0.start > $1.start }
             Eyebrow(text: "Upcoming")
-            if upcoming.isEmpty { Text("Nothing booked.").font(.caption).foregroundStyle(JK.tertiary) }
+            if upcoming.isEmpty { Text("Nothing booked.").font(.jkCaption).foregroundStyle(JK.textTertiary) }
             ForEach(upcoming) { b in row(b) }
             NavigationLink { BookSessionView(client: client) } label: {
                 Label("Book a session for \(client.name)", systemImage: "plus")
-                    .font(.caption)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.card).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
             }
             if !past.isEmpty {
                 Eyebrow(text: "Past 30 days")
@@ -637,10 +637,10 @@ private struct CoachNotesTab: View {
             ForEach(list) { c in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Week of \(Fmt.dayMonth(c.week))").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        Text("Week of \(Fmt.dayMonth(c.week))").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                         Spacer()
                         if c.reviewedAt != nil {
-                            Label("Reviewed", systemImage: "checkmark").font(.caption2).foregroundStyle(JK.tertiary)
+                            Label("Reviewed", systemImage: "checkmark").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                     }
                     HStack(spacing: 8) {
@@ -649,18 +649,18 @@ private struct CoachNotesTab: View {
                         StatTile(label: "Pain", value: c.pain.isEmpty ? "None" : c.pain.joined(separator: ", "))
                     }
                     if let note = c.note, !note.isEmpty {
-                        Text(note).font(.footnote).foregroundStyle(JK.secondary)
+                        Text(note).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     }
                     if let reply = c.reply, !reply.isEmpty {
-                        Label(reply, systemImage: "arrowshape.turn.up.left").font(.caption).foregroundStyle(JK.text)
+                        Label(reply, systemImage: "arrowshape.turn.up.left").font(.jkCaption).foregroundStyle(JK.text)
                     }
                     HStack(spacing: 8) {
                         TextField(c.reply == nil ? "Reply to this check-in" : "Update your reply",
                                   text: Binding(get: { replies[c.id] ?? "" }, set: { replies[c.id] = $0 }), axis: .vertical)
                             .lineLimit(1...4)
-                            .font(.footnote)
+                            .font(.jkCaption)
                             .padding(10)
-                            .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8))
+                            .background(JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                         Button {
                             Task { await reply(c) }
                         } label: {

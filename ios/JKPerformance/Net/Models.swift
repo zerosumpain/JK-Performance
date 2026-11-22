@@ -52,6 +52,8 @@ struct PersonRef: Codable, Hashable, Identifiable {
     let id: String
     let name: String
     var initials: String?
+    /// The coach's portrait (GET /api/media/:id). Absent on older servers and for clients.
+    var avatarMediaId: String?
 
     var displayInitials: String { initials ?? Fmt.initials(name) }
 }

@@ -183,8 +183,8 @@ struct LoadingCard: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ProgressView().tint(JK.secondary)
-            Text(text).font(.caption).foregroundStyle(JK.tertiary)
+            ProgressView().tint(JK.textSecondary)
+            Text(text).font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
@@ -198,10 +198,10 @@ struct EmptyCard: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: systemName).font(.title2).foregroundStyle(JK.tertiary)
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+            Image(systemName: systemName).font(.title2.weight(.light)).foregroundStyle(JK.textTertiary)
+            Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
             if let detail {
-                Text(detail).font(.caption2).foregroundStyle(JK.tertiary).multilineTextAlignment(.center)
+                Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary).multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
@@ -217,12 +217,12 @@ struct ErrorCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Couldn't load", systemImage: "exclamationmark.triangle")
-                .font(.subheadline.weight(.semibold))
+                .font(.jkCallout.weight(.semibold))
                 .foregroundStyle(JK.text)
-            Text(message).font(.caption).foregroundStyle(JK.secondary)
+            Text(message).font(.jkCaption).foregroundStyle(JK.textSecondary)
             if let retry {
                 Button("Try again") { Task { await retry() } }
-                    .font(.caption.weight(.semibold))
+                    .font(.jkCaption.weight(.semibold))
                     .buttonStyle(SmallPillStyle())
             }
         }
@@ -237,11 +237,11 @@ struct ErrorBanner: View {
 
     var body: some View {
         Label(message, systemImage: "exclamationmark.circle")
-            .font(.caption)
-            .foregroundStyle(JK.secondary)
+            .font(.jkCaption)
+            .foregroundStyle(JK.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
     }
 }
 
@@ -281,26 +281,6 @@ extension View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(message.wrappedValue ?? "")
-        }
-    }
-}
-
-/// Field styling for forms inside cards and sheets.
-struct JKField: View {
-    let label: String
-    @Binding var text: String
-    var prompt = ""
-    var keyboard: UIKeyboardType = .default
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 10)).foregroundStyle(JK.tertiary)
-            TextField(prompt, text: $text)
-                .keyboardType(keyboard)
-                .font(.subheadline)
-                .foregroundStyle(JK.text)
-                .padding(.horizontal, 10).padding(.vertical, 8)
-                .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 }

@@ -136,6 +136,7 @@ final class AppSession {
 
     func clear() {
         Reminders.shared.clearPending()
+        PortraitStore.shared.clear()
         api.setToken(nil)
         Keychain.save(nil, account: Self.coachSlot)
         me = nil

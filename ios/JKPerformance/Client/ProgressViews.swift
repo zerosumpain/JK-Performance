@@ -40,7 +40,7 @@ struct ProgressScreen: View {
                         }
                     }
                     Button { measuring = true } label: { Label("Add measurement", systemImage: "plus") }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
 
                     Eyebrow(text: "Personal records", trailing: "Best logged load")
                     if p.records.isEmpty {
@@ -49,13 +49,13 @@ struct ProgressScreen: View {
                         VStack(spacing: 0) {
                             ForEach(p.records, id: \.exercise) { pr in
                                 HStack {
-                                    Image(systemName: "trophy").foregroundStyle(JK.secondary)
-                                    Text(pr.exercise).font(.subheadline.weight(.medium))
+                                    Image(systemName: "trophy").foregroundStyle(JK.textSecondary)
+                                    Text(pr.exercise).font(.jkCallout.weight(.medium))
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 0) {
-                                        Text("\(Fmt.number(pr.kg)) kg").font(.subheadline.weight(.semibold))
+                                        Text("\(Fmt.number(pr.kg)) kg").font(.jkCallout.weight(.semibold))
                                         if let gain = pr.gain {
-                                            Text("\(Fmt.delta(gain)) kg").font(.caption2).foregroundStyle(JK.tertiary)
+                                            Text("\(Fmt.delta(gain)) kg").font(.jkCaption).foregroundStyle(JK.textTertiary)
                                         }
                                     }
                                 }
@@ -69,13 +69,13 @@ struct ProgressScreen: View {
 
                 NavigationLink { ChallengesView() } label: {
                     HStack(spacing: 12) {
-                        IconTile(systemName: "trophy")
+                        Glyph(systemName: "trophy")
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Challenges").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                            Text("Run, walk or row with the group").font(.caption2).foregroundStyle(JK.tertiary)
+                            Text("Challenges").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                            Text("Run, walk or row with the group").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                        Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     .jkCard(padding: 12)
                 }
@@ -83,7 +83,7 @@ struct ProgressScreen: View {
                 HStack {
                     Eyebrow(text: "Progress photos")
                     Spacer()
-                    Label("Private to you and Coach", systemImage: "lock").font(.caption2).foregroundStyle(JK.tertiary)
+                    Label("Private to you and Coach", systemImage: "lock").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 photoRow
             }
@@ -167,12 +167,12 @@ struct ProgressScreen: View {
             }
             PhotosPicker(selection: $picked, matching: .images) {
                 Group {
-                    if uploading { ProgressView().tint(JK.secondary) } else { Image(systemName: "camera") }
+                    if uploading { ProgressView().tint(JK.textSecondary) } else { Image(systemName: "camera") }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.control).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
             }
-            .foregroundStyle(JK.secondary)
+            .foregroundStyle(JK.textSecondary)
             .frame(height: 90)
             .disabled(uploading)
         }
@@ -187,17 +187,15 @@ struct ProgressScreen: View {
                 Spacer()
                 if let delta = p.weight?.delta { DeltaBadge(text: "\(Fmt.delta(delta)) kg") }
             }
-            (Text(p.weight?.latest.map { Fmt.number($0) } ?? "–").font(.largeTitle.weight(.semibold))
-                + Text(" kg").font(.caption).foregroundColor(JK.tertiary))
+            (Text(p.weight?.latest.map { Fmt.number($0) } ?? "–").font(.jkNumberHero)
+                + Text(" kg").font(.jkCaption).foregroundColor(JK.textTertiary))
                 .foregroundStyle(JK.text)
             if points.count >= 2 {
                 let values = points.map(\.1)
                 let low = (values.min() ?? 0) - 1, high = (values.max() ?? 0) + 1
                 Chart(points, id: \.0) { pt in
-                    AreaMark(x: .value("Day", pt.0), yStart: .value("kg", low), yEnd: .value("kg", pt.1))
-                        .foregroundStyle(LinearGradient(colors: [JK.text.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
                     LineMark(x: .value("Day", pt.0), y: .value("kg", pt.1))
-                        .foregroundStyle(JK.text)
+                        .foregroundStyle(JK.data)
                 }
                 .chartYScale(domain: low...high)
                 .chartXAxis(.hidden)
@@ -205,7 +203,7 @@ struct ProgressScreen: View {
                 .frame(height: 90)
             } else {
                 Text("Add two weigh-ins (or turn on Apple Health) to see the trend.")
-                    .font(.caption2).foregroundStyle(JK.tertiary)
+                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
         .jkCard()
@@ -267,24 +265,24 @@ struct AuthedPhoto: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 10).fill(JK.cardRaised)
+            RoundedRectangle(cornerRadius: JK.Radius.control).fill(JK.raised)
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: JK.Radius.control))
             } else {
                 Image(systemName: failed ? "exclamationmark.triangle" : "figure.stand")
-                    .font(.system(size: failed ? 18 : 40))
-                    .foregroundStyle(JK.tertiary)
+                    .font(failed ? Font.jkHeadline : Font.largeTitle)
+                    .foregroundStyle(JK.textTertiary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: failed ? .center : .bottom)
             }
             Text(Fmt.dayMonth(photo.date))
-                .font(.system(size: 9))
-                .foregroundStyle(JK.secondary)
+                .font(.jkMicro)
+                .foregroundStyle(JK.textSecondary)
                 .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(Color.black.opacity(0.5), in: Capsule())
+                .background(JK.scrim, in: Capsule())
                 .padding(6)
         }
         .task(id: photo.id) {
@@ -324,15 +322,15 @@ private struct MeasurementSheet: View {
                 Segmented(options: kinds, selection: $kind) { ProgressScreen.label($0) }
                 JKField(label: "\(ProgressScreen.label(kind)) (\(unitName))", text: $value, prompt: "0", keyboard: .decimalPad)
                 DatePicker("Date", selection: $date, in: ...Date(), displayedComponents: .date)
-                    .font(.subheadline)
+                    .font(.jkCallout)
                     .foregroundStyle(JK.text)
                 if let error { ErrorBanner(message: error) }
                 Button {
                     Task { await submit() }
                 } label: {
-                    if saving { ProgressView().tint(.black) } else { Text("Save") }
+                    if saving { ProgressView().tint(JK.onPrimary) } else { Text("Save") }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(parseNumber(value) == nil || saving)
                 Spacer()
             }
@@ -366,36 +364,6 @@ private struct MeasurementSheet: View {
     }
 }
 
-struct DeltaBadge: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(JK.secondary)
-            .padding(.horizontal, 8).padding(.vertical, 3)
-            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
-    }
-}
-
-struct StatTile: View {
-    let label: String
-    let value: String
-    var delta: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 10)).foregroundStyle(JK.tertiary)
-            Text(value).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
-                .lineLimit(1).minimumScaleFactor(0.6)
-            if let delta {
-                Text(delta).font(.system(size: 10)).foregroundStyle(JK.tertiary)
-            }
-        }
-        .jkCard(padding: 10)
-    }
-}
-
 // MARK: - Challenges
 
 struct ChallengesView: View {
@@ -422,12 +390,12 @@ struct ChallengesView: View {
                             VStack(spacing: 0) {
                                 ForEach(c.leaderboard) { row in
                                     HStack(spacing: 12) {
-                                        Text("\(row.rank)").font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(row.isMe == true ? JK.tertiary : JK.text).frame(width: 18)
+                                        Text("\(row.rank)").font(.jkCallout.weight(.semibold))
+                                            .foregroundStyle(row.isMe == true ? JK.textTertiary : JK.text).frame(width: 18)
                                         Avatar(initials: row.initials ?? Fmt.initials(row.name), size: 26)
-                                        Text(row.isMe == true ? "You" : row.name).font(.subheadline.weight(.medium))
+                                        Text(row.isMe == true ? "You" : row.name).font(.jkCallout.weight(.medium))
                                         Spacer()
-                                        Text("\(Fmt.number(row.value)) km").font(.subheadline.weight(.semibold))
+                                        Text("\(Fmt.number(row.value)) km").font(.jkCallout.weight(.semibold))
                                     }
                                     .foregroundStyle(JK.text)
                                     .padding(12)
@@ -441,7 +409,7 @@ struct ChallengesView: View {
                         }
                     }
                     Text("Distance comes from Apple Health (walking, running and rowing). Turn it on under Account › Health & devices.")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
             }
             .padding(16)
@@ -456,27 +424,27 @@ struct ChallengesView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let days = c.daysLeft {
                 Text(days == 1 ? "1 day left" : "\(days) days left")
-                    .font(.caption2)
+                    .font(.jkCaption)
                     .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(JK.cardRaised, in: Capsule())
-                    .foregroundStyle(JK.secondary)
+                    .background(JK.raised, in: Capsule())
+                    .foregroundStyle(JK.textSecondary)
             }
             Spacer().frame(height: 30)
-            Text(c.title).font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+            Text(c.title).font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
             Text([c.detail, c.members.map { "\($0) members taking part." }].compactMap { $0 }.joined(separator: " "))
-                .font(.caption).foregroundStyle(JK.secondary)
+                .font(.jkCaption).foregroundStyle(JK.textSecondary)
             if c.isJoined {
                 HStack {
                     ThinBar(fraction: c.target > 0 ? c.myValue / c.target : 0, height: 4)
-                    Text("\(Fmt.number(c.myValue)) / \(Fmt.number(c.target)) km").font(.caption.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("\(Fmt.number(c.myValue)) / \(Fmt.number(c.target)) km").font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
                 }
             } else {
                 Button {
                     Task { await join(c) }
                 } label: {
-                    if joining == c.id { ProgressView().tint(.black) } else { Text("Join challenge") }
+                    if joining == c.id { ProgressView().tint(JK.onPrimary) } else { Text("Join challenge") }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(joining != nil)
             }
         }
@@ -511,8 +479,8 @@ private struct BadgeTile: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            IconTile(systemName: systemName, size: 32)
-            Text(text).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
+            Glyph(systemName: systemName, size: 32)
+            Text(text).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
         }
         .jkCard(padding: 10)
     }
@@ -540,14 +508,14 @@ struct WeeklyCheckInView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("How did this week feel, \(session.me?.firstName ?? "")?").font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("\(coachName) reviews these every week.").font(.caption).foregroundStyle(JK.secondary)
+                    Text("How did this week feel, \(session.me?.firstName ?? "")?").font(.jkDisplay).foregroundStyle(JK.text)
+                    Text("\(coachName) reviews these every week.").font(.jkCaption).foregroundStyle(JK.textSecondary)
                 }
                 if let loadError { ErrorBanner(message: loadError) }
                 RatingCard(title: "Energy levels", hint: "1 = drained, 5 = excellent", value: $energy)
                 RatingCard(title: "Sleep quality", hint: nil, value: $sleep)
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Any pain or niggles?").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Any pain or niggles?").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             Chip(label: "None", selected: pain.isEmpty) { pain = [] }
@@ -560,16 +528,16 @@ struct WeeklyCheckInView: View {
                     }
                     TextField("Tell \(coachName) more", text: $note, axis: .vertical)
                         .lineLimit(2...5)
-                        .font(.footnote)
+                        .font(.jkCaption)
                         .padding(10)
-                        .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8))
+                        .background(JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                 }
                 .jkCard()
                 NavigationLink { ProgressScreen() } label: {
                     HStack {
-                        Label("Add weekly photos", systemImage: "camera").font(.subheadline.weight(.medium))
+                        Label("Add weekly photos", systemImage: "camera").font(.jkCallout.weight(.medium))
                         Spacer()
-                        Text("Optional").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Optional").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     .foregroundStyle(JK.text)
                     .jkCard()
@@ -578,14 +546,14 @@ struct WeeklyCheckInView: View {
                 Button {
                     Task { await submit() }
                 } label: {
-                    if saving { ProgressView().tint(.black) } else { Text(sent ? "Sent ✓" : (current == nil ? "Send check-in" : "Update check-in")) }
+                    if saving { ProgressView().tint(JK.onPrimary) } else { Text(sent ? "Sent ✓" : (current == nil ? "Send check-in" : "Update check-in")) }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(saving)
 
                 if let last = history?.checkins.first(where: { $0.reply?.isEmpty == false }) {
                     Eyebrow(text: "Latest reply · week of \(Fmt.dayMonth(last.week))")
-                    Text(last.reply ?? "").font(.footnote).foregroundStyle(JK.text).jkCard()
+                    Text(last.reply ?? "").font(.jkCaption).foregroundStyle(JK.text).jkCard()
                 }
             }
             .padding(16)
@@ -633,32 +601,3 @@ struct WeeklyCheckInView: View {
     }
 }
 
-private struct RatingCard: View {
-    let title: String
-    let hint: String?
-    @Binding var value: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-            if let hint { Text(hint).font(.caption2).foregroundStyle(JK.tertiary) }
-            HStack(spacing: 8) {
-                ForEach(1...5, id: \.self) { n in
-                    Button {
-                        value = n
-                    } label: {
-                        Text("\(n)")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
-                            .foregroundStyle(value == n ? Color.black : JK.text)
-                            .background(value == n ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.cardRaised),
-                                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .jkCard()
-    }
-}

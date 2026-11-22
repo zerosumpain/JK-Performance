@@ -98,8 +98,8 @@ struct PriceLabel: View {
                 .foregroundStyle(JK.text)
             if pence > 0 {
                 Text(period == .month ? "/ month" : "/ year")
-                    .font(.caption2)
-                    .foregroundStyle(JK.tertiary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textTertiary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -112,10 +112,10 @@ struct SaveBadge: View {
 
     var body: some View {
         Text("Save \(percent)%")
-            .font(.caption2.weight(.semibold))
+            .font(.jkCaption.weight(.semibold))
             .foregroundStyle(JK.text)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .overlay(Capsule().stroke(JK.secondary, lineWidth: 1))
+            .overlay(Capsule().stroke(JK.textSecondary, lineWidth: 1))
     }
 }
 
@@ -123,10 +123,10 @@ struct SaveBadge: View {
 struct PopularBadge: View {
     var body: some View {
         Text("Most popular")
-            .font(.system(size: 9, weight: .semibold))
+            .font(.jkMicro.weight(.semibold))
             .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(JK.chrome, in: Capsule())
-            .foregroundStyle(.black)
+            .background(JK.primaryFill, in: Capsule())
+            .foregroundStyle(JK.onPrimary)
     }
 }
 
@@ -206,7 +206,7 @@ struct StepScaffold<Content: View, Actions: View>: View {
             .padding(.bottom, 10)
             .background(JK.bg)
             .overlay(alignment: .top) {
-                Rectangle().fill(JK.stroke).frame(height: 1)
+                Rectangle().fill(JK.hairline).frame(height: 1)
             }
         }
         .background(JK.bg.ignoresSafeArea())
@@ -218,7 +218,7 @@ struct StepScaffold<Content: View, Actions: View>: View {
                 if let back { back() }
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.body.weight(.semibold))
+                    .font(.jkBody.weight(.semibold))
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
@@ -234,11 +234,11 @@ struct StepScaffold<Content: View, Actions: View>: View {
                 if let skip { skip() }
             } label: {
                 Text("Skip")
-                    .font(.subheadline)
+                    .font(.jkCallout)
                     .frame(minWidth: 32, minHeight: 32)
                     .contentShape(Rectangle())
             }
-            .foregroundStyle(JK.secondary)
+            .foregroundStyle(JK.textSecondary)
             .opacity(skip == nil ? 0 : 1)
             .disabled(skip == nil)
             .accessibilityHidden(skip == nil)
@@ -251,14 +251,14 @@ struct StepScaffold<Content: View, Actions: View>: View {
                 JKMark(size: 64).padding(.bottom, 12)
             }
             Text(title)
-                .font(.title.weight(.semibold))
+                .font(.jkDisplay)
                 .foregroundStyle(JK.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             if let subtitle {
                 Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCallout)
+                    .foregroundStyle(JK.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -285,8 +285,8 @@ struct ChoiceCard: View {
             label
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(selected ? JK.cardRaised : JK.card, in: shape)
-                .overlay(shape.stroke(selected ? JK.text : JK.stroke, lineWidth: selected ? 1.5 : 1))
+                .background(selected ? JK.raised : JK.surface, in: shape)
+                .overlay(shape.stroke(selected ? JK.text : JK.hairline, lineWidth: selected ? 1.5 : 1))
                 .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -299,12 +299,12 @@ struct ChoiceCard: View {
         if stacked {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
-                    IconTile(systemName: systemName, size: 36)
+                    Glyph(systemName: systemName, size: 36)
                     Spacer(minLength: 4)
                     CheckCircle(on: selected)
                 }
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.jkCallout.weight(.semibold))
                     .foregroundStyle(JK.text)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
@@ -312,11 +312,11 @@ struct ChoiceCard: View {
             }
         } else {
             HStack(spacing: 12) {
-                IconTile(systemName: systemName, size: 40)
+                Glyph(systemName: systemName, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     if let detail {
-                        Text(detail).font(.caption).foregroundStyle(JK.tertiary)
+                        Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -329,20 +329,13 @@ struct ChoiceCard: View {
 
 // MARK: - Features and plans
 
-/// A feature's rounded-square icon tile, keyed by feature id.
+/// A feature's glyph, unboxed, keyed by feature id.
 struct FeatureTile: View {
     let featureId: String
     var size: CGFloat = 38
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-        return Image(systemName: OnboardingCatalog.featureSymbol(featureId))
-            .font(.system(size: size * 0.42))
-            .foregroundStyle(JK.text)
-            .frame(width: size, height: size)
-            .background(JK.cardRaised, in: shape)
-            .overlay(shape.stroke(JK.stroke, lineWidth: 1))
-            .accessibilityHidden(true)
+        Glyph(systemName: OnboardingCatalog.featureSymbol(featureId), size: size)
     }
 }
 
@@ -355,9 +348,9 @@ struct FeatureRow: View {
         HStack(alignment: showDetail ? .top : .center, spacing: 12) {
             FeatureTile(featureId: feature.id, size: 34)
             VStack(alignment: .leading, spacing: 2) {
-                Text(feature.title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(feature.title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                 if showDetail {
-                    Text(feature.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                    Text(feature.detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -375,12 +368,12 @@ struct PlanRow: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(plan.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(plan.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     if plan.isFeatured { PopularBadge() }
                 }
                 Text(plan.detail)
-                    .font(.caption2)
-                    .foregroundStyle(JK.tertiary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textTertiary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
@@ -401,14 +394,14 @@ struct NumberedRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(number)")
-                .font(.subheadline.weight(.semibold))
+                .font(.jkCallout.weight(.semibold))
                 .foregroundStyle(JK.text)
                 .frame(width: 30, height: 30)
-                .overlay(Circle().stroke(JK.secondary, lineWidth: 1))
+                .overlay(Circle().stroke(JK.textSecondary, lineWidth: 1))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                 if let detail {
-                    Text(detail).font(.caption).foregroundStyle(JK.tertiary)
+                    Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -416,20 +409,5 @@ struct NumberedRow: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// The JK mark in its outlined square, as on Home and Membership.
-struct JKMark: View {
-    var size: CGFloat = 56
-
-    var body: some View {
-        Text("JK")
-            .font(.system(size: size * 0.36, weight: .semibold))
-            .foregroundStyle(JK.text)
-            .frame(width: size, height: size)
-            .background(Color(white: 0.06), in: RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous).stroke(JK.secondary, lineWidth: 1))
-            .accessibilityHidden(true)
     }
 }

@@ -30,7 +30,7 @@ struct MessagesThreadView: View {
                             }
                             ForEach(Array(messages.enumerated()), id: \.element.id) { index, m in
                                 if index == 0 || !Day.same(messages[index - 1].at, m.at) {
-                                    Text(dayLabel(m.at)).font(.caption2).foregroundStyle(JK.tertiary).padding(.top, 8)
+                                    Text(dayLabel(m.at)).font(.jkCaption).foregroundStyle(JK.textTertiary).padding(.top, 8)
                                 }
                                 Bubble(message: m, mine: m.fromId == session.me?.id)
                                     .id(m.id)
@@ -52,17 +52,17 @@ struct MessagesThreadView: View {
                 TextField("Message", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(JK.card, in: Capsule())
-                    .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                    .background(JK.surface, in: Capsule())
+                    .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
                 Button {
                     Task { await send() }
                 } label: {
                     Group {
-                        if sending { ProgressView().tint(.black) } else { Image(systemName: "paperplane.fill") }
+                        if sending { ProgressView().tint(JK.onPrimary) } else { Image(systemName: "paperplane.fill") }
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(JK.onPrimary)
                     .frame(width: 34, height: 34)
-                    .background(JK.chrome, in: Circle())
+                    .background(JK.primaryFill, in: Circle())
                 }
                 .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -76,8 +76,8 @@ struct MessagesThreadView: View {
                 HStack(spacing: 8) {
                     Avatar(initials: Fmt.initials(otherName), size: 26)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(otherName).font(.subheadline.weight(.semibold))
-                        Text(subtitle).font(.system(size: 10)).foregroundStyle(JK.tertiary)
+                        Text(otherName).font(.jkCallout.weight(.semibold))
+                        Text(subtitle).font(.jkMicro).foregroundStyle(JK.textTertiary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -146,25 +146,25 @@ private struct Bubble: View {
             VStack(alignment: .trailing, spacing: 4) {
                 if message.workoutId != nil {
                     HStack(spacing: 8) {
-                        IconTile(systemName: "dumbbell", size: 28)
+                        Glyph(systemName: "dumbbell", size: 28)
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Workout").font(.caption.weight(.semibold))
-                            Text("Plan updated · see your Plan tab").font(.system(size: 10)).foregroundStyle(JK.tertiary)
+                            Text("Workout").font(.jkCaption.weight(.semibold))
+                            Text("Plan updated · see your Plan tab").font(.jkCaption).foregroundStyle(JK.textSecondary)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !message.text.isEmpty {
-                    Text(message.text).font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(message.text).font(.jkBody).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Text(Fmt.time(message.at)).font(.system(size: 9)).foregroundStyle(mine ? Color.black.opacity(0.5) : JK.tertiary)
+                Text(Fmt.time(message.at)).font(.jkMicro).foregroundStyle(JK.textSecondary)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(12)
-            .foregroundStyle(mine ? Color.black : JK.text)
-            .background(mine ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.card),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(mine ? Color.clear : JK.stroke, lineWidth: 1))
+            .foregroundStyle(JK.text)
+            // Your own words sit raised; the other side's on surface.
+            .background(mine ? JK.raised : JK.surface,
+                        in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
             .frame(maxWidth: 280, alignment: mine ? .trailing : .leading)
             if !mine { Spacer(minLength: 50) }
         }
@@ -195,21 +195,21 @@ struct CoachThreadsView: View {
                                             Avatar(initials: t.client.displayInitials, size: 34)
                                             VStack(alignment: .leading, spacing: 2) {
                                                 HStack {
-                                                    Text(t.client.name).font(.subheadline.weight(.semibold))
+                                                    Text(t.client.name).font(.jkCallout.weight(.semibold))
                                                     Spacer()
                                                     if let at = t.last?.at {
                                                         Text(Day.same(at, Date()) ? Fmt.time(at) : Fmt.dayMonth(at))
-                                                            .font(.caption2).foregroundStyle(JK.tertiary)
+                                                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
                                                     }
                                                 }
-                                                Text(t.last?.text ?? "No messages").font(.caption2).foregroundStyle(JK.tertiary).lineLimit(1)
+                                                Text(t.last?.text ?? "No messages").font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(1)
                                             }
                                             if t.unread > 0 {
                                                 Text("\(t.unread)")
-                                                    .font(.system(size: 10, weight: .bold))
+                                                    .font(.jkMicro.weight(.bold))
                                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                                     .background(JK.text, in: Capsule())
-                                                    .foregroundStyle(.black)
+                                                    .foregroundStyle(JK.onPrimary)
                                             }
                                         }
                                         .foregroundStyle(JK.text)

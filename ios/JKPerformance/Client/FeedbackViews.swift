@@ -20,16 +20,16 @@ struct WeeklyFeedbackListView: View {
                     ForEach(list) { r in
                         NavigationLink { ReportDetailView(reportId: r.id ?? "") } label: {
                             HStack(spacing: 12) {
-                                IconTile(systemName: "text.bubble")
+                                Glyph(systemName: "text.bubble")
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(r.weekLabel).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                    Text(firstLine(r)).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2)
+                                    Text(r.weekLabel).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                                    Text(firstLine(r)).font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(2)
                                 }
                                 Spacer()
                                 if r.isUnread {
                                     Circle().fill(JK.text).frame(width: 8, height: 8).accessibilityLabel("New")
                                 }
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                                Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                             }
                             .jkCard(padding: 12)
                         }
@@ -71,10 +71,10 @@ struct ReportDetailView: View {
                 Loadable(value: report, error: error, retry: load) { r in
                     VStack(alignment: .leading, spacing: 2) {
                         Eyebrow(text: "\(Fmt.dayMonth(r.week)) – \(Fmt.dayMonth(r.weekEnd))")
-                        Text("Your week").font(.largeTitle.weight(.semibold)).foregroundStyle(JK.text)
+                        Text("Your week").font(.jkLetterHeadline).foregroundStyle(JK.text)
                         if let by = r.coachName {
                             Text("From \(by)" + (r.publishedAt.map { " · \(Fmt.dayMonth($0))" } ?? ""))
-                                .font(.caption).foregroundStyle(JK.tertiary)
+                                .font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                     }
                     ReportSection(title: "How it went", text: r.summary)
@@ -109,7 +109,7 @@ private struct ReportSection: View {
         if !text.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Eyebrow(text: title)
-                Text(text).font(.body).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
+                Text(text).font(.jkBody).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .jkCard()
@@ -144,7 +144,7 @@ struct ReportStatsGrid: View {
                 }
             }
             if let types = stats.activities?.types, !types.isEmpty {
-                Text(types.joined(separator: " · ")).font(.caption2).foregroundStyle(JK.tertiary)
+                Text(types.joined(separator: " · ")).font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
     }
@@ -159,7 +159,7 @@ struct PlanList: View {
         VStack(alignment: .leading, spacing: 8) {
             Eyebrow(text: "Next week's plan", trailing: "\(Fmt.dayMonth(plan.from)) – \(Fmt.dayMonth(plan.to))")
             if plan.workouts.isEmpty {
-                Text("Not written yet.").font(.caption).foregroundStyle(JK.tertiary)
+                Text("Not written yet.").font(.jkCaption).foregroundStyle(JK.textTertiary)
             } else {
                 VStack(spacing: 0) {
                     ForEach(plan.workouts) { w in
@@ -168,7 +168,7 @@ struct PlanList: View {
                         } else {
                             row(w, chevron: false)
                         }
-                        if w.id != plan.workouts.last?.id { Divider().overlay(JK.stroke) }
+                        if w.id != plan.workouts.last?.id { Divider().overlay(JK.hairline) }
                     }
                 }
                 .jkCard(padding: 4)
