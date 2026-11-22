@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "videocam" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M187.27-187.27q-28.63 0-48.45-19.92Q119-227.1 119-255.54v-448.92q0-28.44 19.82-48.35 19.82-19.92 48.45-19.92h448.92q28.44 0 48.36 19.92 19.91 19.91 19.91 48.35v183.88L811.88-628q8.04-8.04 18.68-3.93 10.63 4.1 10.63 15.59v272.68q0 11.49-10.63 15.59-10.64 4.11-18.68-3.93L704.46-439.42v183.88q0 28.44-19.91 48.35-19.92 19.92-48.36 19.92H187.27Z" />
+    </group>
+</vector>

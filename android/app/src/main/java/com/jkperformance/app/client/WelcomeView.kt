@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -23,7 +24,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,15 +46,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.BrandIntro
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.SmallPillButton
-import com.jkperformance.app.design.bold
-import com.jkperformance.app.design.medium
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.APIError
 import com.jkperformance.app.net.AppSession
@@ -63,6 +54,8 @@ import com.jkperformance.app.net.isCancellation
 import com.jkperformance.app.net.readable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /**
  * First launch. Sign-up is open: signing in creates a client account;
@@ -149,7 +142,7 @@ fun WelcomeView() {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(JK.bg)) {
+    Box(Modifier.fillMaxSize().background(JKColors.bg)) {
         BrandIntro()
         Column(Modifier.fillMaxSize().systemBarsPadding()) {
             Spacer(Modifier.weight(1f))
@@ -166,7 +159,7 @@ fun WelcomeView() {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (message != null) {
-                    Text(message, style = JKType.caption, color = JK.secondary, textAlign = TextAlign.Center)
+                    Text(message, style = JKType.caption, color = JKColors.textSecondary, textAlign = TextAlign.Center)
                 }
                 val c = config
                 when {
@@ -180,7 +173,7 @@ fun WelcomeView() {
                                 // The code sign-in shows its spinner on the top button, as the iPhone's does on its only one.
                                 spinning = pending == "google" || pending == "code",
                                 onClick = { signInWithGoogle(googleId) },
-                            ) { Text("G", style = JKType.title3.bold(), color = JK.text) }
+                            ) { Text("G", style = JKType.headline, color = JKColors.text) }
                         }
                         if (c.apple) {
                             SignInButton(
@@ -193,37 +186,37 @@ fun WelcomeView() {
                                     SignIn.startApple(context)
                                 },
                             ) {
-                                Icon(AppleMark, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                Icon(AppleMark, contentDescription = null, tint = JKColors.primaryLabel, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
-                    configError != null -> SmallPillButton("Try again", onClick = { configAttempt += 1 })
+                    configError != null -> TextButton("Try again", onClick = { configAttempt += 1 })
                     else -> Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
-                        ProgressView(tint = JK.secondary)
+                        ProgressView(tint = JKColors.textSecondary)
                     }
                 }
                 if (configError != null && message == null) {
-                    Text(configError!!, style = JKType.caption, color = JK.secondary, textAlign = TextAlign.Center)
+                    Text(configError!!, style = JKType.caption, color = JKColors.textSecondary, textAlign = TextAlign.Center)
                 }
 
                 Text(
                     "I have a code",
                     style = JKType.caption.semibold(),
-                    color = JK.secondary,
+                    color = JKColors.textSecondary,
                     modifier = Modifier.padding(top = 4.dp).clickable(enabled = !busy) { showCode = true },
                 )
 
                 Text(
                     "New here? Signing in creates your client account. By continuing you agree to the Terms and Privacy Policy.",
-                    style = JKType.caption2,
-                    color = JK.tertiary,
+                    style = JKType.caption,
+                    color = JKColors.textTertiary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 Text(
                     "Privacy Policy",
-                    style = JKType.caption2,
-                    color = JK.secondary,
+                    style = JKType.caption,
+                    color = JKColors.textSecondary,
                     modifier = Modifier.clickable { uriHandler.openUri(APIClient.privacyURL) },
                 )
             }
@@ -260,14 +253,14 @@ private fun SignInButton(
     onClick: () -> Unit,
     mark: @Composable () -> Unit,
 ) {
-    val shape = rounded(12.dp)
-    val ink = if (filled) Color.Black else JK.text
+    val shape = JKShape.card
+    val ink = if (filled) JKColors.primaryLabel else JKColors.text
     Box(
         Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .heightIn(min = 48.dp)
             .clip(shape)
-            .then(if (filled) Modifier.background(Color.White, shape) else Modifier.border(1.dp, JK.text, shape))
+            .then(if (filled) Modifier.background(JKColors.primaryFill, shape) else Modifier.border(1.dp, JKColors.text, shape))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -288,38 +281,38 @@ private fun SignInButton(
 private fun CodeAlert(code: String, onCodeChange: (String) -> Unit, onCancel: () -> Unit, onSignIn: () -> Unit) {
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = Color(0.17f, 0.17f, 0.17f),
-        shape = rounded(14.dp),
-        title = { Text("Sign in with a code", style = JKType.headline, color = JK.text) },
+        containerColor = JKColors.raised,
+        shape = JKShape.card,
+        title = { Text("Sign in with a code", style = JKType.headline, color = JKColors.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("For demo and review accounts.", style = JKType.footnote, color = JK.secondary)
-                val style = JKType.subheadline.copy(color = JK.text)
+                Text("For demo and review accounts.", style = JKType.caption, color = JKColors.textSecondary)
+                val style = JKType.callout.copy(color = JKColors.text)
                 BasicTextField(
                     value = code,
                     onValueChange = onCodeChange,
                     singleLine = true,
                     textStyle = style,
-                    cursorBrush = SolidColor(JK.text),
+                    cursorBrush = SolidColor(JKColors.text),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth(),
                     decorationBox = { field ->
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .background(Color(0.11f, 0.11f, 0.11f), rounded(7.dp))
-                                .border(0.5.dp, JK.stroke, rounded(7.dp))
+                                .background(JKColors.surface, JKShape.chip)
+                                .border(0.5.dp, JKColors.hairline, JKShape.chip)
                                 .padding(horizontal = 8.dp, vertical = 7.dp),
                         ) {
-                            if (code.isEmpty()) Text("Code", style = style, color = JK.tertiary)
+                            if (code.isEmpty()) Text("Code", style = style, color = JKColors.textTertiary)
                             field()
                         }
                     },
                 )
             }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel", style = JKType.body, color = JK.text) } },
-        confirmButton = { TextButton(onClick = onSignIn) { Text("Sign in", style = JKType.body.semibold(), color = JK.text) } },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel", style = JKType.body, color = JKColors.text) } },
+        confirmButton = { TextButton(onClick = onSignIn) { Text("Sign in", style = JKType.body.semibold(), color = JKColors.text) } },
     )
 }
 
@@ -338,7 +331,7 @@ private val AppleMark: ImageVector by lazy {
                     "1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 " +
                     "2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701",
             ),
-            fill = SolidColor(Color.Black),
+            fill = SolidColor(JKColors.primaryLabel),
         )
         .build()
 }

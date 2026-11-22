@@ -20,12 +20,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -39,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import java.util.concurrent.atomic.AtomicLong
+import com.jkperformance.app.design.components.*
 
 /**
  * SwiftUI's NavigationStack + NavigationLink, for Compose: each tab owns a
@@ -135,7 +135,7 @@ fun TopBar(
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     val nav = LocalNav.current
-    Box(modifier.fillMaxWidth().height(44.dp).padding(horizontal = 8.dp)) {
+    Box(modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 8.dp)) {
         Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
             when {
                 leading != null -> leading()
@@ -143,13 +143,13 @@ fun TopBar(
                     Modifier.clickable { nav.pop() }.padding(horizontal = 4.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, contentDescription = "Back", tint = JK.text, modifier = Modifier.size(18.dp))
-                    Text("Back", style = JKType.body, color = JK.text)
+                    Glyph(IconKey.back, size = JKSize.iconTab, tint = JKColors.text, contentDescription = "Back")
+                    Text("Back", style = JKType.body, color = JKColors.text)
                 }
             }
         }
         if (title.isNotEmpty()) {
-            Text(title, style = JKType.headline, color = JK.text, maxLines = 1, modifier = Modifier.align(Alignment.Center).padding(horizontal = 80.dp))
+            Text(title, style = JKType.headline, color = JKColors.text, maxLines = 1, modifier = Modifier.align(Alignment.Center).padding(horizontal = 80.dp))
         }
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically, content = trailing)
     }
@@ -161,7 +161,7 @@ fun BarButton(text: String, bold: Boolean = false, enabled: Boolean = true, onCl
     Text(
         text,
         style = if (bold) JKType.body.semibold() else JKType.body,
-        color = if (enabled) JK.text else JK.tertiary,
+        color = if (enabled) JKColors.text else JKColors.textTertiary,
         modifier = Modifier.clickable(enabled = enabled, onClick = onClick).padding(horizontal = 8.dp, vertical = 10.dp),
     )
 }
@@ -195,7 +195,7 @@ fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
                 w.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             }
         }
-        Box(Modifier.fillMaxSize().background(JK.bg).systemBarsPadding().imePadding()) {
+        Box(Modifier.fillMaxSize().background(JKColors.bg).systemBarsPadding().imePadding()) {
             val stack = rememberNavStack()
             CompositionLocalProvider(LocalDismiss provides onDismiss) {
                 NavHost(stack) { content() }

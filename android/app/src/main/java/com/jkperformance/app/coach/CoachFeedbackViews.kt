@@ -18,7 +18,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import com.jkperformance.app.design.*
 import com.jkperformance.app.net.*
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 // region Weekly feedback (coach)
 
@@ -59,32 +60,28 @@ fun CoachReportsSection(clientId: String, clientName: String) {
     }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Eyebrow(text = "Weekly feedback")
+        Label(text = "Weekly feedback")
         Loadable(value = data, error = error, retry = { load() }) { d ->
             val current = d.reports.firstOrNull { it.week == d.suggestedWeek }
-            ChromeButton(onClick = { editingWeek = d.suggestedWeek }) {
-                Label(
-                    if (current == null) "Write feedback · week of ${Fmt.dayMonth(d.suggestedWeek)}"
-                    else "Edit feedback · week of ${Fmt.dayMonth(d.suggestedWeek)}",
-                    systemImage = "square.and.pencil",
-                    style = LocalTextStyle.current,
-                )
+            PrimaryButton(onClick = { editingWeek = d.suggestedWeek }) {
+                IconLabel(if (current == null) "Write feedback · week of ${Fmt.dayMonth(d.suggestedWeek)}"
+                    else "Edit feedback · week of ${Fmt.dayMonth(d.suggestedWeek)}", icon = IconKey.edit, style = LocalTextStyle.current)
             }
             d.reports.forEach { r ->
                 key(r.week) {
                     Row(
-                        Modifier.clickable { editingWeek = r.week }.jkCard(padding = 12.dp),
+                        Modifier.clickable { editingWeek = r.week }.jkSurface(padding = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(r.weekLabel, style = JKType.subheadline.semibold(), color = JK.text)
+                            Text(r.weekLabel, style = JKType.callout.semibold(), color = JKColors.text)
                             Text(
                                 if (r.isPublished) (if (r.readAt != null) "Published · read" else "Published · not read yet") else "Draft",
-                                style = JKType.caption2,
-                                color = JK.tertiary,
+                                style = JKType.caption,
+                                color = JKColors.textTertiary,
                             )
                         }
-                        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
                     }
                 }
             }
@@ -173,20 +170,20 @@ fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SystemImage("chevron.left", JKType.body, JK.secondary, Modifier.clickable { shift(-7) })
+                Glyph(IconKey.back, JKType.body, JKColors.textSecondary, Modifier.clickable { shift(-7) })
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Week of ${Fmt.dayMonth(shown)}", style = JKType.headline, color = JK.text)
+                    Text("Week of ${Fmt.dayMonth(shown)}", style = JKType.headline, color = JKColors.text)
                     Text(
                         when {
                             report?.isPublished == true -> "Published"
                             report?.id == null -> "Not started"
                             else -> "Draft"
                         },
-                        style = JKType.caption2,
-                        color = JK.tertiary,
+                        style = JKType.caption,
+                        color = JKColors.textTertiary,
                     )
                 }
-                SystemImage("chevron.right", JKType.body, JK.secondary, Modifier.clickable { shift(7) })
+                Glyph(IconKey.chevron, JKType.body, JKColors.textSecondary, Modifier.clickable { shift(7) })
             }
 
             error?.let { ErrorBanner(it) }
@@ -199,10 +196,10 @@ fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
                         if (c.pain.isEmpty()) null else "pain " + c.pain.joinToString(", "),
                         c.note.ifEmpty { null },
                     )
-                    Text("Check-in: " + parts.joinToString(" · "), style = JKType.caption, color = JK.secondary)
+                    Text("Check-in: " + parts.joinToString(" · "), style = JKType.caption, color = JKColors.textSecondary)
                 }
                 if (!stats.healthShared) {
-                    Text("$clientName hasn't shared Apple Health with you.", style = JKType.caption2, color = JK.tertiary)
+                    Text("$clientName hasn't shared Apple Health with you.", style = JKType.caption, color = JKColors.textTertiary)
                 }
             } else if (error == null) {
                 LoadingCard()
@@ -214,14 +211,14 @@ fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
 
             report?.plan?.let { PlanList(plan = it) }
 
-            ChromeButton(onClick = { scope.launch { save("published") } }, enabled = !saving && !empty) {
+            PrimaryButton(onClick = { scope.launch { save("published") } }, enabled = !saving && !empty) {
                 if (saving) {
-                    ProgressView(tint = Color.Black)
+                    ProgressView()
                 } else {
                     Text(if (report?.isPublished == true) "Update" else "Publish to $clientName")
                 }
             }
-            GhostButton(
+            SecondaryButton(
                 if (report?.isPublished == true) "Unpublish (back to draft)" else "Save draft",
                 onClick = { scope.launch { save("draft") } },
                 enabled = !saving,
@@ -229,16 +226,16 @@ fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
             if (report?.id != null) {
                 Text(
                     "Delete",
-                    style = JKType.footnote,
-                    color = SystemRed,
+                    style = JKType.caption,
+                    color = JKColors.error,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable { confirmDelete = true },
                 )
             }
             Text(
                 "Publishing shows it on $clientName's Home and sends them a message. You can also write these on the web: Guides › Coach desk on the web.",
-                style = JKType.caption2,
-                color = JK.tertiary,
+                style = JKType.caption,
+                color = JKColors.textTertiary,
             )
         }
     }
@@ -251,14 +248,14 @@ fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
                 TextButton(onClick = {
                     confirmDelete = false
                     scope.launch { remove() }
-                }) { Text("Delete", style = JKType.body.semibold(), color = SystemRed) }
+                }) { Text("Delete", style = JKType.body.semibold(), color = JKColors.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", style = JKType.body, color = JK.text) }
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", style = JKType.body, color = JKColors.text) }
             },
-            title = { Text("Delete this week's feedback?", style = JKType.headline, color = JK.text) },
-            containerColor = DialogGround,
-            shape = rounded(14.dp),
+            title = { Text("Delete this week's feedback?", style = JKType.headline, color = JKColors.text) },
+            containerColor = JKColors.raised,
+            shape = JKShape.card,
         )
     }
 }
@@ -266,20 +263,20 @@ fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
 /** One of the report's text boxes: a tiny caption over a raised field that grows from 3 to 12 lines. */
 @Composable
 private fun ReportField(title: String, text: String, onTextChange: (String) -> Unit) {
-    val style = JKType.subheadline.copy(color = JK.text)
+    val style = JKType.callout.copy(color = JKColors.text)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = JKType.system(10), color = JK.tertiary)
+        Text(title, style = JKType.caption, color = JKColors.textTertiary)
         BasicTextField(
             value = text,
             onValueChange = onTextChange,
             textStyle = style,
             minLines = 3,
             maxLines = 12,
-            cursorBrush = SolidColor(JK.text),
+            cursorBrush = SolidColor(JKColors.text),
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { field ->
-                Box(Modifier.fillMaxWidth().background(JK.cardRaised, rounded(10.dp)).padding(10.dp)) {
-                    if (text.isEmpty()) Text(title, style = style, color = JK.tertiary)
+                Box(Modifier.fillMaxWidth().background(JKColors.raised, JKShape.control).padding(10.dp)) {
+                    if (text.isEmpty()) Text(title, style = style, color = JKColors.textTertiary)
                     field()
                 }
             },
@@ -308,18 +305,14 @@ fun CoachHealthTab(clientId: String, clientName: String) {
 
     Loadable(value = week, error = error, retry = { load() }) { w ->
         if (!w.shared) {
-            EmptyCard(
-                systemName = "heart.slash",
-                title = "Not shared",
-                detail = "$clientName hasn't shared Apple Health with you. They can turn it on in Account › Apple Health.",
-            )
+            EmptyCard(title = "Not shared", detail = "$clientName hasn't shared Apple Health with you. They can turn it on in Account › Apple Health.")
         } else {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Eyebrow(text = "Last 7 days", trailing = w.sharedSince?.let { "Shared since ${Fmt.dayMonth(it)}" })
-                Column(Modifier.jkCard(padding = 0.dp)) {
+                Label(text = "Last 7 days", trailing = w.sharedSince?.let { "Shared since ${Fmt.dayMonth(it)}" })
+                Column(Modifier.jkSurface(padding = 0.dp)) {
                     HealthRow("", listOf("Steps", "Sleep", "RHR", "kcal"), header = true)
                     w.days.reversed().forEach { d ->
-                        HorizontalDivider(thickness = Dp.Hairline, color = JK.stroke)
+                        HorizontalDivider(thickness = Dp.Hairline, color = JKColors.hairline)
                         HealthRow(
                             d.date?.let(Day::date)?.let { Fmt.weekday(it) } ?: "",
                             listOf(
@@ -332,15 +325,15 @@ fun CoachHealthTab(clientId: String, clientName: String) {
                         )
                     }
                 }
-                Eyebrow(text = "Workouts", trailing = if (w.activities.isEmpty()) null else "${w.activities.size} this week")
+                Label(text = "Workouts", trailing = if (w.activities.isEmpty()) null else "${w.activities.size} this week")
                 if (w.activities.isEmpty()) {
-                    Text("No workouts recorded this week.", style = JKType.caption, color = JK.tertiary)
+                    Text("No workouts recorded this week.", style = JKType.caption, color = JKColors.textTertiary)
                 } else {
-                    Column(Modifier.jkCard(padding = 4.dp)) {
+                    Column(Modifier.jkSurface(padding = 4.dp)) {
                         w.activities.forEach { a ->
                             key(a.id) {
                                 ActivityRow(activity = a)
-                                if (a.id != w.activities.last().id) HorizontalDivider(thickness = Dp.Hairline, color = JK.stroke)
+                                if (a.id != w.activities.last().id) HorizontalDivider(thickness = Dp.Hairline, color = JKColors.hairline)
                             }
                         }
                     }
@@ -354,14 +347,14 @@ fun CoachHealthTab(clientId: String, clientName: String) {
 /** One row of the seven-day table: the weekday, then four right-aligned figures (or the column titles). */
 @Composable
 private fun HealthRow(day: String, values: List<String>, header: Boolean) {
-    val style = if (header) JKType.caption2 else JKType.caption.monospacedDigit()
-    val ink = if (header) JK.tertiary else JK.text
+    val style = if (header) JKType.caption else JKType.caption.monospacedDigit()
+    val ink = if (header) JKColors.textTertiary else JKColors.text
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(day, style = style, color = JK.tertiary, modifier = Modifier.width(44.dp))
+        Text(day, style = style, color = JKColors.textTertiary, modifier = Modifier.width(44.dp))
         values.forEach { Text(it, style = style, color = ink, textAlign = TextAlign.End, modifier = Modifier.weight(1f)) }
     }
 }
@@ -393,34 +386,34 @@ fun WebDeskSheet() {
             Modifier.fillMaxWidth().weight(1f).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Write feedback and plans from a computer.", style = JKType.subheadline, color = JK.secondary)
+            Text("Write feedback and plans from a computer.", style = JKType.callout, color = JKColors.textSecondary)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("1. On your computer, open", style = JKType.caption, color = JK.tertiary)
+                Text("1. On your computer, open", style = JKType.caption, color = JKColors.textTertiary)
                 // Selectable, as `.textSelection(.enabled)`: long-press to copy the address.
                 SelectionContainer {
-                    Text(link?.url ?: "jk.strangeramblings.com/desk", style = JKType.headline.monospaced(), color = JK.text)
+                    Text(link?.url ?: "jk.strangeramblings.com/desk", style = JKType.headline.monospaced(), color = JKColors.text)
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("2. Type this code", style = JKType.caption, color = JK.tertiary)
+                Text("2. Type this code", style = JKType.caption, color = JKColors.textTertiary)
                 val code = link
                 val failure = error
                 when {
                     code != null -> {
                         SelectionContainer {
-                            Text(code.code, style = JKType.system(40, FontWeight.SemiBold).monospaced(), color = JK.text)
+                            Text(code.code, style = JKType.display.monospaced(), color = JKColors.text)
                         }
-                        Text("Works once, until ${Fmt.time(code.expiresAt)}.", style = JKType.caption2, color = JK.tertiary)
+                        Text("Works once, until ${Fmt.time(code.expiresAt)}.", style = JKType.caption, color = JKColors.textTertiary)
                     }
                     failure != null -> ErrorBanner(failure)
                     else -> ProgressView()
                 }
             }
-            GhostButton("New code", onClick = { scope.launch { load() } })
+            SecondaryButton("New code", onClick = { scope.launch { load() } })
             Text(
                 "The browser stays signed in for 30 days. Sign out there when you're done on a shared computer.",
-                style = JKType.caption2,
-                color = JK.tertiary,
+                style = JKType.caption,
+                color = JKColors.textTertiary,
             )
             Spacer(Modifier.weight(1f))
         }
@@ -430,8 +423,4 @@ fun WebDeskSheet() {
 
 // endregion
 
-/** The dark grey of an iOS action sheet. */
-private val DialogGround = Color(0.17f, 0.17f, 0.17f)
 
-/** iOS's dark-mode `systemRed`, the colour of a destructive role. */
-private val SystemRed = Color(1.0f, 0.27f, 0.23f)

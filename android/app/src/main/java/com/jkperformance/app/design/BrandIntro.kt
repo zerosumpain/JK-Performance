@@ -12,22 +12,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.res.vectorResource
+import com.jkperformance.app.R
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -57,9 +55,11 @@ private val GRIP_ANGLES = listOf(-55f, 68f, 172f)
 private const val TAGLINE = "Coaching, programming and accountability."
 
 /**
- * The opening animation: a weight plate draws itself in, the JK tile traces
- * its edge and fills, a chrome sheen crosses it, then PERFORMANCE settles
- * and the tagline appears. About two seconds. Plays when the app opens
+ * The opening animation (Atelier: bone and champagne, no chrome): a weight
+ * plate draws itself in, the tile traces its edge in champagne and the JK
+ * monogram settles in bone, PERFORMANCE settles over the 2dp champagne
+ * brand rule, and the tagline appears. About two seconds. No gradients,
+ * glow or sheen. Plays when the app opens
  * (over the signed-in tabs) and behind the Welcome screen. With animations
  * turned off (Android's Reduce Motion) it shows the finished frame at once.
  *
@@ -97,8 +97,8 @@ fun BrandIntro(modifier: Modifier = Modifier, centerY: Float = 0.36f) {
         val style = TextStyle(fontSize = fixed(8f), fontWeight = FontWeight.SemiBold)
         ARC_TEXT.map { measurer.measure(it.toString(), style) }
     }
-    val monogram = remember(measurer) { measurer.measure("JK", TextStyle(fontSize = fixed(36f), fontWeight = FontWeight.SemiBold)) }
-    val tagline = remember(measurer) { measurer.measure(TAGLINE, JKType.footnote) }
+    val monogram = rememberVectorPainter(ImageVector.vectorResource(R.drawable.jk_monogram))
+    val tagline = remember(measurer) { measurer.measure(TAGLINE, JKType.caption) }
     val wordmarkSize = fixed(15f)
 
     Canvas(
@@ -125,29 +125,21 @@ private fun DrawScope.scene(
     centerY: Float,
     measurer: TextMeasurer,
     arcGlyphs: List<TextLayoutResult>,
-    monogram: TextLayoutResult,
+    monogram: Painter,
     tagline: TextLayoutResult,
     wordmarkStyle: TextStyle,
 ) {
     val k = density
     val c = Offset(size.width / 2, size.height * centerY)
 
-    drawRect(Color.Black)
-    drawRect(
-        Brush.radialGradient(
-            listOf(Color(0.12f, 0.12f, 0.12f), Color.Black),
-            center = Offset(size.width * 0.5f, size.height * (centerY - 0.06f)),
-            radius = size.height * 0.65f,
-        ),
-        alpha = ease(t, 0.0, 0.9),
-    )
+    drawRect(JKColors.bg)
 
     // Plate rims, drawn round from staggered starting points.
     RINGS.forEachIndexed { i, r ->
         val f = ease(t, 0.04 + i * 0.06, 0.62 + i * 0.06)
         if (f > 0f) {
             drawArc(
-                Color.White.copy(alpha = if (i < 4) 0.2f else 0.11f),
+                JKColors.text.copy(alpha = if (i < 4) 0.2f else 0.11f),
                 startAngle = -100f + i * 40f,
                 sweepAngle = 360f * f,
                 useCenter = false,
@@ -162,8 +154,8 @@ private fun DrawScope.scene(
     val grips = ease(t, 0.5, 0.95)
     GRIP_ANGLES.forEach { angle ->
         val p = plateSegment(c, angle, span = 26f, inner = 120f * k, outer = 146f * k)
-        drawPath(p, Color.White.copy(alpha = 0.025f), alpha = grips)
-        drawPath(p, Color.White.copy(alpha = 0.2f), alpha = grips, style = Stroke(0.8f * k))
+        drawPath(p, JKColors.text.copy(alpha = 0.025f), alpha = grips)
+        drawPath(p, JKColors.text.copy(alpha = 0.2f), alpha = grips, style = Stroke(0.8f * k))
     }
 
     // "JK · PERFORMANCE · 20 KG" round the top of the plate.
@@ -173,7 +165,7 @@ private fun DrawScope.scene(
             rotate(-52f + i * 3.4f, pivot = c) {
                 drawText(
                     glyph,
-                    color = Color.White.copy(alpha = 0.42f),
+                    color = JKColors.textSecondary,
                     topLeft = Offset(c.x - glyph.size.width / 2f, c.y - 166f * k - glyph.size.height / 2f),
                     alpha = lettering,
                 )
@@ -185,7 +177,7 @@ private fun DrawScope.scene(
     val hub = ease(t, 0.3, 0.75)
     if (hub > 0f) {
         drawArc(
-            Color.White.copy(alpha = 0.16f),
+            JKColors.text.copy(alpha = 0.16f),
             startAngle = 90f,
             sweepAngle = 360f * hub,
             useCenter = false,
@@ -201,64 +193,44 @@ private fun DrawScope.scene(
     if (wordmark > 0f) {
         val tracking = 6f + 12f * (1f - ease(t, 1.1, 1.6))
         val layout = measurer.measure("PERFORMANCE", wordmarkStyle.copy(letterSpacing = (tracking * k).toSp()))
-        drawCentred(layout, JK.text, Offset(c.x, c.y + 92f * k), wordmark)
+        drawCentred(layout, JKColors.text, Offset(c.x, c.y + 92f * k), wordmark)
+    }
+
+    // The brand rule grows out from the centre under the wordmark.
+    val rule = ease(t, 1.2, 1.6)
+    if (rule > 0f) {
+        val half = 16f * k * rule
+        drawLine(JKColors.accent, Offset(c.x - half, c.y + 104f * k), Offset(c.x + half, c.y + 104f * k), strokeWidth = 2f * k)
     }
 
     val tag = ease(t, 1.4, 1.8)
-    if (tag > 0f) drawCentred(tagline, JK.secondary, Offset(c.x, c.y + 118f * k), tag)
+    if (tag > 0f) drawCentred(tagline, JKColors.textSecondary, Offset(c.x, c.y + 124f * k), tag)
 }
 
-private fun DrawScope.tile(t: Double, c: Offset, monogram: TextLayoutResult) {
+private fun DrawScope.tile(t: Double, c: Offset, monogram: Painter) {
     val k = density
     val half = 52f * k
     val corner = 18f * k
     val box = Rect(c, half)
-    val shape = Path().apply { addRoundRect(RoundRect(box, CornerRadius(corner))) }
 
-    // Ground with its faint white glow (SwiftUI's `.shadow(color: .white…, radius: 24)`).
     val fill = ease(t, 0.55, 1.0)
-    val glow = ease(t, 0.9, 1.4)
-    drawIntoCanvas { canvas ->
-        val paint = Paint().asFrameworkPaint().apply {
-            isAntiAlias = true
-            color = Color(0.06f, 0.06f, 0.06f, fill).toArgb()
-            if (glow > 0f) setShadowLayer(24f * k, 0f, 0f, Color.White.copy(alpha = 0.08f * glow).toArgb())
-        }
-        canvas.nativeCanvas.drawRoundRect(box.left, box.top, box.right, box.bottom, corner, corner, paint)
-    }
+    if (fill > 0f) drawRoundRect(JKColors.surface, box.topLeft, box.size, CornerRadius(corner), alpha = fill)
 
     val letters = ease(t, 0.7, 1.05)
     if (letters > 0f) {
-        scale(0.94f + 0.06f * letters, pivot = c) { drawCentred(monogram, JK.text, c, letters) }
-    }
-
-    // The chrome sheen: a bright slanted band swept across, kept inside the tile.
-    val sheen = linear(t, 1.05, 1.5)
-    if (sheen > 0f && sheen < 1f) {
-        val x = c.x + (-150f + 300f * sheen) * k
-        clipPath(shape) {
-            rotate(28f, pivot = Offset(x, c.y)) {
-                drawRect(
-                    Brush.horizontalGradient(
-                        listOf(Color.Transparent, Color.White.copy(alpha = 0.85f), Color(0.75f, 0.75f, 0.75f, 0.6f), Color.Transparent),
-                        startX = x - 35f * k,
-                        endX = x + 35f * k,
-                    ),
-                    topLeft = Offset(x - 35f * k, c.y - 110f * k),
-                    size = Size(70f * k, 220f * k),
-                    blendMode = BlendMode.Plus,
-                )
-            }
+        val side = 64f * k * (0.94f + 0.06f * letters)
+        translate(c.x - side / 2, c.y - side / 2) {
+            with(monogram) { draw(Size(side, side), alpha = letters, colorFilter = ColorFilter.tint(JKColors.text)) }
         }
     }
 
-    // The edge traces itself in, clockwise from the top-left.
+    // The edge traces itself in, clockwise from the top-left, in champagne.
     val edge = ease(t, 0.3, 0.85)
     if (edge > 0f) {
         val measure = PathMeasure().apply { setPath(roundedOutline(box, corner), false) }
         val traced = Path()
         measure.getSegment(0f, measure.length * edge, traced, true)
-        drawPath(traced, Color.White.copy(alpha = 0.85f), style = Stroke(1.2f * k))
+        drawPath(traced, JKColors.accent, style = Stroke(1.2f * k))
     }
 }
 

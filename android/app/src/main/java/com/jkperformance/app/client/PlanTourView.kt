@@ -22,10 +22,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,6 +37,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -50,33 +47,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.AnnualPriceLine
-import com.jkperformance.app.design.CheckCircle
-import com.jkperformance.app.design.CheckPoint
-import com.jkperformance.app.design.Chip
-import com.jkperformance.app.design.ChromeButton
-import com.jkperformance.app.design.ErrorCard
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.FeatureRow
-import com.jkperformance.app.design.FeatureTile
-import com.jkperformance.app.design.FittingText
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.LoadingCard
-import com.jkperformance.app.design.LocalDismiss
-import com.jkperformance.app.design.LocalNav
-import com.jkperformance.app.design.PopularBadge
-import com.jkperformance.app.design.Price
-import com.jkperformance.app.design.PriceLabel
-import com.jkperformance.app.design.ThinBar
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.medium
-import com.jkperformance.app.design.rememberReduceMotion
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
-import com.jkperformance.app.design.tracking
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.Feature
 import com.jkperformance.app.net.Plan
@@ -84,6 +54,8 @@ import com.jkperformance.app.net.PlansResponse
 import com.jkperformance.app.net.isCancellation
 import com.jkperformance.app.net.readable
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /** One page of the walkthrough; `section` is its index in the strip at the top. */
 private sealed class TourPage(val section: Int) {
@@ -142,7 +114,7 @@ fun PlanTourView(onChoose: ((String) -> Unit)? = null, preview: Boolean = false)
     }
     LaunchedEffect(Unit) { load() }
 
-    Column(Modifier.fillMaxSize().background(JK.bg)) {
+    Column(Modifier.fillMaxSize().background(JKColors.bg)) {
         val r = reply
         if (r == null) {
             CloseBar(dismiss)
@@ -167,10 +139,10 @@ private fun CloseBar(dismiss: () -> Unit, title: String = "") {
                 .semantics { contentDescription = "Close" },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Close, contentDescription = null, tint = JK.text, modifier = Modifier.size(22.dp))
+            Glyph(IconKey.close, size = JKSize.iconTab, tint = JKColors.text)
         }
         if (title.isNotEmpty()) {
-            Text(title, style = JKType.headline, color = JK.text, modifier = Modifier.align(Alignment.Center))
+            Text(title, style = JKType.headline, color = JKColors.text, modifier = Modifier.align(Alignment.Center))
         }
     }
 }
@@ -247,8 +219,8 @@ private fun ColumnScope.TourPager(reply: PlansResponse, onChoose: ((String) -> U
     ) {
         val first = pager.currentPage == 0
         val last = pager.currentPage == pages.lastIndex
-        GhostButton("Back", onClick = { goTo(pager.currentPage - 1) }, modifier = Modifier.weight(1f).alpha(if (first) 0.4f else 1f), enabled = !first)
-        ChromeButton(if (last) "Done" else "Next", onClick = { if (last) dismiss() else goTo(pager.currentPage + 1) }, modifier = Modifier.weight(1f))
+        SecondaryButton("Back", onClick = { goTo(pager.currentPage - 1) }, modifier = Modifier.weight(1f).alpha(if (first) 0.4f else 1f), enabled = !first)
+        PrimaryButton(if (last) "Done" else "Next", onClick = { if (last) dismiss() else goTo(pager.currentPage + 1) }, modifier = Modifier.weight(1f))
     }
 }
 
@@ -257,9 +229,9 @@ private fun ColumnScope.TourPager(reply: PlansResponse, onChoose: ((String) -> U
 @Composable
 private fun PageTitle(eyebrow: String?, title: String, subtitle: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (eyebrow != null) Eyebrow(eyebrow)
-        Text(title, style = JKType.title.semibold(), color = JK.text, modifier = Modifier.semantics { heading() })
-        if (subtitle != null) Text(subtitle, style = JKType.subheadline, color = JK.secondary)
+        if (eyebrow != null) Label(eyebrow)
+        Text(title, style = JKType.display, color = JKColors.text, modifier = Modifier.semantics { heading() })
+        if (subtitle != null) Text(subtitle, style = JKType.callout, color = JKColors.textSecondary)
     }
 }
 
@@ -268,42 +240,42 @@ private fun OverviewPage(reply: PlansResponse, open: (String) -> Unit) {
     val free = reply.plans.firstOrNull { it.isFree }
     PageTitle("Coaching", "What coaching includes", "Step through each plan, or tap one to jump to it.")
     if (free != null) {
-        Eyebrow("You have now · ${free.name}")
-        Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Label("You have now · ${free.name}")
+        Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             free.featureIds.forEach { id ->
                 val f = reply.features.firstOrNull { it.id == id }
                 FeatureRow(id, f?.title ?: id, f?.detail)
             }
         }
     }
-    Eyebrow("With a coach")
+    Label("With a coach")
     reply.plans.filter { !it.isFree }.forEach { p -> PlanSummaryCard(p, onClick = { open(p.id) }) }
 }
 
 /** A plan in brief: name, Most popular, tagline, monthly price. `compact` drops the chevron and tightens it. */
 @Composable
 fun PlanSummaryCard(plan: Plan, modifier: Modifier = Modifier, compact: Boolean = false, onClick: (() -> Unit)? = null) {
-    val shape = rounded(JK.corner)
+    val shape = JKShape.card
     Row(
         modifier
             .fillMaxWidth()
             .clip(shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(JK.card, shape)
-            .border(1.dp, if (plan.isFeatured) JK.secondary else JK.stroke, shape)
+            .background(JKColors.surface, shape)
+            .border(1.dp, if (plan.isFeatured) JKColors.textSecondary else JKColors.hairline, shape)
             .padding(if (compact) 12.dp else 14.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(plan.name, style = JKType.headline, color = JK.text)
+                Text(plan.name, style = JKType.headline, color = JKColors.text)
                 if (plan.isFeatured) PopularBadge()
             }
-            Text(plan.detail, style = JKType.caption, color = JK.tertiary)
+            Text(plan.detail, style = JKType.caption, color = JKColors.textTertiary)
         }
         PriceLabel(plan.monthlyPence)
-        if (onClick != null && !compact) com.jkperformance.app.design.SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        if (onClick != null && !compact) Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -311,37 +283,37 @@ fun PlanSummaryCard(plan: Plan, modifier: Modifier = Modifier, compact: Boolean 
 private fun PlanIntroPage(plan: Plan) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("PLAN", style = JKType.caption2.semibold().tracking(1.4f), color = JK.tertiary)
+            Text("PLAN", style = JKType.label, color = JKColors.textTertiary)
             if (plan.isFeatured) PopularBadge()
         }
-        Text(plan.name, style = JKType.largeTitle.semibold(), color = JK.text, modifier = Modifier.semantics { heading() })
-        Text(plan.detail, style = JKType.subheadline, color = JK.secondary)
+        Text(plan.name, style = JKType.display, color = JKColors.text, modifier = Modifier.semantics { heading() })
+        Text(plan.detail, style = JKType.callout, color = JKColors.textSecondary)
     }
-    Column(Modifier.jkCard(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(padding = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         PriceLabel(plan.monthlyPence, big = true)
         AnnualPriceLine(plan.monthlyPence, plan.annualPence)
         if (plan.credits > 0) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                com.jkperformance.app.design.SystemImage("calendar", JKType.subheadline, JK.secondary)
+                Glyph(IconKey.week, JKType.callout, JKColors.textSecondary)
                 Text(
                     if (plan.credits == 1) "1 session a month" else "${plan.credits} sessions a month",
-                    style = JKType.subheadline, color = JK.text,
+                    style = JKType.callout, color = JKColors.text,
                 )
             }
         }
     }
-    plan.pitch?.takeIf { it.isNotBlank() }?.let { Text(it, style = JKType.body, color = JK.text) }
-    Text("Next: what's in it, one step at a time.", style = JKType.caption, color = JK.tertiary)
+    plan.pitch?.takeIf { it.isNotBlank() }?.let { Text(it, style = JKType.body, color = JKColors.text) }
+    Text("Next: what's in it, one step at a time.", style = JKType.caption, color = JKColors.textTertiary)
 }
 
 @Composable
 private fun CarriedPage(page: TourPage.Carried, catalogue: List<Feature>) {
     PageTitle(page.plan.name, "Everything in ${page.previous.name}, plus…", "${page.plan.name} keeps all of this.")
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         page.features.forEach { id ->
             val f = catalogue.firstOrNull { it.id == id }
             FeatureRow(id, f?.title ?: id, null) {
-                Icon(Icons.Rounded.Check, contentDescription = "Included", tint = JK.secondary, modifier = Modifier.size(18.dp))
+                Glyph(IconKey.done, tint = JKColors.textSecondary, contentDescription = "Included")
             }
         }
     }
@@ -361,7 +333,7 @@ private fun FeaturePage(plan: Plan, feature: Feature) {
 private fun ComparePage(reply: PlansResponse, choose: ((String) -> Unit)?) {
     val paid = reply.plans.filter { !it.isFree }
     PageTitle("Compare", "The plans side by side", null)
-    Column(Modifier.jkCard(padding = 0.dp)) {
+    Column(Modifier.jkSurface(padding = 0.dp)) {
         CompareRow(header = true, label = "", cells = paid.map { { CompareHeader(it) } })
         reply.features.forEach { f ->
             CompareRow(label = f.title, cells = paid.map { p -> { CompareMark(f.id in p.featureIds, "${f.title} in ${p.name}") } })
@@ -372,10 +344,10 @@ private fun ComparePage(reply: PlansResponse, choose: ((String) -> Unit)?) {
     if (choose != null) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             paid.forEach { p ->
-                GhostButton("Choose ${p.name}", onClick = { choose(p.id) })
+                SecondaryButton("Choose ${p.name}", onClick = { choose(p.id) })
             }
         }
-        Text("Nothing is charged while payments are off.", style = JKType.caption2, color = JK.tertiary,
+        Text("Nothing is charged while payments are off.", style = JKType.caption, color = JKColors.textTertiary,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
@@ -385,36 +357,36 @@ private fun CompareRow(label: String, cells: List<@Composable () -> Unit>, heade
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (header) Modifier.background(JK.cardRaised, rounded(JK.corner)) else Modifier)
+            .then(if (header) Modifier.background(JKColors.raised, JKShape.card) else Modifier)
             .padding(horizontal = 12.dp, vertical = if (header) 10.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = JKType.caption, color = JK.secondary, modifier = Modifier.weight(1.5f))
+        Text(label, style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.weight(1.5f))
         cells.forEach { cell -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { cell() } }
     }
-    if (!last && !header) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(1.dp).background(JK.stroke))
+    if (!last && !header) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(1.dp).background(JKColors.hairline))
 }
 
 @Composable
 private fun CompareHeader(p: Plan) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        FittingText(p.name, style = JKType.caption.semibold(), color = JK.text, minimumScaleFactor = 0.7f)
+        FittingText(p.name, style = JKType.caption.semibold(), color = JKColors.text, minimumScaleFactor = 0.7f)
         // The featured plan is underlined; the others keep the same height so the names line up.
-        Box(Modifier.size(width = 18.dp, height = 3.dp).then(if (p.isFeatured) Modifier.background(JK.chrome, CircleShape) else Modifier))
+        Box(Modifier.size(width = 18.dp, height = 3.dp).then(if (p.isFeatured) Modifier.background(SolidColor(JKColors.accentControl), CircleShape) else Modifier))
     }
 }
 
 @Composable
 private fun CompareMark(on: Boolean, description: String) {
     Box(Modifier.semantics { contentDescription = if (on) "$description: included" else "$description: not included" }) {
-        if (on) Icon(Icons.Rounded.Check, contentDescription = null, tint = JK.text, modifier = Modifier.size(18.dp))
-        else Text("–", style = JKType.caption, color = JK.tertiary)
+        if (on) Glyph(IconKey.done, tint = JKColors.text)
+        else Text("–", style = JKType.caption, color = JKColors.textTertiary)
     }
 }
 
 @Composable
 private fun CompareText(text: String, strong: Boolean = false) {
-    FittingText(text, style = if (strong) JKType.caption.semibold() else JKType.caption, color = JK.text, minimumScaleFactor = 0.7f)
+    FittingText(text, style = if (strong) JKType.caption.semibold() else JKType.caption, color = JKColors.text, minimumScaleFactor = 0.7f)
 }
 
 // MARK: - Feature previews (static sample content, drawn with the app's own pieces)
@@ -422,10 +394,10 @@ private fun CompareText(text: String, strong: Boolean = false) {
 @Composable
 private fun PreviewCard(content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.padding(top = 4.dp)) {
-        Eyebrow("Preview")
+        Label("Preview")
         Spacer(Modifier.height(6.dp))
         Column(
-            Modifier.jkCard().semantics { contentDescription = "An example of how this looks in the app" },
+            Modifier.jkSurface().semantics { contentDescription = "An example of how this looks in the app" },
             verticalArrangement = Arrangement.spacedBy(10.dp),
             content = content,
         )
@@ -436,7 +408,7 @@ private fun PreviewCard(content: @Composable ColumnScope.() -> Unit) {
 private fun FeaturePreview(id: String, plan: Plan) {
     when (id) {
         "programme" -> PreviewCard {
-            Eyebrow("Today", trailing = "Lower Body Strength")
+            Label("Today", trailing = "Lower Body Strength")
             listOf(
                 Triple("Back Squat", "4 × 6 · 80 kg", true),
                 Triple("Romanian Deadlift", "3 × 8 · 70 kg", false),
@@ -444,8 +416,8 @@ private fun FeaturePreview(id: String, plan: Plan) {
             ).forEach { (name, sets, done) ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(name, style = JKType.subheadline.semibold(), color = JK.text)
-                        Text(sets, style = JKType.caption, color = JK.tertiary)
+                        Text(name, style = JKType.callout.semibold(), color = JKColors.text)
+                        Text(sets, style = JKType.caption, color = JKColors.textTertiary)
                     }
                     CheckCircle(done)
                 }
@@ -463,10 +435,10 @@ private fun FeaturePreview(id: String, plan: Plan) {
         "progress" -> PreviewCard {
             Row(verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
-                    Text("Body weight", style = JKType.caption, color = JK.tertiary)
-                    Text("78.4 kg", style = JKType.title2.semibold(), color = JK.text)
+                    Text("Body weight", style = JKType.caption, color = JKColors.textTertiary)
+                    Text("78.4 kg", style = JKType.display, color = JKColors.text)
                 }
-                Text("−4.0 kg since March", style = JKType.caption, color = JK.secondary)
+                Text("−4.0 kg since March", style = JKType.caption, color = JKColors.textSecondary)
             }
             SampleLine(listOf(82.4, 82.0, 81.6, 81.7, 80.9, 80.2, 79.8, 79.1, 78.8, 78.4))
         }
@@ -479,7 +451,7 @@ private fun FeaturePreview(id: String, plan: Plan) {
             SampleSlot("TUE", "25", "1:1 in person · 07:00", "Studio 2")
             SampleSlot("FRI", "28", "1:1 on video · 12:30", "Video call")
             val credits = plan.credits.coerceAtLeast(2)
-            Text("2 of $credits credits left this month", style = JKType.caption, color = JK.secondary)
+            Text("2 of $credits credits left this month", style = JKType.caption, color = JKColors.textSecondary)
         }
         "nutrition" -> PreviewCard {
             SampleHabit("Calories", "1,720 of 2,500 kcal", 0.69)
@@ -490,15 +462,15 @@ private fun FeaturePreview(id: String, plan: Plan) {
         "priority" -> PreviewCard {
             SampleBubble("Knee feels off after yesterday's run. Should I still squat today?", mine = true)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Bolt, contentDescription = null, tint = JK.text, modifier = Modifier.size(16.dp))
-                Text("Replied in 12 min", style = JKType.caption.semibold(), color = JK.text)
+                Glyph(IconKey.energy, size = JKSize.iconSmall, tint = JKColors.text)
+                Text("Replied in 12 min", style = JKType.caption.semibold(), color = JKColors.text)
             }
         }
         "guides" -> PreviewCard {
-            Eyebrow("Guide · 2 min read")
-            Text("Sleep is training too", style = JKType.headline, color = JK.text)
+            Label("Guide · 2 min read")
+            Text("Sleep is training too", style = JKType.headline, color = JKColors.text)
             Text("Why seven hours does more for your squat than another set, and three ways to get there.",
-                style = JKType.caption, color = JK.secondary)
+                style = JKType.caption, color = JKColors.textSecondary)
         }
         else -> Unit
     }
@@ -506,16 +478,16 @@ private fun FeaturePreview(id: String, plan: Plan) {
 
 @Composable
 private fun SampleBubble(text: String, mine: Boolean) {
-    val shape = rounded(14.dp)
+    val shape = JKShape.card
     Row(Modifier.fillMaxWidth()) {
         if (mine) Spacer(Modifier.weight(0.2f))
         Text(
             text,
-            style = JKType.footnote,
-            color = if (mine) Color.Black else JK.text,
+            style = JKType.caption,
+            color = if (mine) JKColors.primaryLabel else JKColors.text,
             modifier = Modifier
                 .weight(0.8f)
-                .then(if (mine) Modifier.background(JK.chrome, shape) else Modifier.background(JK.cardRaised, shape).border(1.dp, JK.stroke, shape))
+                .then(if (mine) Modifier.background(SolidColor(JKColors.accentControl), shape) else Modifier.background(JKColors.raised, shape).border(1.dp, JKColors.hairline, shape))
                 .padding(10.dp),
         )
         if (!mine) Spacer(Modifier.weight(0.2f))
@@ -526,8 +498,8 @@ private fun SampleBubble(text: String, mine: Boolean) {
 private fun SampleHabit(name: String, value: String, fraction: Double) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row {
-            Text(name, style = JKType.subheadline.medium(), color = JK.text, modifier = Modifier.weight(1f))
-            Text(value, style = JKType.caption, color = JK.tertiary)
+            Text(name, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+            Text(value, style = JKType.caption, color = JKColors.textTertiary)
         }
         ThinBar(fraction)
     }
@@ -536,13 +508,13 @@ private fun SampleHabit(name: String, value: String, fraction: Double) {
 @Composable
 private fun SampleScale(label: String, value: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = JKType.subheadline.medium(), color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             (1..5).forEach { n ->
                 Box(
-                    Modifier.size(26.dp).background(if (n == value) JK.text else JK.cardRaised, CircleShape),
+                    Modifier.size(26.dp).background(if (n == value) JKColors.text else JKColors.raised, CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Text("$n", style = JKType.caption.semibold(), color = if (n == value) Color.Black else JK.secondary) }
+                ) { Text("$n", style = JKType.caption.semibold(), color = if (n == value) JKColors.primaryLabel else JKColors.textSecondary) }
             }
         }
     }
@@ -551,17 +523,17 @@ private fun SampleScale(label: String, value: Int) {
 @Composable
 private fun SampleSlot(weekday: String, day: String, title: String, detail: String) {
     Row(
-        Modifier.fillMaxWidth().background(JK.cardRaised, rounded(10.dp)).padding(10.dp),
+        Modifier.fillMaxWidth().background(JKColors.raised, JKShape.control).padding(10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(weekday, style = JKType.system(9), color = JK.tertiary)
-            Text(day, style = JKType.headline, color = JK.text)
+            Text(weekday, style = JKType.caption, color = JKColors.textTertiary)
+            Text(day, style = JKType.headline, color = JKColors.text)
         }
         Column(Modifier.weight(1f)) {
-            Text(title, style = JKType.subheadline.medium(), color = JK.text)
-            Text(detail, style = JKType.caption2, color = JK.tertiary)
+            Text(title, style = JKType.callout, color = JKColors.text)
+            Text(detail, style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
@@ -575,7 +547,7 @@ private fun SampleLine(values: List<Double>) {
         fun y(v: Double) = size.height - ((v - low) / (high - low)).toFloat() * size.height
         val path = Path()
         values.forEachIndexed { i, v -> if (i == 0) path.moveTo(0f, y(v)) else path.lineTo(i * step, y(v)) }
-        drawPath(path, JK.text, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
-        drawCircle(JK.text, 3.5.dp.toPx(), Offset(size.width, y(values.last())))
+        drawPath(path, JKColors.text, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+        drawCircle(JKColors.text, 3.5.dp.toPx(), Offset(size.width, y(values.last())))
     }
 }

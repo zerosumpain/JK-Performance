@@ -16,8 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.Fmt
 import com.jkperformance.app.net.ApiJson
 import com.jkperformance.app.net.Booking
 import com.jkperformance.app.net.Push
@@ -30,6 +28,8 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.temporal.TemporalAdjusters
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /**
  * Reminders scheduled on the phone itself: the weekly check-in on Friday

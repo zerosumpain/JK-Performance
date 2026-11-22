@@ -22,26 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.Dot
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKRefreshable
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.StatTile
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.UpcomingRow
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Report
@@ -53,6 +33,8 @@ import com.jkperformance.app.net.isCancellation
 import com.jkperformance.app.net.readable
 import com.jkperformance.app.net.seg
 import java.time.LocalDate
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 // MARK: - Weekly feedback (client)
 
@@ -84,25 +66,20 @@ fun WeeklyFeedbackListView() {
                 ScreenHeader(eyebrow = "From ${AppSession.me?.coach?.name ?: "your coach"}", title = "Feedback")
                 Loadable(value = reports, error = error, retry = { load() }) { list ->
                     if (list.isEmpty()) {
-                        EmptyCard(
-                            systemName = "text.bubble",
-                            title = "Nothing yet",
-                            detail = "Your coach's review of each week appears here, with the plan for the next one.",
-                        )
+                        EmptyCard(title = "Nothing yet", detail = "Your coach's review of each week appears here, with the plan for the next one.")
                     }
                     list.forEach { r ->
                         Row(
-                            Modifier.clip(rounded(JK.corner)).navLink { ReportDetailView(reportId = r.id ?: "") }.jkCard(padding = 12.dp),
+                            Modifier.clip(JKShape.card).navLink { ReportDetailView(reportId = r.id ?: "") }.jkSurface(padding = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            IconTile("text.bubble")
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(r.weekLabel, style = JKType.subheadline.semibold(), color = JK.text)
-                                Text(firstLine(r), style = JKType.caption2, color = JK.tertiary, maxLines = 2)
+                                Text(r.weekLabel, style = JKType.callout.semibold(), color = JKColors.text)
+                                Text(firstLine(r), style = quoteStyle(inSheet = true), color = JKColors.textSecondary, maxLines = 2)
                             }
-                            if (r.isUnread) Dot(JK.text, size = 8.dp, modifier = Modifier.semantics { contentDescription = "New" })
-                            SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                            if (r.isUnread) Dot(JKColors.text, size = 8.dp, modifier = Modifier.semantics { contentDescription = "New" })
+                            Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
                         }
                     }
                 }
@@ -138,13 +115,13 @@ fun ReportDetailView(reportId: String) {
         ) {
             Loadable(value = report, error = error, retry = { load() }) { r ->
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Eyebrow(text = "${Fmt.dayMonth(r.week)} – ${Fmt.dayMonth(r.weekEnd)}")
-                    Text("Your week", style = JKType.largeTitle.semibold(), color = JK.text)
+                    Label(text = "${Fmt.dayMonth(r.week)} – ${Fmt.dayMonth(r.weekEnd)}")
+                    Text("Your week", style = JKType.display, color = JKColors.text)
                     r.coachName?.let { by ->
                         Text(
                             "From $by" + (r.publishedAt?.let { " · ${Fmt.dayMonth(it)}" } ?: ""),
                             style = JKType.caption,
-                            color = JK.tertiary,
+                            color = JKColors.textTertiary,
                         )
                     }
                 }
@@ -161,9 +138,9 @@ fun ReportDetailView(reportId: String) {
 @Composable
 private fun ReportSection(title: String, text: String) {
     if (text.isEmpty()) return
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Eyebrow(text = title)
-        Text(text, style = JKType.body, color = JK.text)
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Label(text = title)
+        Text(text, style = JKType.body, color = JKColors.text)
     }
 }
 
@@ -198,7 +175,7 @@ fun ReportStatsGrid(stats: ReportStats) {
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Eyebrow(text = "The week in numbers")
+        Label(text = "The week in numbers")
         tiles.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { tile -> tile(Modifier.weight(1f)) }
@@ -207,7 +184,7 @@ fun ReportStatsGrid(stats: ReportStats) {
         }
         val types = stats.activities?.types
         if (!types.isNullOrEmpty()) {
-            Text(types.joinToString(" · "), style = JKType.caption2, color = JK.tertiary)
+            Text(types.joinToString(" · "), style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
@@ -216,18 +193,18 @@ fun ReportStatsGrid(stats: ReportStats) {
 @Composable
 fun PlanList(plan: ReportPlan, linkWorkouts: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Eyebrow(text = "Next week's plan", trailing = "${Fmt.dayMonth(plan.from)} – ${Fmt.dayMonth(plan.to)}")
+        Label(text = "Next week's plan", trailing = "${Fmt.dayMonth(plan.from)} – ${Fmt.dayMonth(plan.to)}")
         if (plan.workouts.isEmpty()) {
-            Text("Not written yet.", style = JKType.caption, color = JK.tertiary)
+            Text("Not written yet.", style = JKType.caption, color = JKColors.textTertiary)
         } else {
-            Column(Modifier.jkCard(padding = 4.dp)) {
+            Column(Modifier.jkSurface(padding = 4.dp)) {
                 plan.workouts.forEach { w ->
                     if (linkWorkouts && w.published) {
                         PlanRow(w, chevron = true, modifier = Modifier.navLink { WorkoutDetailLoader(workoutId = w.id) })
                     } else {
                         PlanRow(w, chevron = false)
                     }
-                    if (w.id != plan.workouts.last().id) HorizontalDivider(thickness = 0.5.dp, color = JK.stroke)
+                    if (w.id != plan.workouts.last().id) HorizontalDivider(thickness = 0.5.dp, color = JKColors.hairline)
                 }
             }
         }

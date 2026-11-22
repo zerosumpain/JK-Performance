@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "south_east" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M636.73-284.04 208.04-713.23q-8-7.81-8.35-19.02-.34-11.21 8.35-19.9 8.5-8.5 19.61-8.5 11.12 0 19.62 8.5l428.69 428.69v-252.69q0-11.45 8.23-19.67 8.22-8.22 19.86-8.22 11.45 0 19.66 8.22t8.21 19.67v313.84q0 14.25-9.99 24.24-9.99 9.99-24.05 9.99H384.04q-11.64 0-19.86-8.22-8.22-8.23-8.22-19.87 0-11.45 8.22-19.66t19.86-8.21h252.69Z" />
+    </group>
+</vector>

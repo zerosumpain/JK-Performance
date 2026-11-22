@@ -25,9 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
@@ -40,7 +37,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,44 +67,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.jkperformance.app.design.Avatar
-import com.jkperformance.app.design.BarButton
-import com.jkperformance.app.design.CheckCircle
-import com.jkperformance.app.design.Chip
-import com.jkperformance.app.design.ChromeButton
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.DeltaBadge
-import com.jkperformance.app.design.Dot
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.ErrorBanner
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKField
-import com.jkperformance.app.design.JKRefreshable
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Label
-import com.jkperformance.app.design.LoadingCard
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.LocalDismiss
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.Segmented
-import com.jkperformance.app.design.Sheet
-import com.jkperformance.app.design.SmallPillButton
-import com.jkperformance.app.design.StatTile
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.bold
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.medium
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
-import com.jkperformance.app.design.symbol
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.AssignInput
@@ -137,6 +95,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 // MARK: - Shared screen scaffolding
 
@@ -200,11 +160,7 @@ private suspend inline fun <T> loadInto(onError: (String?) -> Unit, onValue: (T)
     }
 }
 
-/** iOS's destructive red (systemRed, dark). */
-private val Destructive = Color(0xFFFF453A)
 
-/** The dark alert surface, as [com.jkperformance.app.design.ErrorAlert] uses. */
-private val AlertSurface = Color(0.17f, 0.17f, 0.17f)
 
 /**
  * `.confirmationDialog(title, titleVisibility: .visible)` with one destructive
@@ -221,37 +177,37 @@ private fun ConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(action, style = JKType.body.semibold(), color = Destructive) }
+            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(action, style = JKType.body.semibold(), color = JKColors.error) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JK.text) } },
-        title = { Text(title, style = JKType.headline, color = JK.text) },
-        text = message?.let { { Text(it, style = JKType.footnote, color = JK.secondary) } },
-        containerColor = AlertSurface,
-        shape = rounded(14.dp),
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JKColors.text) } },
+        title = { Text(title, style = JKType.headline, color = JKColors.text) },
+        text = message?.let { { Text(it, style = JKType.caption, color = JKColors.textSecondary) } },
+        containerColor = JKColors.raised,
+        shape = JKShape.card,
     )
 }
 
 /** The magnifying glass and a borderless field in a card (Clients and Guides search). */
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit, prompt: String, autocorrect: Boolean = true) {
-    val style = JKType.body.copy(color = JK.text)
+    val style = JKType.body.copy(color = JKColors.text)
     Row(
-        Modifier.jkCard(padding = 10.dp),
+        Modifier.jkSurface(padding = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SystemImage("magnifyingglass", JKType.body, JK.tertiary)
+        Glyph(IconKey.search, JKType.body, JKColors.textTertiary)
         BasicTextField(
             value = query,
             onValueChange = onQueryChange,
             textStyle = style,
             singleLine = true,
-            cursorBrush = SolidColor(JK.text),
+            cursorBrush = SolidColor(JKColors.text),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = autocorrect),
             modifier = Modifier.weight(1f),
             decorationBox = { field ->
                 Box {
-                    if (query.isEmpty()) Text(prompt, style = style, color = JK.tertiary)
+                    if (query.isEmpty()) Text(prompt, style = style, color = JKColors.textTertiary)
                     field()
                 }
             },
@@ -270,21 +226,21 @@ private fun Stepper(
     style: TextStyle = JKType.caption,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = style, color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = style, color = JKColors.text, modifier = Modifier.weight(1f))
         Row(
-            Modifier.width(94.dp).height(32.dp).background(JK.cardRaised, rounded(8.dp)),
+            Modifier.width(94.dp).height(32.dp).background(JKColors.raised, JKShape.chip),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StepperHalf(Icons.Rounded.Remove, "Decrement", enabled = value > range.first) { onValueChange(value - 1) }
-            Box(Modifier.width(1.dp).height(18.dp).background(JK.stroke))
-            StepperHalf(Icons.Rounded.Add, "Increment", enabled = value < range.last) { onValueChange(value + 1) }
+            StepperHalf(IconKey.remove, "Decrement", enabled = value > range.first) { onValueChange(value - 1) }
+            Box(Modifier.width(1.dp).height(18.dp).background(JKColors.hairline))
+            StepperHalf(IconKey.add, "Increment", enabled = value < range.last) { onValueChange(value + 1) }
         }
     }
 }
 
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.StepperHalf(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: IconKey,
     description: String,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -293,26 +249,16 @@ private fun androidx.compose.foundation.layout.RowScope.StepperHalf(
         Modifier.weight(1f).height(32.dp).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = if (enabled) JK.text else JK.tertiary, modifier = Modifier.size(20.dp))
+        Glyph(icon, tint = if (enabled) JKColors.text else JKColors.textTertiary, contentDescription = description)
     }
 }
 
-/** An iOS switch: white thumb, green when on (`.tint(.green)`), grey fill when off. */
+/** The Atelier toggle ([JKSwitch]): bone when on, outlined when off. */
 @Composable
 private fun IOSSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Switch(
+    JKSwitch(
         checked = checked,
         onCheckedChange = onCheckedChange,
-        // A thumb content keeps the thumb full size in both states, as on iOS.
-        thumbContent = {},
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White,
-            checkedTrackColor = Color(0xFF30D158),
-            checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = Color.White,
-            uncheckedTrackColor = Color(0x52787880),
-            uncheckedBorderColor = Color.Transparent,
-        ),
     )
 }
 
@@ -323,7 +269,7 @@ internal fun CoachConfirmDialog(title: String, action: String, onConfirm: () -> 
 
 @Composable
 internal fun CoachStepper(label: String, value: Int, range: IntRange, onValueChange: (Int) -> Unit, modifier: Modifier = Modifier) =
-    Stepper(label, value, range, onValueChange, modifier, style = JKType.subheadline)
+    Stepper(label, value, range, onValueChange, modifier, style = JKType.callout)
 
 @Composable
 internal fun CoachSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) = IOSSwitch(checked, onCheckedChange)
@@ -353,19 +299,18 @@ fun CoachTodayView() {
                         .semantics { contentDescription = "Account" },
                     contentAlignment = Alignment.Center,
                 ) {
-                    SystemImage("person.crop.circle", JKType.title3, JK.text)
+                    Glyph(IconKey.account, JKType.headline, JKColors.text)
                 }
                 Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
-                        .size(30.dp)
-                        .clip(rounded(7.dp))
-                        .border(1.dp, JK.secondary, rounded(7.dp))
+                        .size(JKSize.touchTarget)
+                        .clip(CircleShape)
                         .navLink { BusinessView() }
                         .semantics { contentDescription = "Business" },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("JK", style = JKType.caption.bold(), color = JK.text)
+                    Monogram(size = JKSize.iconTab, tint = JKColors.accent, contentDescription = null)
                 }
             }
         }
@@ -383,15 +328,15 @@ fun FeedbackDueView(due: FeedbackDue) {
         due.clients.forEach { c ->
             Row(
                 Modifier
-                    .clip(rounded(JK.corner))
+                    .clip(JKShape.card)
                     .navLink { ClientDetailView(clientId = c.id, name = c.name, initialTab = ClientDetailTab.feedback) }
-                    .jkCard(padding = 12.dp),
+                    .jkSurface(padding = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Avatar(initials = c.displayInitials, size = 32.dp)
-                Text(c.name, style = JKType.subheadline.semibold(), color = JK.text, modifier = Modifier.weight(1f))
-                SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                Text(c.name, style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
+                Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
             }
         }
     }
@@ -402,13 +347,13 @@ fun FeedbackDueView(due: FeedbackDue) {
 fun SessionRow(session: Booking, isNext: Boolean) {
     val done = session.end < Instant.now()
     val who = session.client?.name ?: session.title ?: "Group"
-    val ink = if (done) JK.tertiary else JK.text
-    val shape = rounded(12.dp)
+    val ink = if (done) JKColors.textTertiary else JKColors.text
+    val shape = JKShape.card
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(38.dp)) {
-            Text(Fmt.time(session.start), style = JKType.caption2.semibold(), color = ink)
-            Text(Fmt.time(session.end), style = JKType.system(9), color = JK.tertiary)
+            Text(Fmt.time(session.start), style = JKType.caption.semibold(), color = ink)
+            Text(Fmt.time(session.end), style = JKType.caption, color = JKColors.textTertiary)
         }
         Row(
             Modifier
@@ -418,8 +363,8 @@ fun SessionRow(session: Booking, isNext: Boolean) {
                     val c = session.client
                     if (c != null) ClientDetailView(clientId = c.id, name = c.name) else ClassDetailView(booking = session)
                 }
-                .background(JK.card, shape)
-                .border(1.dp, if (isNext) JK.secondary else JK.stroke, shape)
+                .background(JKColors.surface, shape)
+                .border(1.dp, if (isNext) JKColors.textSecondary else JKColors.hairline, shape)
                 .padding(10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -427,27 +372,27 @@ fun SessionRow(session: Booking, isNext: Boolean) {
             Box(
                 Modifier
                     .size(width = 3.dp, height = 28.dp)
-                    .background(JK.slot(session.kind).copy(alpha = if (done) 0.4f else 1f), CircleShape),
+                    .background(JKColors.slot(session.kind).copy(alpha = if (done) 0.4f else 1f), CircleShape),
             )
             Avatar(initials = session.client?.displayInitials ?: "G", size = 28.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 val count = session.attendeeCount ?: session.attendees?.size ?: 0
-                Text(if (session.isGroup) "$who · $count clients" else who, style = JKType.subheadline.semibold(), color = ink)
+                Text(if (session.isGroup) "$who · $count clients" else who, style = JKType.callout.semibold(), color = ink)
                 Text(
                     listOfNotNull(session.title, session.kindLabel).joinToString(" · "),
-                    style = JKType.caption2,
-                    color = JK.tertiary,
+                    style = JKType.caption,
+                    color = JKColors.textTertiary,
                 )
             }
             when {
                 isNext -> Text(
                     "Next",
-                    style = JKType.system(9, FontWeight.SemiBold),
-                    color = Color.Black,
-                    modifier = Modifier.background(JK.text, CircleShape).padding(horizontal = 7.dp, vertical = 3.dp),
+                    style = JKType.caption.semibold(),
+                    color = JKColors.primaryLabel,
+                    modifier = Modifier.background(JKColors.text, CircleShape).padding(horizontal = 7.dp, vertical = 3.dp),
                 )
-                done -> SystemImage("checkmark", JKType.caption, ink)
-                else -> SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                done -> Glyph(IconKey.done, JKType.caption, ink)
+                else -> Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
             }
         }
     }
@@ -463,23 +408,23 @@ fun ClassDetailView(booking: Booking) {
 
     PushedScreen(spacing = 14.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(booking.title ?: booking.kindLabel, style = JKType.title2.semibold(), color = JK.text)
+            Text(booking.title ?: booking.kindLabel, style = JKType.display, color = JKColors.text)
             Text(
                 "${Fmt.longDay(booking.start)} · ${Fmt.time(booking.start)}–${Fmt.time(booking.end)}",
                 style = JKType.caption,
-                color = JK.secondary,
+                color = JKColors.textSecondary,
             )
-            booking.location?.let { Text(it, style = JKType.caption, color = JK.tertiary) }
+            booking.location?.let { Text(it, style = JKType.caption, color = JKColors.textTertiary) }
         }
-        Eyebrow(
+        Label(
             text = "Attendees",
             trailing = booking.capacity?.let { "${booking.attendeeCount ?: booking.attendees?.size ?: 0} of $it" },
         )
         val people = booking.attendees ?: listOfNotNull(booking.client)
         if (people.isEmpty()) {
-            EmptyCard(systemName = "person.2", title = "Nobody yet")
+            EmptyCard(title = "Nobody yet")
         } else {
-            Column(Modifier.jkCard(padding = 2.dp)) {
+            Column(Modifier.jkSurface(padding = 2.dp)) {
                 people.forEach { p ->
                     Row(
                         Modifier.fillMaxWidth().padding(10.dp),
@@ -487,7 +432,7 @@ fun ClassDetailView(booking: Booking) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Avatar(initials = p.displayInitials, size = 28.dp)
-                        Text(p.name, style = JKType.subheadline, color = JK.text)
+                        Text(p.name, style = JKType.callout, color = JKColors.text)
                     }
                 }
             }
@@ -495,7 +440,7 @@ fun ClassDetailView(booking: Booking) {
         error?.let { ErrorBanner(it) }
         if (booking.cancellable != false && booking.start > Instant.now()) {
             // GhostButtonStyle paints every label white, the destructive role included.
-            GhostButton(if (booking.isGroup) "Cancel class" else "Cancel booking", onClick = { confirm = true })
+            SecondaryButton(if (booking.isGroup) "Cancel class" else "Cancel booking", onClick = { confirm = true })
         }
     }
 
@@ -554,17 +499,17 @@ fun BusinessView() {
             }
             val plans = b.plans
             if (!plans.isNullOrEmpty()) {
-                Eyebrow(text = "Members by plan")
+                Label(text = "Members by plan")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     plans.forEach { p -> StatTile(label = p.name, value = "${p.members}", modifier = Modifier.weight(1f)) }
                 }
             }
             PlansPricesLink()
-            Eyebrow(text = "Needs attention", trailing = "Auto-flagged")
+            Label(text = "Needs attention", trailing = "Auto-flagged")
             if (b.attention.isEmpty()) {
-                EmptyCard(systemName = "checkmark.seal", title = "Everyone's on track")
+                EmptyCard(title = "Everyone's on track")
             } else {
-                Column(Modifier.jkCard(padding = 2.dp)) {
+                Column(Modifier.jkSurface(padding = 2.dp)) {
                     b.attention.forEach { item ->
                         Row(
                             Modifier
@@ -576,10 +521,10 @@ fun BusinessView() {
                         ) {
                             Avatar(initials = item.client.displayInitials)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(item.client.name, style = JKType.subheadline.semibold(), color = JK.text)
-                                Text(item.reason, style = JKType.caption2, color = JK.tertiary)
+                                Text(item.client.name, style = JKType.callout.semibold(), color = JKColors.text)
+                                Text(item.reason, style = JKType.caption, color = JKColors.textTertiary)
                             }
-                            SystemImage(attentionIcon(item.kind), JKType.caption, JK.secondary)
+                            Glyph(IconKey.fromSymbol(attentionIcon(item.kind)), JKType.caption, JKColors.textSecondary)
                         }
                     }
                 }
@@ -597,12 +542,12 @@ private fun attentionIcon(kind: String): String = when (kind) {
 @Composable
 private fun MrrCard(b: Business) {
     val points = b.series.mapNotNull { s -> Day.date(s.date)?.let { it to s.pence / 100.0 } }
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { Eyebrow(text = "Monthly recurring revenue") }
+            Box(Modifier.weight(1f)) { Label(text = "Monthly recurring revenue") }
             b.mrrDeltaPct?.let { DeltaBadge(text = "${Fmt.delta(it, digits = 0)}%") }
         }
-        Text(Fmt.pounds(b.mrrPence), style = JKType.largeTitle.semibold(), color = JK.text)
+        Text(Fmt.pounds(b.mrrPence), style = JKType.display, color = JKColors.text)
         if (points.size >= 2) {
             val values = points.map { it.second }
             val span = maxOf(values.max() - values.min(), 1.0)
@@ -630,14 +575,7 @@ private fun MrrChart(points: List<Pair<LocalDate, Double>>, low: Double, high: D
             moveTo(offsets.first().x, offsets.first().y)
             offsets.drop(1).forEach { lineTo(it.x, it.y) }
         }
-        val area = Path().apply {
-            addPath(line)
-            lineTo(offsets.last().x, size.height)
-            lineTo(offsets.first().x, size.height)
-            close()
-        }
-        drawPath(area, Brush.verticalGradient(listOf(JK.text.copy(alpha = 0.3f), Color.Transparent), 0f, size.height))
-        drawPath(line, JK.text, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(line, JKColors.data, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -656,27 +594,17 @@ fun ClientsView() {
 
     ScrollScreen(spacing = 14.dp, onRefresh = load) {
         ScreenHeader(eyebrow = "Coach", title = "Clients") {
-            Label(
-                "Programs",
-                systemImage = "square.stack",
-                style = JKType.caption.semibold(),
-                color = JK.text,
-                modifier = Modifier
+            IconLabel("Programs", icon = IconKey.stack, style = JKType.caption.semibold(), color = JKColors.text, modifier = Modifier
                     .clip(CircleShape)
                     .navLink { ProgramsView() }
-                    .border(1.dp, JK.stroke, CircleShape)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
+                    .border(1.dp, JKColors.hairline, CircleShape)
+                    .padding(horizontal = 10.dp, vertical = 6.dp))
         }
         SearchField(query, { query = it }, prompt = "Search clients", autocorrect = false)
         Loadable(value = clients, error = error, retry = load) { list ->
             val shown = list.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }
             when {
-                shown.isEmpty() -> EmptyCard(
-                    systemName = "person.2",
-                    title = if (list.isEmpty()) "No clients yet" else "No matches",
-                    detail = if (list.isEmpty()) "Clients appear here when they sign up." else null,
-                )
+                shown.isEmpty() -> EmptyCard(title = if (list.isEmpty()) "No clients yet" else "No matches", detail = if (list.isEmpty()) "Clients appear here when they sign up." else null)
                 query.isEmpty() -> {
                     // The server sends them most-in-need first; group them so the line between is clear.
                     val later = { c: ClientSummary -> c.demand?.kind == "quiet" || c.demand?.kind == "inactive" }
@@ -693,8 +621,8 @@ fun ClientsView() {
 @Composable
 private fun ClientGroup(title: String?, list: List<ClientSummary>) {
     if (list.isEmpty()) return
-    if (title != null) Eyebrow(text = title, trailing = "${list.size}")
-    Column(Modifier.jkCard(padding = 2.dp)) {
+    if (title != null) Label(text = title, trailing = "${list.size}")
+    Column(Modifier.jkSurface(padding = 2.dp)) {
         list.forEach { c ->
             ClientRow(
                 client = c,
@@ -722,23 +650,23 @@ private fun ClientRow(client: ClientSummary, modifier: Modifier = Modifier) {
                         .align(Alignment.TopEnd)
                         .offset(x = 1.dp, y = (-1).dp)
                         .size(11.dp)
-                        .background(JK.card, CircleShape),
+                        .background(JKColors.surface, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) { Dot(color = tint, size = 7.dp) }
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(client.name, style = JKType.subheadline.semibold(), color = JK.text)
+            Text(client.name, style = JKType.callout.semibold(), color = JKColors.text)
             Text(
                 ClientText.reason(client),
-                style = JKType.caption2,
-                color = if (client.demand?.kind == "urgent") JK.urgent else JK.tertiary,
+                style = JKType.caption,
+                color = if (client.demand?.kind == "urgent") JKColors.urgent else JKColors.textTertiary,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
-        if ((client.unread ?: 0) > 0) SystemImage("bubble.left.fill", JKType.caption2, JK.secondary)
-        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        if ((client.unread ?: 0) > 0) Glyph(IconKey.messages, JKType.caption, JKColors.textSecondary)
+        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -750,8 +678,8 @@ object ClientText {
     fun needsYou(c: ClientSummary): Boolean = (c.demand?.kind ?: "") in waitingKinds
 
     fun tint(c: ClientSummary): Color? = when (c.demand?.kind) {
-        "urgent" -> JK.urgent
-        "message", "form", "checkin" -> JK.waiting
+        "urgent" -> JKColors.urgent
+        "message", "form", "checkin" -> JKColors.attention
         else -> null
     }
 
@@ -812,28 +740,18 @@ fun ProgramsView(initialTab: ProgramsTab = ProgramsTab.programs) {
     PushedScreen(spacing = 14.dp, onRefresh = load) {
         ScreenHeader(eyebrow = "Templates & automation", title = tab.label) {
             if (tab == ProgramsTab.programs) {
-                Label(
-                    "New",
-                    systemImage = "plus",
-                    style = JKType.caption.semibold(),
-                    color = Color.Black,
-                    modifier = Modifier
+                IconLabel("New", icon = IconKey.add, style = JKType.caption.semibold(), color = JKColors.primaryLabel, modifier = Modifier
                         .clip(CircleShape)
                         .clickable { editing = ProgramDraft() }
-                        .background(JK.chrome, CircleShape)
-                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                )
+                        .background(SolidColor(JKColors.accentControl), CircleShape)
+                        .padding(horizontal = 12.dp, vertical = 7.dp))
             }
         }
         Segmented(options = ProgramsTab.entries, selection = tab, onSelectionChange = { tab = it }) { it.label }
         when (tab) {
             ProgramsTab.programs -> Loadable(value = programs, error = error, retry = load) { list ->
                 if (list.isEmpty()) {
-                    EmptyCard(
-                        systemName = "square.stack",
-                        title = "No programs yet",
-                        detail = "Build a template once, then assign it to any client with a start date.",
-                    )
+                    EmptyCard(title = "No programs yet", detail = "Build a template once, then assign it to any client with a start date.")
                 }
                 list.forEach { p ->
                     ProgramRow(p, onEdit = { editing = ProgramDraft(p) }, onAssign = { assigning = p })
@@ -856,36 +774,36 @@ fun ProgramsView(initialTab: ProgramsTab = ProgramsTab.programs) {
 private fun ProgramRow(p: Program, onEdit: () -> Unit, onAssign: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.clip(rounded(JK.corner)).clickable(onClick = onEdit).jkCard(padding = 12.dp),
+        Modifier.clip(JKShape.card).clickable(onClick = onEdit).jkSurface(padding = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(52.dp).background(JK.cardRaised, rounded(10.dp)), contentAlignment = Alignment.Center) {
-            SystemImage("chart.xyaxis.line", JKType.body, JK.tertiary)
+        Box(Modifier.size(52.dp).background(JKColors.raised, JKShape.control), contentAlignment = Alignment.Center) {
+            Glyph(IconKey.progress, JKType.body, JKColors.textTertiary)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(p.name, style = JKType.subheadline.semibold(), color = JK.text)
+            Text(p.name, style = JKType.callout.semibold(), color = JKColors.text)
             Text(
                 "${p.daysPerWeek} days / week · ${p.weeks} weeks · ${p.workouts.size} workouts",
-                style = JKType.caption2,
-                color = JK.tertiary,
+                style = JKType.caption,
+                color = JKColors.textTertiary,
             )
             Text(
                 p.clientCount?.let { if (it == 1) "1 client" else "$it clients" } ?: "Template",
-                style = JKType.system(10, FontWeight.Medium),
-                color = JK.secondary,
-                modifier = Modifier.background(JK.cardRaised, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
+                style = JKType.caption,
+                color = JKColors.textSecondary,
+                modifier = Modifier.background(JKColors.raised, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
             )
         }
         Box {
             Box(Modifier.size(30.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                SystemImage("ellipsis", JKType.body, JK.secondary)
+                Glyph(IconKey.more, JKType.body, JKColors.textSecondary)
             }
             DropdownMenu(
                 expanded = menu,
                 onDismissRequest = { menu = false },
-                containerColor = AlertSurface,
-                shape = rounded(12.dp),
+                containerColor = JKColors.raised,
+                shape = JKShape.card,
             ) {
                 MenuItem("Edit", "pencil") { menu = false; onEdit() }
                 MenuItem("Assign to client", "person.badge.plus") { menu = false; onAssign() }
@@ -898,8 +816,8 @@ private fun ProgramRow(p: Program, onEdit: () -> Unit, onAssign: () -> Unit) {
 @Composable
 private fun MenuItem(title: String, systemImage: String, onClick: () -> Unit) {
     DropdownMenuItem(
-        text = { Text(title, style = JKType.body, color = JK.text) },
-        trailingIcon = { SystemImage(systemImage, JKType.body, JK.text) },
+        text = { Text(title, style = JKType.body, color = JKColors.text) },
+        trailingIcon = { Glyph(IconKey.fromSymbol(systemImage), JKType.body, JKColors.text) },
         onClick = onClick,
     )
 }
@@ -977,9 +895,9 @@ fun ProgramEditorSheet(draft: ProgramDraft, onSaved: suspend () -> Unit) {
             Stepper("${d.weeks} wk", d.weeks, 1..52, { d = d.copy(weeks = it) }, Modifier.weight(1f))
         }
 
-        Eyebrow(text = "Workouts", trailing = "Day offset from the start date")
+        Label(text = "Workouts", trailing = "Day offset from the start date")
         d.workouts.forEach { w ->
-            Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     JKField(
                         label = "Title",
@@ -998,17 +916,17 @@ fun ProgramEditorSheet(draft: ProgramDraft, onSaved: suspend () -> Unit) {
                 }
                 ItemsEditor(items = w.items, onItemsChange = { items -> updateWorkout(w.localId) { it.copy(items = items) } })
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SmallPillButton(onClick = { picking = w.localId }) {
-                        Label("Add exercise", systemImage = "plus", style = JKType.caption2.semibold(), color = JK.secondary)
+                    TextButton(onClick = { picking = w.localId }) {
+                        IconLabel("Add exercise", icon = IconKey.add, style = JKType.caption.semibold(), color = JKColors.textSecondary)
                     }
                     Spacer(Modifier.weight(1f))
-                    SmallPillButton(onClick = { d = d.copy(workouts = d.workouts.filter { it.localId != w.localId }) }) {
-                        Label("Remove workout", systemImage = "trash", style = JKType.caption2.semibold(), color = JK.secondary)
+                    TextButton(onClick = { d = d.copy(workouts = d.workouts.filter { it.localId != w.localId }) }) {
+                        IconLabel("Remove workout", icon = IconKey.delete, style = JKType.caption.semibold(), color = JKColors.textSecondary)
                     }
                 }
             }
         }
-        GhostButton(onClick = {
+        SecondaryButton(onClick = {
             val next = (d.workouts.maxOfOrNull { it.dayOffset } ?: -1) + 1
             d = d.copy(
                 workouts = d.workouts + ProgramWorkout(
@@ -1018,15 +936,15 @@ fun ProgramEditorSheet(draft: ProgramDraft, onSaved: suspend () -> Unit) {
                 ),
             )
         }) {
-            Label("Add workout", systemImage = "plus", style = JKType.subheadline.semibold())
+            IconLabel("Add workout", icon = IconKey.add, style = JKType.callout.semibold())
         }
 
         error?.let { ErrorBanner(it) }
-        ChromeButton(onClick = { scope.launch { save() } }, enabled = !saving && d.name.isNotBlank()) {
-            if (saving) ProgressView(tint = Color.Black) else Text(if (d.programId == null) "Create program" else "Save program")
+        PrimaryButton(onClick = { scope.launch { save() } }, enabled = !saving && d.name.isNotBlank()) {
+            if (saving) ProgressView() else Text(if (d.programId == null) "Create program" else "Save program")
         }
         if (d.programId != null) {
-            GhostButton("Delete program", onClick = { confirmDelete = true })
+            SecondaryButton("Delete program", onClick = { confirmDelete = true })
         }
     }
 
@@ -1059,7 +977,7 @@ fun ProgramEditorSheet(draft: ProgramDraft, onSaved: suspend () -> Unit) {
 @Composable
 fun ItemsEditor(items: List<WorkoutItemInput>, onItemsChange: (List<WorkoutItemInput>) -> Unit) {
     if (items.isEmpty()) {
-        Text("No exercises yet.", style = JKType.caption2, color = JK.tertiary)
+        Text("No exercises yet.", style = JKType.caption, color = JKColors.textTertiary)
     }
     fun update(index: Int, change: (WorkoutItemInput) -> WorkoutItemInput) {
         onItemsChange(items.toMutableList().also { it[index] = change(it[index]) })
@@ -1073,21 +991,21 @@ fun ItemsEditor(items: List<WorkoutItemInput>, onItemsChange: (List<WorkoutItemI
     items.forEachIndexed { index, item ->
         androidx.compose.runtime.key(item.localId) {
             Column(
-                Modifier.fillMaxWidth().background(JK.cardRaised.copy(alpha = 0.5f), rounded(10.dp)).padding(10.dp),
+                Modifier.fillMaxWidth().background(JKColors.raised.copy(alpha = 0.5f), JKShape.control).padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         item.exerciseName.ifEmpty { item.exerciseId },
-                        style = JKType.subheadline.semibold(),
-                        color = JK.text,
+                        style = JKType.callout.semibold(),
+                        color = JKColors.text,
                     )
                     if (item.id == null) {
                         Text(
                             "New",
-                            style = JKType.system(9, FontWeight.SemiBold),
-                            color = Color.Black,
-                            modifier = Modifier.background(JK.text, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = JKType.caption.semibold(),
+                            color = JKColors.primaryLabel,
+                            modifier = Modifier.background(JKColors.text, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
                     Spacer(Modifier.weight(1f))
@@ -1149,7 +1067,7 @@ private fun ItemAction(systemName: String, description: String, enabled: Boolean
             .padding(4.dp)
             .semantics { contentDescription = description },
     ) {
-        SystemImage(systemName, JKType.caption, if (enabled) JK.secondary else JK.tertiary.copy(alpha = 0.5f))
+        Glyph(IconKey.fromSymbol(systemName), JKType.caption, if (enabled) JKColors.textSecondary else JKColors.textTertiary.copy(alpha = 0.5f))
     }
 }
 
@@ -1195,25 +1113,25 @@ fun AssignProgramSheet(program: Program, onDone: suspend () -> Unit) {
     }
 
     SheetScreen(title = "Assign program", spacing = 12.dp, leading = { BarButton("Cancel") { dismiss() } }) {
-        Text(program.name, style = JKType.title3.semibold(), color = JK.text)
+        Text(program.name, style = JKType.headline, color = JKColors.text)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Start date", style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
+            Text("Start date", style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
             // iOS's compact date picker: the date in a grey capsule that opens the calendar.
             Text(
                 Fmt.dayMonthYear(start),
-                style = JKType.subheadline,
-                color = JK.text,
+                style = JKType.callout,
+                color = JKColors.text,
                 modifier = Modifier
-                    .clip(rounded(8.dp))
+                    .clip(JKShape.chip)
                     .clickable { pickingDate = true }
-                    .background(JK.cardRaised, rounded(8.dp))
+                    .background(JKColors.raised, JKShape.chip)
                     .padding(horizontal = 11.dp, vertical = 6.dp),
             )
         }
-        Eyebrow(text = "Client")
+        Label(text = "Client")
         val list = clients
         if (list != null) {
-            Column(Modifier.jkCard(padding = 2.dp)) {
+            Column(Modifier.jkSurface(padding = 2.dp)) {
                 list.forEach { c ->
                     Row(
                         Modifier.fillMaxWidth().clickable { clientId = c.id }.padding(10.dp),
@@ -1221,7 +1139,7 @@ fun AssignProgramSheet(program: Program, onDone: suspend () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Avatar(initials = c.displayInitials, size = 28.dp)
-                        Text(c.name, style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
+                        Text(c.name, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
                         CheckCircle(on = clientId == c.id)
                     }
                 }
@@ -1230,19 +1148,14 @@ fun AssignProgramSheet(program: Program, onDone: suspend () -> Unit) {
             LoadingCard()
         }
         created?.let {
-            Label(
-                "Created $it draft workouts. Publish them from the client's Plan tab.",
-                systemImage = "checkmark.circle",
-                style = JKType.caption,
-                color = JK.secondary,
-            )
+            IconLabel("Created $it draft workouts. Publish them from the client's Plan tab.", icon = IconKey.custom, style = JKType.caption, color = JKColors.textSecondary)
         }
         error?.let { ErrorBanner(it) }
-        ChromeButton(
+        PrimaryButton(
             onClick = { scope.launch { assign() } },
             enabled = !saving && (created != null || clientId != null),
         ) {
-            if (saving) ProgressView(tint = Color.Black) else Text(if (created == null) "Assign" else "Done")
+            if (saving) ProgressView() else Text(if (created == null) "Assign" else "Done")
         }
     }
 
@@ -1253,16 +1166,16 @@ fun AssignProgramSheet(program: Program, onDone: suspend () -> Unit) {
 @Composable
 private fun StartDateDialog(initial: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit) {
     val state = rememberDatePickerState(initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
-    val colors = DatePickerDefaults.colors(containerColor = AlertSurface)
+    val colors = DatePickerDefaults.colors(containerColor = JKColors.raised)
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
                 state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
                 onDismiss()
-            }) { Text("Done", style = JKType.body.semibold(), color = JK.text) }
+            }) { Text("Done", style = JKType.body.semibold(), color = JKColors.text) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JK.text) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JKColors.text) } },
         colors = colors,
     ) {
         DatePicker(state = state, colors = colors, title = null, headline = null, showModeToggle = false)
@@ -1304,37 +1217,37 @@ fun GuidesView() {
             g.featured?.takeIf(::matches)?.let { featured ->
                 FeaturedCard(featured, Modifier.clickable { open = featured })
             }
-            Eyebrow(text = "Quick tips")
+            Label(text = "Quick tips")
             val tips = g.tips.filter(::matches)
             if (tips.isEmpty()) {
-                Text("Nothing matches.", style = JKType.caption, color = JK.tertiary)
+                Text("Nothing matches.", style = JKType.caption, color = JKColors.textTertiary)
             }
             tips.forEach { tip ->
                 Row(
-                    Modifier.clip(rounded(JK.corner)).clickable { open = tip }.jkCard(padding = 12.dp),
+                    Modifier.clip(JKShape.card).clickable { open = tip }.jkSurface(padding = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    IconTile(systemName = symbol(tip.icon ?: "lightbulb", fallback = "lightbulb"), size = 32.dp)
+                    RowGlyph(IconKey.fromSymbolOrNull(tip.icon) ?: IconKey.idea, slot = 32.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(tip.title, style = JKType.subheadline.semibold(), color = JK.text)
-                        Text(tip.body, style = JKType.caption2, color = JK.tertiary, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(tip.title, style = JKType.callout.semibold(), color = JKColors.text)
+                        Text(tip.body, style = JKType.caption, color = JKColors.textTertiary, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
         }
-        ChromeButton(onClick = { showDesk = true }, modifier = Modifier.padding(top = 20.dp)) {
-            Label("Coach desk on the web", systemImage = "desktopcomputer", style = JKType.subheadline.semibold(), color = Color.Black)
+        PrimaryButton(onClick = { showDesk = true }, modifier = Modifier.padding(top = 20.dp)) {
+            IconLabel("Coach desk on the web", icon = IconKey.desktop, style = JKType.callout.semibold(), color = JKColors.primaryLabel)
         }
-        Text("Write weekly feedback and plans from a computer.", style = JKType.caption2, color = JK.tertiary)
-        GhostButton(onClick = {
+        Text("Write weekly feedback and plans from a computer.", style = JKType.caption, color = JKColors.textTertiary)
+        SecondaryButton(onClick = {
             scope.launch {
                 try { session.switchToDemoClient() } catch (e: Throwable) { switchError = e.readable }
             }
         }) {
-            Label("View the app as a client (demo: Sam Carter)", systemImage = "arrow.left.arrow.right", style = JKType.subheadline.semibold())
+            IconLabel("View the app as a client (demo: Sam Carter)", icon = IconKey.swap, style = JKType.callout.semibold())
         }
         switchError?.let { ErrorBanner(it) }
-        GhostButton("Sign out", onClick = { scope.launch { session.signOut() } })
+        SecondaryButton("Sign out", onClick = { scope.launch { session.signOut() } })
     }
 
     if (showDesk) Sheet(onDismiss = { showDesk = false }) { WebDeskSheet() }
@@ -1344,48 +1257,48 @@ fun GuidesView() {
 /** A guide read in full: SwiftUI's medium/large detent sheet, as a bottom sheet. */
 @Composable
 private fun GuideSheet(g: Guide, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = JK.bg, contentColor = JK.text) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = JKColors.bg, contentColor = JKColors.text) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Eyebrow(text = (listOfNotNull(g.minutes?.let { "$it min" }) + g.tags).joinToString(" · "))
-            Text(g.title, style = JKType.title2.semibold(), color = JK.text)
-            Text(g.body, style = JKType.body, color = JK.secondary)
+            Label(text = (listOfNotNull(g.minutes?.let { "$it min" }) + g.tags).joinToString(" · "))
+            Text(g.title, style = JKType.display, color = JKColors.text)
+            Text(g.body, style = JKType.body, color = JKColors.textSecondary)
         }
     }
 }
 
 @Composable
 private fun FeaturedCard(g: Guide, modifier: Modifier = Modifier) {
-    val shape = rounded(JK.corner)
+    val shape = JKShape.card
     Column(
         Modifier
             .fillMaxWidth()
             .clip(shape)
             .then(modifier)
-            .background(JK.card)
-            .border(1.dp, JK.stroke, shape),
+            .background(JKColors.surface)
+            .border(1.dp, JKColors.hairline, shape),
     ) {
-        Box(Modifier.fillMaxWidth().height(110.dp).background(JK.cardRaised)) {
-            SystemImage("book.pages", JKType.largeTitle, JK.tertiary, Modifier.align(Alignment.Center))
+        Box(Modifier.fillMaxWidth().height(110.dp).background(JKColors.raised)) {
+            Glyph(IconKey.guide, JKType.display, JKColors.textTertiary, Modifier.align(Alignment.Center))
             g.tags.firstOrNull()?.let { first ->
                 Text(
                     first,
-                    style = JKType.system(9, FontWeight.SemiBold),
-                    color = JK.secondary,
+                    style = JKType.caption.semibold(),
+                    color = JKColors.textSecondary,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
-                        .background(JK.card, CircleShape)
+                        .background(JKColors.surface, CircleShape)
                         .padding(horizontal = 7.dp, vertical = 3.dp),
                 )
             }
         }
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Eyebrow(text = "Featured guide" + (g.minutes?.let { " · $it min" } ?: ""))
-            Text(g.title, style = JKType.headline, color = JK.text, textAlign = TextAlign.Start)
-            Text(g.body, style = JKType.caption, color = JK.tertiary, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Label(text = "Featured guide" + (g.minutes?.let { " · $it min" } ?: ""))
+            Text(g.title, style = JKType.headline, color = JKColors.text, textAlign = TextAlign.Start)
+            Text(g.body, style = JKType.caption, color = JKColors.textTertiary, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         }
     }
 }
@@ -1407,26 +1320,26 @@ fun CoachAccountView() {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(initials = initialsOf(session.me?.name ?: "Coach"), size = 48.dp)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(session.me?.name ?: "Coach", style = JKType.title2.semibold(), color = JK.text)
-                Text(session.me?.email ?: "Coach account", style = JKType.caption, color = JK.tertiary)
+                Text(session.me?.name ?: "Coach", style = JKType.display, color = JKColors.text)
+                Text(session.me?.email ?: "Coach account", style = JKType.caption, color = JKColors.textTertiary)
             }
         }
-        Text("Signed in as the coach. Clients who sign up are assigned to you.", style = JKType.footnote, color = JK.secondary)
+        Text("Signed in as the coach. Clients who sign up are assigned to you.", style = JKType.caption, color = JKColors.textSecondary)
         Row(
-            Modifier.clip(rounded(JK.corner)).clickable { uri.openUri(APIClient.privacyURL) }.jkCard(padding = 12.dp),
+            Modifier.clip(JKShape.card).clickable { uri.openUri(APIClient.privacyURL) }.jkSurface(padding = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconTile(systemName = "hand.raised")
-            Text("Privacy policy", style = JKType.subheadline.semibold(), color = JK.text, modifier = Modifier.weight(1f))
-            SystemImage("arrow.up.right", JKType.caption, JK.tertiary)
+            RowGlyph(IconKey.handRaised)
+            Text("Privacy policy", style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
+            Glyph(IconKey.trendUp, JKType.caption, JKColors.textTertiary)
         }
         CoachNotificationsRow()
         PlansPricesLink()
         CalendarSubscribeCard()
         WebSessionsRow()
-        ChromeButton("Sign out", onClick = { confirmSignOut = true }, modifier = Modifier.padding(top = 12.dp))
-        Text("To see the client side, use Guides › View the app as a client.", style = JKType.caption2, color = JK.tertiary)
+        PrimaryButton("Sign out", onClick = { confirmSignOut = true }, modifier = Modifier.padding(top = 12.dp))
+        Text("To see the client side, use Guides › View the app as a client.", style = JKType.caption, color = JKColors.textTertiary)
     }
 
     if (confirmSignOut) {
@@ -1476,20 +1389,20 @@ private fun WebSessionsRow() {
     }
 
     Row(
-        Modifier.jkCard(padding = 12.dp),
+        Modifier.jkSurface(padding = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile(systemName = "desktopcomputer")
+        RowGlyph(IconKey.desktop)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Coach desk on the web", style = JKType.subheadline.semibold(), color = JK.text)
-            Text(detail, style = JKType.caption2, color = JK.tertiary)
+            Text("Coach desk on the web", style = JKType.callout.semibold(), color = JKColors.text)
+            Text(detail, style = JKType.caption, color = JKColors.textTertiary)
         }
         if ((sessions?.count ?: 0) > 0) {
             Text(
                 "Sign out all",
                 style = JKType.caption.semibold(),
-                color = if (busy) JK.tertiary else JK.text,
+                color = if (busy) JKColors.textTertiary else JKColors.text,
                 modifier = Modifier.clickable(enabled = !busy) {
                     scope.launch {
                         busy = true
@@ -1516,12 +1429,12 @@ private fun CoachNotificationsRow() {
     // Mirrors Reminders.enabled so the switch moves as soon as the change lands.
     var on by remember { mutableStateOf(Reminders.enabled) }
 
-    Column(Modifier.jkCard(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.jkSurface(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconTile(systemName = "bell")
+            RowGlyph(IconKey.notifications)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Notifications", style = JKType.subheadline.semibold(), color = JK.text)
-                Text("Client messages, check-ins and bookings", style = JKType.caption2, color = JK.tertiary)
+                Text("Notifications", style = JKType.callout.semibold(), color = JKColors.text)
+                Text("Client messages, check-ins and bookings", style = JKType.caption, color = JKColors.textTertiary)
             }
             IOSSwitch(checked = on, onCheckedChange = { wanted ->
                 scope.launch {
@@ -1535,6 +1448,6 @@ private fun CoachNotificationsRow() {
                 }
             })
         }
-        error?.let { Text(it, style = JKType.caption2, color = JK.secondary) }
+        error?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
     }
 }

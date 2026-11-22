@@ -83,6 +83,8 @@ data class PersonRef(
     val id: String,
     val name: String,
     var initials: String? = null,
+    /** The coach's portrait (GET /api/media/:id with the session token); null until uploaded or on older servers. */
+    var avatarMediaId: String? = null,
 ) {
     val displayInitials: String get() = initials ?: Fmt.initials(name)
 }

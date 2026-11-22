@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,39 +49,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.jkperformance.app.design.Chip
-import com.jkperformance.app.design.CheckCircle
-import com.jkperformance.app.design.ChromeButton
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.DayStrip
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.ErrorBanner
-import com.jkperformance.app.design.ErrorCard
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKRefreshable
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Label
-import com.jkperformance.app.design.LoadingCard
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.LocalDismiss
-import com.jkperformance.app.design.ProgressRing
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.SmallPillButton
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.ThinBar
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.BarButton
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.monospacedDigit
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
-import com.jkperformance.app.design.medium
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Exercise
@@ -100,6 +68,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 // MARK: - Workout plan (Plan tab root)
 
@@ -198,11 +168,7 @@ fun WorkoutPlanView() {
             when {
                 error != null && s.week == null -> ErrorCard(error, retry = { s.loadWeek(force = true) })
                 s.week == null -> LoadingCard()
-                dayWorkouts.isEmpty() -> EmptyCard(
-                    systemName = "calendar",
-                    title = "Nothing planned",
-                    detail = "No workout from your coach on ${Fmt.longDay(s.selected)}.",
-                )
+                dayWorkouts.isEmpty() -> EmptyCard(title = "Nothing planned", detail = "No workout from your coach on ${Fmt.longDay(s.selected)}.")
                 else -> {
                     if (error != null) ErrorBanner(error)
                     if (dayWorkouts.size > 1) {
@@ -224,14 +190,14 @@ fun WorkoutPlanView() {
     }
 }
 
-/** A 30-point outlined square holding a header action's symbol. */
+/** A header action: an unboxed glyph in a 48dp target. */
 @Composable
 private fun HeaderIcon(name: String, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(30.dp).border(1.dp, JK.stroke, rounded(7.dp)),
+        modifier.size(JKSize.touchTarget),
         contentAlignment = Alignment.Center,
     ) {
-        SystemImage(name, JKType.body, JK.text)
+        Glyph(IconKey.fromSymbol(name), JKType.body, JKColors.text)
     }
 }
 
@@ -287,32 +253,32 @@ fun WorkoutBody(workout: Workout, onChange: (Workout) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(workout.title, style = JKType.headline, color = JK.text, modifier = Modifier.weight(1f))
+            Text(workout.title, style = JKType.headline, color = JKColors.text, modifier = Modifier.weight(1f))
             val editedAt = workout.editedAt
             if (workout.editedBy == "coach" && editedAt != null) {
-                Label("Coach · ${Fmt.relative(editedAt)}", systemImage = "person.2", style = JKType.caption2, color = JK.tertiary)
+                IconLabel("Coach · ${Fmt.relative(editedAt)}", icon = IconKey.clients, style = JKType.caption, color = JKColors.textTertiary)
             } else {
-                Label("Shared with Coach", systemImage = "person.2", style = JKType.caption2, color = JK.tertiary)
+                IconLabel("Shared with Coach", icon = IconKey.clients, style = JKType.caption, color = JKColors.textTertiary)
             }
         }
         Text(
             (listOfNotNull(workout.startsAt, workout.location).filter { it.isNotEmpty() } + "${workout.items.size} exercises")
                 .joinToString(" · "),
-            style = JKType.caption2,
-            color = JK.tertiary,
+            style = JKType.caption,
+            color = JKColors.textTertiary,
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ThinBar(
                 fraction = if (workout.items.isEmpty()) 0.0 else workout.doneCount.toDouble() / workout.items.size,
                 modifier = Modifier.weight(1f),
             )
-            Text("${workout.doneCount} of ${workout.items.size} done", style = JKType.caption2, color = JK.tertiary)
+            Text("${workout.doneCount} of ${workout.items.size} done", style = JKType.caption, color = JKColors.textTertiary)
         }
         val notes = workout.notes
         if (!notes.isNullOrEmpty()) {
-            Label(notes, systemImage = "text.bubble", style = JKType.caption2, color = JK.secondary)
+            IconLabel(notes, icon = IconKey.messages, style = JKType.caption, color = JKColors.textSecondary)
         }
     }
 
@@ -325,10 +291,10 @@ fun WorkoutBody(workout: Workout, onChange: (Workout) -> Unit) {
     val done = workout.completedAt
     if (done != null) {
         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-            Label("Completed ${Fmt.relative(done)}", systemImage = "checkmark.seal", style = JKType.subheadline.semibold(), color = JK.secondary)
+            IconLabel("Completed ${Fmt.relative(done)}", icon = IconKey.verified, style = JKType.callout.semibold(), color = JKColors.textSecondary)
         }
     } else if (workout.items.isNotEmpty()) {
-        ChromeButton(
+        PrimaryButton(
             onClick = {
                 scope.launch {
                     completing = true
@@ -355,9 +321,9 @@ fun WorkoutBody(workout: Workout, onChange: (Workout) -> Unit) {
             enabled = !completing,
         ) {
             if (completing) {
-                ProgressView(tint = Color.Black)
+                ProgressView()
             } else {
-                Label("Complete workout", systemImage = "checkmark", style = LocalTextStyle.current, color = LocalContentColor.current)
+                IconLabel("Complete workout", icon = IconKey.done, style = LocalTextStyle.current, color = LocalContentColor.current)
             }
         }
     }
@@ -365,14 +331,14 @@ fun WorkoutBody(workout: Workout, onChange: (Workout) -> Unit) {
 
 @Composable
 private fun PlanExerciseCard(item: WorkoutItem, modifier: Modifier) {
-    Column(modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CheckCircle(on = item.isDone)
-            Text(item.exercise.name, style = JKType.subheadline.semibold(), color = JK.text, modifier = Modifier.weight(1f))
+            Text(item.exercise.name, style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
             if (item.logged.isNotEmpty() && !item.isDone) {
-                Text("${item.logged.size}/${item.sets}", style = JKType.caption2, color = JK.tertiary)
+                Text("${item.logged.size}/${item.sets}", style = JKType.caption, color = JKColors.textTertiary)
             }
-            SystemImage("chevron.right", JKType.caption, JK.tertiary)
+            Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PrescriptionCell("Sets", "${item.sets}", Modifier.weight(1f))
@@ -381,7 +347,7 @@ private fun PlanExerciseCard(item: WorkoutItem, modifier: Modifier) {
         }
         val note = item.note
         if (!note.isNullOrEmpty()) {
-            Label(note, systemImage = "text.bubble", style = JKType.caption2, color = JK.tertiary)
+            IconLabel(note, icon = IconKey.messages, style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
@@ -389,11 +355,11 @@ private fun PlanExerciseCard(item: WorkoutItem, modifier: Modifier) {
 @Composable
 private fun PrescriptionCell(label: String, value: String, modifier: Modifier) {
     Column(
-        modifier.background(JK.cardRaised, rounded(8.dp)).padding(8.dp),
+        modifier.background(JKColors.raised, JKShape.chip).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(label, style = JKType.system(9), color = JK.tertiary)
-        Text(value, style = JKType.subheadline.semibold(), color = JK.text)
+        Text(label, style = JKType.caption, color = JKColors.textTertiary)
+        Text(value, style = JKType.callout.semibold(), color = JKColors.text)
     }
 }
 
@@ -418,22 +384,22 @@ private object ExerciseSearch {
 @Composable
 private fun ExerciseFilters(query: String, onQuery: (String) -> Unit, category: String, onCategory: (String) -> Unit) {
     Row(
-        Modifier.jkCard(padding = 10.dp),
+        Modifier.jkSurface(padding = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SystemImage("magnifyingglass", JKType.body, JK.tertiary)
+        Glyph(IconKey.search, JKType.body, JKColors.textTertiary)
         BasicTextField(
             value = query,
             onValueChange = onQuery,
             singleLine = true,
-            textStyle = JKType.body.copy(color = JK.text),
-            cursorBrush = SolidColor(JK.text),
+            textStyle = JKType.body.copy(color = JKColors.text),
+            cursorBrush = SolidColor(JKColors.text),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
             modifier = Modifier.weight(1f),
             decorationBox = { field ->
                 Box {
-                    if (query.isEmpty()) Text("Search exercises", style = JKType.body, color = JK.tertiary)
+                    if (query.isEmpty()) Text("Search exercises", style = JKType.body, color = JKColors.textTertiary)
                     field()
                 }
             },
@@ -473,7 +439,7 @@ fun ExercisesView() {
             ExerciseFilters(query, { query = it }, category, { category = it })
             Loadable(value = exercises, error = error, retry = { load() }) { list ->
                 if (list.isEmpty()) {
-                    EmptyCard(systemName = "magnifyingglass", title = "No matches", detail = "Try another word or category.")
+                    EmptyCard(title = "No matches", detail = "Try another word or category.")
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     list.chunked(2).forEach { pair ->
@@ -498,19 +464,14 @@ fun ExercisesView() {
 
 @Composable
 private fun ExerciseTile(exercise: Exercise, modifier: Modifier) {
-    val shape = rounded(JK.corner)
-    Column(modifier.clip(shape).background(JK.card).border(1.dp, JK.stroke, shape)) {
-        Box(Modifier.fillMaxWidth().height(84.dp).background(JK.cardRaised), contentAlignment = Alignment.BottomEnd) {
-            SystemImage(
-                if (exercise.videoUrl == null) "figure.strengthtraining.traditional" else "play.circle",
-                JKType.body,
-                JK.secondary,
-                Modifier.padding(6.dp),
-            )
+    val shape = JKShape.card
+    Column(modifier.clip(shape).background(JKColors.surface).border(1.dp, JKColors.hairline, shape)) {
+        Box(Modifier.fillMaxWidth().height(84.dp).background(JKColors.raised), contentAlignment = Alignment.BottomEnd) {
+            Glyph(if (exercise.videoUrl == null) IconKey.workout else IconKey.play, JKType.body, JKColors.textSecondary, Modifier.padding(6.dp))
         }
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(exercise.name, style = JKType.caption.semibold(), color = JK.text)
-            Text("${exercise.equipment} · ${exercise.pattern}", style = JKType.system(10), color = JK.tertiary)
+            Text(exercise.name, style = JKType.caption.semibold(), color = JKColors.text)
+            Text("${exercise.equipment} · ${exercise.pattern}", style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
@@ -547,8 +508,8 @@ fun ExercisePickerSheet(onPick: (Exercise) -> Unit) {
         ) {
             ExerciseFilters(query, { query = it }, category, { category = it })
             Loadable(value = exercises, error = error, retry = { load() }) { list ->
-                if (list.isEmpty()) EmptyCard(systemName = "magnifyingglass", title = "No matches")
-                Column(Modifier.jkCard(padding = 4.dp)) {
+                if (list.isEmpty()) EmptyCard(title = "No matches")
+                Column(Modifier.jkSurface(padding = 4.dp)) {
                     list.forEach { exercise ->
                         Row(
                             Modifier
@@ -561,12 +522,12 @@ fun ExercisePickerSheet(onPick: (Exercise) -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            IconTile("dumbbell", size = 34.dp)
+                            RowGlyph(IconKey.workout, slot = 34.dp)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(exercise.name, style = JKType.subheadline.medium(), color = JK.text)
-                                Text("${exercise.equipment} · ${exercise.pattern}", style = JKType.caption2, color = JK.tertiary)
+                                Text(exercise.name, style = JKType.callout, color = JKColors.text)
+                                Text("${exercise.equipment} · ${exercise.pattern}", style = JKType.caption, color = JKColors.textTertiary)
                             }
-                            SystemImage("plus", JKType.body, JK.tertiary)
+                            Glyph(IconKey.add, JKType.body, JKColors.textTertiary)
                         }
                     }
                 }
@@ -685,7 +646,7 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
 
     Column(Modifier.jkScreen()) {
         TopBar(title = current.title) {
-            Text("${index + 1} of ${ordered.size}", style = JKType.caption2, color = JK.tertiary, modifier = Modifier.padding(horizontal = 8.dp))
+            Text("${index + 1} of ${ordered.size}", style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.padding(horizontal = 8.dp))
         }
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -724,7 +685,7 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
                 error?.let { ErrorBanner(it) }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (index + 1 < ordered.size) {
-                        GhostButton(
+                        SecondaryButton(
                             onClick = {
                                 itemIdState = ordered[index + 1].id
                                 loads.clear()
@@ -732,10 +693,10 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
                             },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Label("Next exercise", systemImage = "forward", style = LocalTextStyle.current, color = LocalContentColor.current)
+                            IconLabel("Next exercise", icon = IconKey.skip, style = LocalTextStyle.current, color = LocalContentColor.current)
                         }
                     }
-                    ChromeButton(
+                    PrimaryButton(
                         text = nextSet?.let { "Log set $it" } ?: "All sets logged",
                         onClick = { nextSet?.let { n -> scope.launch { log(n) } } },
                         modifier = Modifier.weight(1f),
@@ -743,7 +704,7 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
                     )
                 }
             } else {
-                EmptyCard(systemName = "dumbbell", title = "Exercise removed", detail = "Your coach changed this workout.")
+                EmptyCard(title = "Exercise removed", detail = "Your coach changed this workout.")
             }
         }
     }
@@ -752,9 +713,9 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
 /** The coach demo card: a play button when the exercise has a video, then the prescription and note. */
 @Composable
 private fun LoggerDemo(item: WorkoutItem, openVideo: (String) -> Unit) {
-    val shape = rounded(JK.corner)
-    Column(Modifier.fillMaxWidth().clip(shape).background(JK.card).border(1.dp, JK.stroke, shape)) {
-        Box(Modifier.fillMaxWidth().height(150.dp).background(JK.cardRaised)) {
+    val shape = JKShape.card
+    Column(Modifier.fillMaxWidth().clip(shape).background(JKColors.surface).border(1.dp, JKColors.hairline, shape)) {
+        Box(Modifier.fillMaxWidth().height(150.dp).background(JKColors.raised)) {
             val url = item.exercise.videoUrl
             if (url != null) {
                 Box(
@@ -762,36 +723,36 @@ private fun LoggerDemo(item: WorkoutItem, openVideo: (String) -> Unit) {
                         .align(Alignment.Center)
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(JK.card)
+                        .background(JKColors.surface)
                         .clickable { openVideo(url) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    SystemImage("play.fill", JKType.body, JK.text)
+                    Glyph(IconKey.playArrow, JKType.body, JKColors.text)
                 }
                 Text(
                     "Coach demo",
-                    style = JKType.caption2,
-                    color = JK.secondary,
+                    style = JKType.caption,
+                    color = JKColors.textSecondary,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(10.dp)
-                        .background(JK.card, CircleShape)
+                        .background(JKColors.surface, CircleShape)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             } else {
-                SystemImage("figure.strengthtraining.traditional", JKType.system(40), JK.tertiary, Modifier.align(Alignment.Center))
+                Glyph(IconKey.workout, JKType.display, JKColors.textTertiary, Modifier.align(Alignment.Center))
             }
         }
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(item.exercise.name, style = JKType.title3.semibold(), color = JK.text)
+            Text(item.exercise.name, style = JKType.headline, color = JKColors.text)
             Text(
                 listOfNotNull("${item.sets} × ${item.reps}", item.load.ifEmpty { null }, item.rpe?.let { "RPE $it" }).joinToString(" · "),
                 style = JKType.caption,
-                color = JK.tertiary,
+                color = JKColors.textTertiary,
             )
             val note = item.note
             if (!note.isNullOrEmpty()) {
-                Text(note, style = JKType.caption2, color = JK.secondary, modifier = Modifier.padding(top = 4.dp))
+                Text(note, style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -811,17 +772,17 @@ private fun SetTable(
     locked: Boolean,
     onToggle: (Int, Boolean) -> Unit,
 ) {
-    val header = JKType.system(9, FontWeight.SemiBold)
-    Column(Modifier.jkCard(padding = 0.dp)) {
+    val header = JKType.caption.semibold()
+    Column(Modifier.jkSurface(padding = 0.dp)) {
         Row(
             Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("SET", style = header, color = JK.tertiary, modifier = Modifier.width(34.dp))
-            Text("PREVIOUS", style = header, color = JK.tertiary, modifier = Modifier.weight(1f))
-            Text("KG", style = header, color = JK.tertiary, textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
-            Text("REPS", style = header, color = JK.tertiary, textAlign = TextAlign.Center, modifier = Modifier.width(44.dp))
+            Text("SET", style = header, color = JKColors.textTertiary, modifier = Modifier.width(34.dp))
+            Text("PREVIOUS", style = header, color = JKColors.textTertiary, modifier = Modifier.weight(1f))
+            Text("KG", style = header, color = JKColors.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
+            Text("REPS", style = header, color = JKColors.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.width(44.dp))
             Spacer(Modifier.width(28.dp))
         }
         (1..maxOf(item.sets, 1)).forEach { n ->
@@ -832,17 +793,12 @@ private fun SetTable(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(Modifier.width(34.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("$n", style = JKType.subheadline.semibold(), color = JK.text)
+                    Text("$n", style = JKType.callout.semibold(), color = JKColors.text)
                     if (done && pending(n)) {
-                        SystemImage(
-                            "icloud.and.arrow.up",
-                            JKType.system(9),
-                            JK.tertiary,
-                            Modifier.semantics { contentDescription = "Waiting to send" },
-                        )
+                        Glyph(IconKey.upload, JKType.caption, JKColors.textTertiary, Modifier.semantics { contentDescription = "Waiting to send" })
                     }
                 }
-                Text(item.previous ?: "–", style = JKType.caption, color = JK.tertiary, modifier = Modifier.weight(1f))
+                Text(item.previous ?: "–", style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.weight(1f))
                 SetField(load(n), { onLoad(n, it) }, placeholder = "kg", width = 56.dp, done = done, keyboard = KeyboardType.Text)
                 Box(Modifier.width(44.dp), contentAlignment = Alignment.Center) {
                     SetField(reps(n), { onReps(n, it) }, placeholder = "–", width = 36.dp, done = done, keyboard = KeyboardType.Number)
@@ -852,9 +808,9 @@ private fun SetTable(
                     contentAlignment = Alignment.Center,
                 ) {
                     if (busy == n) {
-                        ProgressView(tint = JK.secondary, size = 16.dp)
+                        ProgressView(tint = JKColors.textSecondary, size = 16.dp)
                     } else {
-                        SystemImage(if (done) "checkmark.square.fill" else "square", JKType.title3, if (done) JK.text else JK.tertiary)
+                        Glyph(if (done) IconKey.checkbox else IconKey.checkboxBlank, JKType.headline, if (done) JKColors.text else JKColors.textTertiary)
                     }
                 }
             }
@@ -872,22 +828,22 @@ private fun SetField(
     done: Boolean,
     keyboard: KeyboardType,
 ) {
-    val style = JKType.subheadline.semibold().copy(color = JK.text, textAlign = TextAlign.Center)
+    val style = JKType.callout.semibold().copy(color = JKColors.text, textAlign = TextAlign.Center)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         enabled = !done,
         singleLine = true,
         textStyle = style,
-        cursorBrush = SolidColor(JK.text),
+        cursorBrush = SolidColor(JKColors.text),
         keyboardOptions = KeyboardOptions(keyboardType = keyboard, autoCorrectEnabled = false),
-        modifier = Modifier.width(width).height(28.dp),
+        modifier = Modifier.width(width).heightIn(min = 28.dp),
         decorationBox = { field ->
             Box(
-                Modifier.fillMaxSize().background(if (done) Color.Transparent else JK.cardRaised, rounded(6.dp)),
+                Modifier.fillMaxSize().background(if (done) Color.Transparent else JKColors.raised, JKShape.chip),
                 contentAlignment = Alignment.Center,
             ) {
-                if (value.isEmpty()) Text(placeholder, style = style.copy(color = JK.tertiary))
+                if (value.isEmpty()) Text(placeholder, style = style.copy(color = JKColors.textTertiary))
                 field()
             }
         },
@@ -897,34 +853,34 @@ private fun SetField(
 @Composable
 private fun RpeRow(rpe: Int?, onMinus: () -> Unit, onPlus: () -> Unit) {
     Row(
-        Modifier.jkCard(padding = 10.dp),
+        Modifier.jkSurface(padding = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("RPE", style = JKType.system(9, FontWeight.SemiBold), color = JK.tertiary)
-        Text(rpe?.toString() ?: "–", style = JKType.subheadline.semibold(), color = JK.text, modifier = Modifier.widthIn(min = 20.dp))
-        Text("optional, for the next set", style = JKType.caption2, color = JK.tertiary, modifier = Modifier.weight(1f))
-        SmallPillButton("−", onClick = onMinus, enabled = rpe != null)
-        SmallPillButton("+", onClick = onPlus)
+        Text("RPE", style = JKType.caption.semibold(), color = JKColors.textTertiary)
+        Text(rpe?.toString() ?: "–", style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.widthIn(min = 20.dp))
+        Text("optional, for the next set", style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.weight(1f))
+        TextButton("−", onClick = onMinus, enabled = rpe != null)
+        TextButton("+", onClick = onPlus)
     }
 }
 
 @Composable
 private fun RestTimer(rest: Int, resting: Boolean, onMinus: () -> Unit, onPlus: () -> Unit, onToggle: () -> Unit) {
     Row(
-        Modifier.jkCard(),
+        Modifier.jkSurface(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProgressRing(fraction = minOf(1.0, rest / 90.0), lineWidth = 4.dp, modifier = Modifier.size(38.dp))
+        Ring(fraction = minOf(1.0, rest / 90.0), lineWidth = 4.dp, modifier = Modifier.size(38.dp))
         Column(Modifier.weight(1f)) {
-            Text("REST", style = JKType.system(9, FontWeight.SemiBold), color = JK.tertiary)
-            Text("%d:%02d".format(rest / 60, rest % 60), style = JKType.title.semibold().monospacedDigit(), color = JK.text)
+            Text("REST", style = JKType.caption.semibold(), color = JKColors.textTertiary)
+            Text("%d:%02d".format(rest / 60, rest % 60), style = JKType.numberTile, color = JKColors.text)
         }
-        SmallPillButton("−15s", onClick = onMinus)
-        SmallPillButton("+15s", onClick = onPlus)
-        SmallPillButton(onClick = onToggle) {
-            SystemImage(if (resting) "pause" else "play", LocalTextStyle.current, LocalContentColor.current)
+        TextButton("−15s", onClick = onMinus)
+        TextButton("+15s", onClick = onPlus)
+        TextButton(onClick = onToggle) {
+            Glyph(if (resting) IconKey.pause else IconKey.play, LocalTextStyle.current, LocalContentColor.current)
         }
     }
 }
@@ -953,17 +909,11 @@ fun OfflineBanner() {
         } else {
             "Offline · $sets ${if (sets == 1) "set" else "sets"} will send when you're back online"
         }
-        Label(
-            text,
-            systemImage = "icloud.slash",
-            style = JKType.caption2,
-            color = JK.secondary,
-            modifier = Modifier
+        IconLabel(text, icon = IconKey.offline, style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier
                 .fillMaxWidth()
-                .background(JK.card, rounded(10.dp))
-                .border(1.dp, JK.stroke, rounded(10.dp))
-                .padding(10.dp),
-        )
+                .background(JKColors.surface, JKShape.control)
+                .border(1.dp, JKColors.hairline, JKShape.control)
+                .padding(10.dp))
     }
     Outbox.lastError?.let { message ->
         ErrorBanner(message, Modifier.clickable { Outbox.lastError = null })

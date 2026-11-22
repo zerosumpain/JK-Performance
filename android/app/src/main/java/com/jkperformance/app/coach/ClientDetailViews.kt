@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +50,8 @@ import com.jkperformance.app.net.*
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /** Swift `ClientDetailView.Tab`. */
 enum class ClientDetailTab(val label: String) { plan("Plan"), feedback("Feedback"), health("Health"), habits("Habits"), sessions("Sessions") }
@@ -85,7 +86,7 @@ fun ClientDetailView(clientId: String, name: String, initialTab: ClientDetailTab
                 Modifier
                     .navLink { MessagesThreadView(clientId = clientId, otherName = fullName, subtitle = "Client") }
                     .padding(10.dp),
-            ) { SystemImage("bubble.left", JKType.body, JK.text) }
+            ) { Glyph(IconKey.messages, JKType.body, JKColors.text) }
         }
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -98,7 +99,7 @@ fun ClientDetailView(clientId: String, name: String, initialTab: ClientDetailTab
                 ClientDetailTab.plan -> CoachPlanTab(clientId, fullName)
                 ClientDetailTab.feedback -> {
                     CoachReportsSection(clientId = clientId, clientName = firstName)
-                    Eyebrow(text = "Check-ins")
+                    Label(text = "Check-ins")
                     CoachNotesTab(clientId)
                     ClientAutomationSection(client = PersonRef(id = clientId, name = fullName))
                 }
@@ -116,8 +117,8 @@ private fun ClientHeader(detail: ClientDetail?, name: String, error: String?) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(initials = detail?.client?.displayInitials ?: Fmt.initials(name), size = 48.dp)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(detail?.client?.name ?: name, style = JKType.title2.semibold(), color = JK.text)
-                Text(subtitle(detail), style = JKType.caption, color = JK.tertiary)
+                Text(detail?.client?.name ?: name, style = JKType.display, color = JKColors.text)
+                Text(subtitle(detail), style = JKType.caption, color = JKColors.textTertiary)
             }
         }
         if (error != null) ErrorBanner(error)
@@ -125,10 +126,10 @@ private fun ClientHeader(detail: ClientDetail?, name: String, error: String?) {
             chips(detail).forEach { t ->
                 Text(
                     t,
-                    style = JKType.system(10, FontWeight.Medium),
-                    color = JK.secondary,
+                    style = JKType.caption,
+                    color = JKColors.textSecondary,
                     maxLines = 1,
-                    modifier = Modifier.border(1.dp, JK.stroke, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.border(1.dp, JKColors.hairline, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
         }
@@ -139,23 +140,23 @@ private fun ClientHeader(detail: ClientDetail?, name: String, error: String?) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ClientAboutCard(profile: Profile?) {
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Eyebrow(text = "About", trailing = profile?.answeredAt?.let { "Answered ${Fmt.dayMonth(it)}" })
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Label(text = "About", trailing = profile?.answeredAt?.let { "Answered ${Fmt.dayMonth(it)}" })
         when {
-            profile == null -> Text("Hasn't answered the first-run questions yet.", style = JKType.footnote, color = JK.tertiary)
-            profile.isEmpty -> Text("Skipped the first-run questions.", style = JKType.footnote, color = JK.tertiary)
+            profile == null -> Text("Hasn't answered the first-run questions yet.", style = JKType.caption, color = JKColors.textTertiary)
+            profile.isEmpty -> Text("Skipped the first-run questions.", style = JKType.caption, color = JKColors.textTertiary)
             else -> {
                 val goals = profile.goals.orEmpty().mapNotNull { Answers.goal(it) }
                 if (goals.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         goals.forEach { g ->
                             Row(
-                                Modifier.background(JK.cardRaised, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
+                                Modifier.background(JKColors.raised, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                androidx.compose.material3.Icon(g.icon, contentDescription = null, tint = JK.text, modifier = Modifier.size(14.dp))
-                                Text(g.title, style = JKType.caption.medium(), color = JK.text)
+                                Glyph(g.icon, size = JKSize.iconSmall, tint = JKColors.text)
+                                Text(g.title, style = JKType.caption, color = JKColors.text)
                             }
                         }
                     }
@@ -175,8 +176,8 @@ private fun ClientAboutCard(profile: Profile?) {
 @Composable
 private fun AboutLine(label: String, value: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, style = JKType.caption, color = JK.tertiary, modifier = Modifier.width(72.dp))
-        Text(value, style = JKType.caption, color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.width(72.dp))
+        Text(value, style = JKType.caption, color = JKColors.text, modifier = Modifier.weight(1f))
     }
 }
 
@@ -218,17 +219,13 @@ private fun flagText(f: String): String {
 
 // MARK: - Shared bits
 
-/** iOS's system red, for `role: .destructive` buttons. */
-private val destructiveRed = Color(1f, 0.27f, 0.23f)
 
-/** SwiftUI's alert/dialog surface in dark mode. */
-private val alertSurface = Color(0.17f, 0.17f, 0.17f)
 
 /**
  * `.overlay(RoundedRectangle(cornerRadius:).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4])))`:
  * the dashed outline of an "add" affordance, drawn inside the bounds.
  */
-private fun Modifier.dashedBorder(radius: Dp, color: Color = JK.stroke): Modifier = drawBehind {
+private fun Modifier.dashedBorder(radius: Dp, color: Color = JKColors.hairline): Modifier = drawBehind {
     val w = 1.dp.toPx()
     drawRoundRect(
         color = color,
@@ -245,7 +242,7 @@ private fun DashedAddRow(text: String, modifier: Modifier = Modifier) {
     Box(
         modifier.fillMaxWidth().dashedBorder(12.dp).padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
-    ) { Label(text, systemImage = "plus", style = JKType.caption, color = JK.secondary) }
+    ) { IconLabel(text, icon = IconKey.add, style = JKType.caption, color = JKColors.textSecondary) }
 }
 
 /**
@@ -256,22 +253,22 @@ private fun DashedAddRow(text: String, modifier: Modifier = Modifier) {
 private fun ConfirmDestructive(title: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, style = JKType.headline, color = JK.text) },
+        title = { Text(title, style = JKType.headline, color = JKColors.text) },
         confirmButton = {
-            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(action, style = JKType.body, color = destructiveRed) }
+            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(action, style = JKType.body, color = JKColors.error) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body.semibold(), color = JK.text) }
+            TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body.semibold(), color = JKColors.text) }
         },
-        containerColor = alertSurface,
-        shape = rounded(14.dp),
+        containerColor = JKColors.raised,
+        shape = JKShape.card,
     )
 }
 
 /** A plain trash-can button in the tertiary colour (`Button(role: .destructive) { … } label: { Image("trash") }`). */
 @Composable
 private fun TrashButton(onClick: () -> Unit) {
-    Box(Modifier.clickable(onClick = onClick).padding(6.dp)) { SystemImage("trash", JKType.body, JK.tertiary) }
+    Box(Modifier.clickable(onClick = onClick).padding(6.dp)) { Glyph(IconKey.delete, JKType.body, JKColors.textTertiary) }
 }
 
 // MARK: - Plan tab
@@ -402,11 +399,11 @@ private fun CoachPlanTab(clientId: String, clientName: String) {
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.clickable { day = Day.add(-7, day) }.padding(6.dp)) { SystemImage("chevron.left", JKType.body, JK.secondary) }
+        Box(Modifier.clickable { day = Day.add(-7, day) }.padding(6.dp)) { Glyph(IconKey.back, JKType.body, JKColors.textSecondary) }
         Spacer(Modifier.weight(1f))
-        Text("Week of ${Fmt.dayMonth(Day.weekStart(day))}", style = JKType.caption, color = JK.secondary)
+        Text("Week of ${Fmt.dayMonth(Day.weekStart(day))}", style = JKType.caption, color = JKColors.textSecondary)
         Spacer(Modifier.weight(1f))
-        Box(Modifier.clickable { day = Day.add(7, day) }.padding(6.dp)) { SystemImage("chevron.right", JKType.body, JK.secondary) }
+        Box(Modifier.clickable { day = Day.add(7, day) }.padding(6.dp)) { Glyph(IconKey.chevron, JKType.body, JKColors.textSecondary) }
     }
     DayStrip(days = Day.week(day), selected = day, onSelect = { day = it }, marked = week.orEmpty().map { it.date }.toSet())
 
@@ -443,11 +440,7 @@ private fun CoachPlanTab(clientId: String, clientName: String) {
                     onDelete = { confirmDelete = true },
                 )
             } else if (dayWorkouts().isEmpty()) {
-                EmptyCard(
-                    systemName = "calendar.badge.plus",
-                    title = "Nothing planned for ${Fmt.shortDay(day)}",
-                    detail = "Tap “+ New workout” to write one for $clientName.",
-                )
+                EmptyCard(title = "Nothing planned for ${Fmt.shortDay(day)}", detail = "Tap “+ New workout” to write one for $clientName.")
             }
         }
     }
@@ -501,11 +494,11 @@ private fun PlanEditor(
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             "${Fmt.weekday(Day.date(current.date) ?: day)} · ${current.title.ifEmpty { "New workout" }}",
-            style = JKType.subheadline.semibold(), color = JK.text,
+            style = JKType.callout.semibold(), color = JKColors.text,
         )
-        Text(statusLine(current, clientName), style = JKType.caption2, color = JK.tertiary)
+        Text(statusLine(current, clientName), style = JKType.caption, color = JKColors.textTertiary)
     }
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         JKField("Title", current.title, { onChange(current.copy(title = it)) }, prompt = "Lower Body Strength")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             JKField("Starts (HH:mm)", current.startsAt, { onChange(current.copy(startsAt = it)) }, Modifier.weight(1f), prompt = "11:00", keyboard = KeyboardType.Ascii)
@@ -515,16 +508,16 @@ private fun PlanEditor(
     }
     ItemsEditor(items = current.items, onItemsChange = { onChange(current.copy(items = it)) })
     DashedAddRow("Add exercise from the library", Modifier.clickable(onClick = onPick))
-    if (notice != null) Label(notice, systemImage = "checkmark.circle", style = JKType.caption, color = JK.secondary)
+    if (notice != null) IconLabel(notice, icon = IconKey.custom, style = JKType.caption, color = JKColors.textSecondary)
     if (error != null) ErrorBanner(error)
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        GhostButton("Save", onClick = { onSave(false) }, modifier = Modifier.weight(1f), enabled = !busy && valid && !unchanged)
-        ChromeButton(
+        SecondaryButton("Save", onClick = { onSave(false) }, modifier = Modifier.weight(1f), enabled = !busy && valid && !unchanged)
+        PrimaryButton(
             onClick = { onSave(true) },
             modifier = Modifier.weight(1f),
             enabled = !busy && valid && !(current.published && unchanged),
         ) {
-            if (busy) ProgressView(tint = Color.Black)
+            if (busy) ProgressView()
             else Text(if (current.published && unchanged) "Published" else "Publish to $firstName")
         }
     }
@@ -532,7 +525,7 @@ private fun PlanEditor(
         Text(
             "Delete workout",
             style = JKType.caption,
-            color = destructiveRed,
+            color = JKColors.error,
             modifier = Modifier.fillMaxWidth().clickable(onClick = onDelete).padding(vertical = 6.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
@@ -608,24 +601,24 @@ private fun CoachHabitsTab(clientId: String) {
     }
 
     Loadable(value = data, error = error, retry = { load() }) { d ->
-        Eyebrow(text = "Daily habits", trailing = "${d.streak}-day streak")
+        Label(text = "Daily habits", trailing = "${d.streak}-day streak")
         if (d.habits.isEmpty()) {
-            EmptyCard(systemName = "checklist", title = "No habits set")
+            EmptyCard(title = "No habits set")
         } else {
-            Column(Modifier.jkCard(padding = 2.dp)) {
+            Column(Modifier.jkSurface(padding = 2.dp)) {
                 d.habits.forEach { h ->
                     Row(
                         Modifier.fillMaxWidth().padding(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconTile(systemName = symbol(h.icon), size = 32.dp)
+                        RowGlyph(IconKey.fromSymbol(h.icon), slot = 32.dp)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(h.name, style = JKType.subheadline.semibold(), color = JK.text)
+                            Text(h.name, style = JKType.callout.semibold(), color = JKColors.text)
                             Text(
                                 if (h.isCount) "${Fmt.number(h.value ?: 0.0)} / ${Fmt.number(h.target)} ${h.unit} today"
                                 else if (h.done) "Done today" else "Not done today",
-                                style = JKType.caption2, color = JK.tertiary,
+                                style = JKType.caption, color = JKColors.textTertiary,
                             )
                         }
                         TrashButton { scope.launch { remove(h) } }
@@ -633,10 +626,10 @@ private fun CoachHabitsTab(clientId: String) {
                 }
             }
         }
-        GhostButton(onClick = { adding = true }) { Label("Add habit", systemImage = "plus", style = JKType.subheadline.semibold()) }
+        SecondaryButton(onClick = { adding = true }) { IconLabel("Add habit", icon = IconKey.add, style = JKType.callout.semibold()) }
 
-        Eyebrow(text = "Nutrition targets", trailing = "Today ${Fmt.number(d.nutrition.totals.kcal, digits = 0)} kcal logged")
-        Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Label(text = "Nutrition targets", trailing = "Today ${Fmt.number(d.nutrition.totals.kcal, digits = 0)} kcal logged")
+        Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 JKField("kcal", kcal, { kcal = it }, Modifier.weight(1f), prompt = "2500", keyboard = KeyboardType.Number)
                 JKField("Protein g", protein, { protein = it }, Modifier.weight(1f), prompt = "170", keyboard = KeyboardType.Number)
@@ -645,12 +638,12 @@ private fun CoachHabitsTab(clientId: String) {
                 JKField("Carbs g", carbs, { carbs = it }, Modifier.weight(1f), prompt = "260", keyboard = KeyboardType.Number)
                 JKField("Fat g", fat, { fat = it }, Modifier.weight(1f), prompt = "80", keyboard = KeyboardType.Number)
             }
-            notice?.let { Text(it, style = JKType.caption2, color = JK.secondary) }
-            ChromeButton(
+            notice?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
+            PrimaryButton(
                 onClick = { scope.launch { saveTargets() } },
                 enabled = !savingTargets && listOf(kcal, protein, carbs, fat).none { parseNumber(it) == null },
             ) {
-                if (savingTargets) ProgressView(tint = Color.Black) else Text("Save targets")
+                if (savingTargets) ProgressView() else Text("Save targets")
             }
         }
     }
@@ -729,41 +722,37 @@ private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
                     JKField("Unit", unit, { unit = it }, Modifier.weight(1f), prompt = "L")
                 }
             }
-            Eyebrow(text = "Icon")
+            Label(text = "Icon")
             // LazyVGrid of five flexible columns.
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 habitIcons.chunked(5).forEach { row ->
                     Row(Modifier.fillMaxWidth()) {
                         row.forEach { i ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                IconTile(
-                                    systemName = i,
-                                    size = 40.dp,
-                                    modifier = Modifier
+                                RowGlyph(IconKey.fromSymbol(i), modifier = Modifier
                                         .clickable { icon = i }
-                                        .border(1.5.dp, if (icon == i) JK.text else Color.Transparent, rounded(10.dp)),
-                                )
+                                        .border(1.5.dp, if (icon == i) JKColors.text else Color.Transparent, JKShape.control), slot = 40.dp)
                             }
                         }
                     }
                 }
             }
-            Eyebrow(text = "Fill from health data")
+            Label(text = "Fill from health data")
             Segmented(listOf("none", "steps", "sleep"), healthKind, { selectHealthKind(it) }) {
                 when (it) { "none" -> "None"; "steps" -> "Steps"; else -> "Sleep" }
             }
             if (healthKind != "none") {
                 Text(
                     "Filled from the client's health data and done once the value reaches the target.",
-                    style = JKType.caption2, color = JK.tertiary,
+                    style = JKType.caption, color = JKColors.textTertiary,
                 )
             }
             error?.let { ErrorBanner(it) }
-            ChromeButton(
+            PrimaryButton(
                 onClick = { scope.launch { save() } },
                 enabled = !saving && name.isNotBlank() && !(kind == "count" && parseNumber(target) == null),
             ) {
-                if (saving) ProgressView(tint = Color.Black) else Text("Add habit")
+                if (saving) ProgressView() else Text("Add habit")
             }
         }
     }
@@ -800,12 +789,12 @@ private fun CoachSessionsTab(client: PersonRef) {
         val now = Instant.now()
         val upcoming = list.filter { it.end >= now }.sortedBy { it.start }
         val past = list.filter { it.end < now }.sortedByDescending { it.start }
-        Eyebrow(text = "Upcoming")
-        if (upcoming.isEmpty()) Text("Nothing booked.", style = JKType.caption, color = JK.tertiary)
+        Label(text = "Upcoming")
+        if (upcoming.isEmpty()) Text("Nothing booked.", style = JKType.caption, color = JKColors.textTertiary)
         upcoming.forEach { b -> key(b.id) { SessionBookingRow(b) } }
         DashedAddRow("Book a session for ${client.name}", Modifier.navLink { BookSessionView(client = client) })
         if (past.isNotEmpty()) {
-            Eyebrow(text = "Past 30 days")
+            Label(text = "Past 30 days")
             past.forEach { b -> key(b.id) { SessionBookingRow(b) } }
         }
     }
@@ -819,7 +808,7 @@ private fun SessionBookingRow(b: Booking) {
         day = "${b.start.atZone(Day.zone).dayOfMonth}",
         title = b.title ?: b.kindLabel,
         detail = listOfNotNull("${Fmt.time(b.start)}–${Fmt.time(b.end)}", b.kindLabel, b.location).joinToString(" · "),
-        modifier = Modifier.navLink { ClassDetailView(booking = b) }.jkCard(padding = 0.dp),
+        modifier = Modifier.navLink { ClassDetailView(booking = b) }.jkSurface(padding = 0.dp),
     )
 }
 
@@ -859,22 +848,22 @@ private fun CoachNotesTab(clientId: String) {
     }
 
     Loadable(value = checkins, error = error, retry = { load() }) { list ->
-        if (list.isEmpty()) EmptyCard(systemName = "doc.text", title = "No check-ins yet")
+        if (list.isEmpty()) EmptyCard(title = "No check-ins yet")
         list.forEach { c ->
             key(c.id) {
-                Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Week of ${Fmt.dayMonth(c.week)}", style = JKType.subheadline.semibold(), color = JK.text)
+                        Text("Week of ${Fmt.dayMonth(c.week)}", style = JKType.callout.semibold(), color = JKColors.text)
                         Spacer(Modifier.weight(1f))
-                        if (c.reviewedAt != null) Label("Reviewed", systemImage = "checkmark", style = JKType.caption2, color = JK.tertiary)
+                        if (c.reviewedAt != null) IconLabel("Reviewed", icon = IconKey.done, style = JKType.caption, color = JKColors.textTertiary)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatTile(label = "Energy", value = "${c.energy}/5", modifier = Modifier.weight(1f))
                         StatTile(label = "Sleep", value = "${c.sleep}/5", modifier = Modifier.weight(1f))
                         StatTile(label = "Pain", value = if (c.pain.isEmpty()) "None" else c.pain.joinToString(", "), modifier = Modifier.weight(1f))
                     }
-                    c.note?.takeIf { it.isNotEmpty() }?.let { Text(it, style = JKType.footnote, color = JK.secondary) }
-                    c.reply?.takeIf { it.isNotEmpty() }?.let { Label(it, systemImage = "arrowshape.turn.up.left", style = JKType.caption, color = JK.text) }
+                    c.note?.takeIf { it.isNotEmpty() }?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
+                    c.reply?.takeIf { it.isNotEmpty() }?.let { IconLabel(it, icon = IconKey.reply, style = JKType.caption, color = JKColors.text) }
                     val draftReply = replies[c.id].orEmpty()
                     val canSend = sending == null && draftReply.isNotBlank()
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -888,8 +877,8 @@ private fun CoachNotesTab(clientId: String) {
                             Modifier.size(32.dp).clickable(enabled = canSend) { scope.launch { reply(c) } },
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (sending == c.id) ProgressView(tint = JK.secondary, size = 16.dp)
-                            else SystemImage("paperplane.fill", JKType.body, if (canSend) JK.text else JK.tertiary)
+                            if (sending == c.id) ProgressView(tint = JKColors.textSecondary, size = 16.dp)
+                            else Glyph(IconKey.send, JKType.body, if (canSend) JKColors.text else JKColors.textTertiary)
                         }
                     }
                 }
@@ -903,18 +892,18 @@ private fun CoachNotesTab(clientId: String) {
 /** `TextField(prompt, text:, axis: .vertical).lineLimit(1...4)` on a raised ground: grows to four lines. */
 @Composable
 private fun ReplyField(text: String, onTextChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier) {
-    val style = JKType.footnote.copy(color = JK.text)
+    val style = JKType.caption.copy(color = JKColors.text)
     BasicTextField(
         value = text,
         onValueChange = onTextChange,
         textStyle = style,
         minLines = 1,
         maxLines = 4,
-        cursorBrush = SolidColor(JK.text),
+        cursorBrush = SolidColor(JKColors.text),
         modifier = modifier,
         decorationBox = { field ->
-            Box(Modifier.fillMaxWidth().background(JK.cardRaised, rounded(8.dp)).padding(10.dp)) {
-                if (text.isEmpty()) Text(prompt, style = style, color = JK.tertiary)
+            Box(Modifier.fillMaxWidth().background(JKColors.raised, JKShape.chip).padding(10.dp)) {
+                if (text.isEmpty()) Text(prompt, style = style, color = JKColors.textTertiary)
                 field()
             }
         },

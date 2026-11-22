@@ -22,25 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.Avatar
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.Dot
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.FittingText
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Label
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.monospacedDigit
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.AttentionItem
 import com.jkperformance.app.net.Booking
 import com.jkperformance.app.net.CoachToday
@@ -50,6 +31,8 @@ import com.jkperformance.app.net.PersonRef
 import com.jkperformance.app.net.TabRouter
 import java.time.Instant
 import java.time.LocalDate
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /**
  * The coach's Today screen as a grid of cards: each says what's waiting,
@@ -82,7 +65,7 @@ fun TodayCards(today: CoachToday) {
                 title = "Check-ins",
                 count = checkins,
                 detail = oldest(today.checkinClients)?.let { "Oldest ${Fmt.relative(it)}" } ?: "All replied",
-                tint = if (checkins > 0) JK.waiting else null,
+                tint = if (checkins > 0) JKColors.attention else null,
                 modifier = cell().cardLink(enabled = checkins > 0) {
                     PeopleListView(
                         title = "Check-ins to reply to",
@@ -98,7 +81,7 @@ fun TodayCards(today: CoachToday) {
                 title = "Forms to read",
                 count = forms,
                 detail = names(today.formClients?.map { it.name }) ?: "Nothing new",
-                tint = if (forms > 0) JK.waiting else null,
+                tint = if (forms > 0) JKColors.attention else null,
                 modifier = cell().cardLink { ProgramsView(initialTab = ProgramsTab.forms) },
             )
         }
@@ -142,17 +125,17 @@ fun TodayCards(today: CoachToday) {
 
     val inactive = (today.attention ?: emptyList()).filter { it.kind == "inactive" }
     if (inactive.isNotEmpty()) {
-        Eyebrow(text = "No training lately")
-        Column(Modifier.jkCard(padding = 2.dp)) {
+        Label(text = "No training lately")
+        Column(Modifier.jkSurface(padding = 2.dp)) {
             inactive.forEach { item ->
                 PersonRow(item.client, item.reason, Modifier.navLink { ClientDetailView(clientId = item.client.id, name = item.client.name) })
             }
         }
     }
 
-    Eyebrow(text = "Sessions today", trailing = if (sessions.isEmpty()) null else "${upcomingSessions.size} to go")
+    Label(text = "Sessions today", trailing = if (sessions.isEmpty()) null else "${upcomingSessions.size} to go")
     if (sessions.isEmpty()) {
-        Text("Nothing booked today.", style = JKType.caption, color = JK.tertiary)
+        Text("Nothing booked today.", style = JKType.caption, color = JKColors.textTertiary)
     }
     sessions.forEach { s ->
         SessionRow(session = s, isNext = s.id == upcomingSessions.firstOrNull()?.id)
@@ -165,17 +148,11 @@ fun TodayCards(today: CoachToday) {
 private fun UrgentCard(items: List<AttentionItem>) {
     Column(
         Modifier
-            .border(1.dp, JK.urgent.copy(alpha = 0.55f), rounded(JK.corner))
-            .jkCard(padding = 2.dp),
+            .border(1.dp, JKColors.urgent.copy(alpha = 0.55f), JKShape.card)
+            .jkSurface(padding = 2.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Label(
-            if (items.size == 1) "Needs you first" else "${items.size} need you first",
-            systemImage = "exclamationmark.triangle.fill",
-            style = JKType.caption.semibold(),
-            color = JK.urgent,
-            modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp),
-        )
+        IconLabel(if (items.size == 1) "Needs you first" else "${items.size} need you first", icon = IconKey.warning, style = JKType.caption.semibold(), color = JKColors.urgent, modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp))
         items.forEach { item ->
             PersonRow(
                 item.client,
@@ -195,7 +172,7 @@ private fun NextSessionCard(sessions: List<Booking>, upcoming: List<Booking>, mo
             title = "Next session",
             value = Fmt.time(next.start),
             detail = "${next.client?.name ?: next.title ?: next.kindLabel} · ${Fmt.countdown(to = next.start) ?: "now"}",
-            tint = JK.slot(next.kind),
+            tint = JKColors.slot(next.kind),
             modifier = modifier.cardLink {
                 val c = next.client
                 if (c != null && !next.isGroup) ClientDetailView(clientId = c.id, name = c.name) else ClassDetailView(booking = next)
@@ -221,7 +198,7 @@ private fun MessagesCard(today: CoachToday, modifier: Modifier) {
         title = "Messages",
         count = today.unread,
         detail = newest?.let { "Newest ${Fmt.relative(it)} · ${names(today.unreadClients?.map { c -> c.name }) ?: ""}" } ?: "No unread",
-        tint = if (today.unread > 0) JK.waiting else null,
+        tint = if (today.unread > 0) JKColors.attention else null,
         countLabel = "unread",
         modifier = modifier.cardButton { TabRouter.coach = TabRouter.Coach.messages },
     )
@@ -236,8 +213,8 @@ private fun FeedbackCard(due: FeedbackDue?, modifier: Modifier) {
         count = count,
         detail = if (count == 0) "All published" else dueText(due),
         tint = when {
-            count > 0 && isOverdue(due) -> JK.urgent
-            count > 0 -> JK.waiting
+            count > 0 && isOverdue(due) -> JKColors.urgent
+            count > 0 -> JKColors.attention
             else -> null
         },
         modifier = modifier.cardLink(enabled = count > 0) { if (due != null) FeedbackDueView(due = due) },
@@ -268,11 +245,11 @@ private fun RowScope.cell(): Modifier = Modifier.weight(1f).fillMaxHeight()
 /** A card that opens `destination`, its press-dim clipped to the card's corners. */
 @Composable
 private fun Modifier.cardLink(enabled: Boolean = true, destination: @Composable () -> Unit): Modifier =
-    clip(rounded(JK.corner)).navLink(enabled, destination)
+    clip(JKShape.card).navLink(enabled, destination)
 
 /** A card that acts in place (switching tab), like `Button { } .buttonStyle(.plain)`. */
 private fun Modifier.cardButton(action: () -> Unit): Modifier =
-    clip(rounded(JK.corner)).clickable(onClick = action)
+    clip(JKShape.card).clickable(onClick = action)
 
 @Composable
 private fun PersonRow(p: PersonRef, reason: String, modifier: Modifier = Modifier) {
@@ -283,10 +260,10 @@ private fun PersonRow(p: PersonRef, reason: String, modifier: Modifier = Modifie
     ) {
         Avatar(initials = p.displayInitials, size = 30.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(p.name, style = JKType.subheadline.semibold(), color = JK.text)
-            Text(reason, style = JKType.caption2, color = JK.tertiary, maxLines = 2)
+            Text(p.name, style = JKType.callout.semibold(), color = JKColors.text)
+            Text(reason, style = JKType.caption, color = JKColors.textTertiary, maxLines = 2)
         }
-        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -322,33 +299,32 @@ fun SummaryCard(
     value: String? = null,
     countLabel: String? = null,
 ) {
-    val shape = rounded(JK.corner)
+    val shape = JKShape.card
     Column(
         modifier
-            .background(JK.card, shape)
-            .border(1.dp, tint?.copy(alpha = 0.4f) ?: JK.stroke, shape)
+            .background(JKColors.surface, shape)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SystemImage(systemName, JKType.caption, tint ?: JK.tertiary)
+            Glyph(IconKey.fromSymbol(systemName), JKType.caption, tint ?: JKColors.textTertiary)
             Spacer(Modifier.weight(1f))
             if (tint != null) Dot(color = tint, size = 7.dp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             FittingText(
                 value ?: "${count ?: 0}",
-                style = JKType.title2.semibold().monospacedDigit(),
-                color = if ((count ?: 1) == 0 && value == null) JK.tertiary else JK.text,
+                style = JKType.numberTile,
+                color = if ((count ?: 1) == 0 && value == null) JKColors.textTertiary else JKColors.text,
                 minimumScaleFactor = 0.6f,
                 modifier = Modifier.alignByBaseline().weight(1f, fill = false),
             )
             if (countLabel != null) {
-                Text(countLabel, style = JKType.caption2, color = JK.tertiary, modifier = Modifier.alignByBaseline())
+                Text(countLabel, style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.alignByBaseline())
             }
         }
-        Text(title, style = JKType.caption.semibold(), color = JK.text)
-        Text(detail, style = JKType.caption2, color = JK.tertiary, maxLines = 2, minLines = 2)
+        Text(title, style = JKType.caption.semibold(), color = JKColors.text)
+        Text(detail, style = JKType.caption, color = JKColors.textTertiary, maxLines = 2, minLines = 2)
     }
 }
 
@@ -372,23 +348,23 @@ fun PeopleListView(title: String, people: List<PeopleListRow>) {
         ) {
             ScreenHeader(eyebrow = "Today", title = title)
             if (people.isEmpty()) {
-                EmptyCard(systemName = "checkmark", title = "Nothing waiting")
+                EmptyCard(title = "Nothing waiting")
             }
             people.forEach { row ->
                 Row(
                     Modifier
-                        .clip(rounded(JK.corner))
+                        .clip(JKShape.card)
                         .navLink { ClientDetailView(clientId = row.person.id, name = row.person.name, initialTab = row.tab) }
-                        .jkCard(padding = 12.dp),
+                        .jkSurface(padding = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Avatar(initials = row.person.displayInitials, size = 32.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(row.person.name, style = JKType.subheadline.semibold(), color = JK.text)
-                        Text(row.detail, style = JKType.caption2, color = JK.tertiary)
+                        Text(row.person.name, style = JKType.callout.semibold(), color = JKColors.text)
+                        Text(row.detail, style = JKType.caption, color = JKColors.textTertiary)
                     }
-                    SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                    Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
                 }
             }
         }

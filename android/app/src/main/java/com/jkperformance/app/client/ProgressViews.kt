@@ -37,7 +37,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,42 +69,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.ChromeButton
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.DeltaBadge
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.ErrorAlert
-import com.jkperformance.app.design.ErrorBanner
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKField
-import com.jkperformance.app.design.JKRefreshable
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Label
-import com.jkperformance.app.design.LocalDismiss
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.Segmented
-import com.jkperformance.app.design.Sheet
-import com.jkperformance.app.design.StatTile
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.ThinBar
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.Avatar
-import com.jkperformance.app.design.BarButton
-import com.jkperformance.app.design.Chip
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.medium
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.parseNumber
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
-import com.jkperformance.app.design.sfIcon
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Challenge
@@ -133,9 +96,9 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.math.max
 import kotlin.math.roundToInt
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
-/** iOS's destructive red (systemRed, dark). */
-private val Destructive = Color(0xFFFF453A)
 
 // MARK: - Progress
 
@@ -236,25 +199,25 @@ fun ProgressScreen() {
                             }
                         }
                     }
-                    GhostButton(onClick = { measuring = true }) {
-                        Label("Add measurement", systemImage = "plus", style = JKType.subheadline.semibold())
+                    SecondaryButton(onClick = { measuring = true }) {
+                        IconLabel("Add measurement", icon = IconKey.add, style = JKType.callout.semibold())
                     }
 
-                    Eyebrow(text = "Personal records", trailing = "Best logged load")
+                    Label(text = "Personal records", trailing = "Best logged load")
                     if (p.records.isEmpty()) {
-                        EmptyCard(systemName = "trophy", title = "No records yet", detail = "Log sets in your workouts to see them here.")
+                        EmptyCard(title = "No records yet", detail = "Log sets in your workouts to see them here.")
                     } else {
-                        Column(Modifier.jkCard(padding = 2.dp)) {
+                        Column(Modifier.jkSurface(padding = 2.dp)) {
                             p.records.forEach { pr ->
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    SystemImage("trophy", JKType.body, JK.secondary)
-                                    Text(pr.exercise, style = JKType.subheadline.medium(), color = JK.text,
+                                    Glyph(IconKey.trophy, JKType.body, JKColors.textSecondary)
+                                    Text(pr.exercise, style = JKType.callout, color = JKColors.text,
                                         modifier = Modifier.padding(start = 8.dp))
                                     Spacer(Modifier.weight(1f))
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text("${Fmt.number(pr.kg)} kg", style = JKType.subheadline.semibold(), color = JK.text)
+                                        Text("${Fmt.number(pr.kg)} kg", style = JKType.callout.semibold(), color = JKColors.text)
                                         pr.gain?.let { gain ->
-                                            Text("${Fmt.delta(gain)} kg", style = JKType.caption2, color = JK.tertiary)
+                                            Text("${Fmt.delta(gain)} kg", style = JKType.caption, color = JKColors.textTertiary)
                                         }
                                     }
                                 }
@@ -264,21 +227,21 @@ fun ProgressScreen() {
                 }
 
                 Row(
-                    Modifier.navLink { ChallengesView() }.jkCard(padding = 12.dp),
+                    Modifier.navLink { ChallengesView() }.jkSurface(padding = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconTile(systemName = "trophy")
+                    RowGlyph(IconKey.trophy)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Challenges", style = JKType.subheadline.semibold(), color = JK.text)
-                        Text("Run, walk or row with the group", style = JKType.caption2, color = JK.tertiary)
+                        Text("Challenges", style = JKType.callout.semibold(), color = JKColors.text)
+                        Text("Run, walk or row with the group", style = JKType.caption, color = JKColors.textTertiary)
                     }
-                    SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                    Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Eyebrow(text = "Progress photos", modifier = Modifier.weight(1f))
-                    Label("Private to you and Coach", systemImage = "lock", style = JKType.caption2, color = JK.tertiary)
+                    Label(text = "Progress photos", modifier = Modifier.weight(1f))
+                    IconLabel("Private to you and Coach", icon = IconKey.lock, style = JKType.caption, color = JKColors.textTertiary)
                 }
                 PhotoRow(
                     photos = photos ?: emptyList(),
@@ -316,8 +279,8 @@ private fun PhotoRow(photos: List<Photo>, uploading: Boolean, onAdd: () -> Unit,
                 AuthedPhoto(photo, Modifier.fillMaxSize())
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text("Delete photo", style = JKType.body, color = Destructive) },
-                        leadingIcon = { Icon(sfIcon("trash"), contentDescription = null, tint = Destructive) },
+                        text = { Text("Delete photo", style = JKType.body, color = JKColors.error) },
+                        leadingIcon = { Glyph(IconKey.delete, tint = JKColors.error) },
                         onClick = {
                             menu = false
                             onDelete(photo)
@@ -330,12 +293,12 @@ private fun PhotoRow(photos: List<Photo>, uploading: Boolean, onAdd: () -> Unit,
             Modifier
                 .weight(1f)
                 .height(90.dp)
-                .clip(rounded(10.dp))
+                .clip(JKShape.control)
                 .clickable(enabled = !uploading, onClick = onAdd)
                 .drawBehind {
                     val width = 1.dp.toPx()
                     drawRoundRect(
-                        JK.stroke,
+                        JKColors.hairline,
                         topLeft = Offset(width / 2, width / 2),
                         size = size.copy(width = size.width - width, height = size.height - width),
                         cornerRadius = CornerRadius(10.dp.toPx()),
@@ -344,7 +307,7 @@ private fun PhotoRow(photos: List<Photo>, uploading: Boolean, onAdd: () -> Unit,
                 },
             contentAlignment = Alignment.Center,
         ) {
-            if (uploading) ProgressView(tint = JK.secondary) else SystemImage("camera", JKType.body, JK.secondary)
+            if (uploading) ProgressView(tint = JKColors.textSecondary) else Glyph(IconKey.mealPhoto, JKType.body, JKColors.textSecondary)
         }
     }
 }
@@ -352,32 +315,31 @@ private fun PhotoRow(photos: List<Photo>, uploading: Boolean, onAdd: () -> Unit,
 @Composable
 private fun WeightCard(p: ProgressData) {
     val points = (p.weight?.series ?: emptyList()).mapNotNull { pt -> Day.date(pt.date)?.let { it to pt.value } }
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            Eyebrow(text = "Body weight", modifier = Modifier.weight(1f))
+            Label(text = "Body weight", modifier = Modifier.weight(1f))
             p.weight?.delta?.let { DeltaBadge(text = "${Fmt.delta(it)} kg") }
         }
         Text(
             buildAnnotatedString {
                 append(p.weight?.latest?.let { Fmt.number(it) } ?: "–")
-                withStyle(SpanStyle(fontSize = JKType.caption.fontSize, fontWeight = JKType.caption.fontWeight, color = JK.tertiary)) {
+                withStyle(SpanStyle(fontSize = JKType.caption.fontSize, fontWeight = JKType.caption.fontWeight, color = JKColors.textTertiary)) {
                     append(" kg")
                 }
             },
-            style = JKType.largeTitle.semibold(),
-            color = JK.text,
+            style = JKType.display,
+            color = JKColors.text,
         )
         if (points.size >= 2) {
             WeightChart(points, Modifier.fillMaxWidth().height(90.dp))
         } else {
-            Text("Add two weigh-ins (or turn on Health Connect) to see the trend.", style = JKType.caption2, color = JK.tertiary)
+            Text("Add two weigh-ins (or turn on Health Connect) to see the trend.", style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
 
 /**
- * The iPhone's Swift Chart: an area fading from the line down to the floor
- * and the line over it, x by date, y from 1 kg under the lowest to 1 kg over
+ * The weight trend (Atelier TrendChart): a slate line with no fill, x by date, y from 1 kg under the lowest to 1 kg over
  * the highest, no axes.
  */
 @Composable
@@ -392,15 +354,7 @@ private fun WeightChart(points: List<Pair<LocalDate, Double>>, modifier: Modifie
         fun y(v: Double) = (size.height * (1 - (v - low) / (high - low))).toFloat()
         val line = Path()
         points.forEachIndexed { i, (d, v) -> if (i == 0) line.moveTo(x(d), y(v)) else line.lineTo(x(d), y(v)) }
-        val area = Path().apply {
-            addPath(line)
-            lineTo(x(points.last().first), size.height)
-            lineTo(x(points.first().first), size.height)
-            close()
-        }
-        val top = points.minOf { y(it.second) }
-        drawPath(area, Brush.verticalGradient(listOf(JK.text.copy(alpha = 0.35f), Color.Transparent), startY = top, endY = size.height))
-        drawPath(line, JK.text, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(line, JKColors.data, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -487,26 +441,21 @@ fun AuthedPhoto(photo: Photo, modifier: Modifier = Modifier) {
         }
     }
 
-    Box(modifier.clip(rounded(10.dp)).background(JK.cardRaised)) {
+    Box(modifier.clip(JKShape.control).background(JKColors.raised)) {
         val loaded = image
         if (loaded != null) {
             Image(loaded, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {
-            SystemImage(
-                if (failed) "exclamationmark.triangle" else "figure.stand",
-                JKType.system(if (failed) 18 else 40),
-                JK.tertiary,
-                Modifier.align(if (failed) Alignment.Center else Alignment.BottomCenter),
-            )
+            Glyph(if (failed) IconKey.warning else IconKey.stand, if (failed) JKType.body else JKType.numberHero, JKColors.textTertiary, Modifier.align(if (failed) Alignment.Center else Alignment.BottomCenter))
         }
         Text(
             Fmt.dayMonth(photo.date),
-            style = JKType.system(9),
-            color = JK.secondary,
+            style = JKType.caption,
+            color = JKColors.textSecondary,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(6.dp)
-                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                .background(JKColors.scrim, CircleShape)
                 .padding(horizontal = 5.dp, vertical = 2.dp),
         )
     }
@@ -558,8 +507,8 @@ private fun MeasurementSheet(save: suspend (MeasurementInput) -> Unit) {
             )
             PastDateRow("Date", date) { date = it }
             error?.let { ErrorBanner(it) }
-            ChromeButton(onClick = { scope.launch { submit() } }, enabled = parseNumber(value) != null && !saving) {
-                if (saving) ProgressView(tint = Color.Black) else Text("Save")
+            PrimaryButton(onClick = { scope.launch { submit() } }, enabled = parseNumber(value) != null && !saving) {
+                if (saving) ProgressView() else Text("Save")
             }
         }
     }
@@ -574,15 +523,15 @@ private fun MeasurementSheet(save: suspend (MeasurementInput) -> Unit) {
 private fun PastDateRow(label: String, date: LocalDate, onChange: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
         Text(
             Fmt.dayMonthYear(date),
-            style = JKType.subheadline,
-            color = JK.text,
+            style = JKType.callout,
+            color = JKColors.text,
             modifier = Modifier
-                .clip(rounded(8.dp))
+                .clip(JKShape.chip)
                 .clickable { open = true }
-                .background(JK.cardRaised)
+                .background(JKColors.raised)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }
@@ -600,10 +549,10 @@ private fun PastDateRow(label: String, date: LocalDate, onChange: (LocalDate) ->
                 TextButton(onClick = {
                     state.selectedDateMillis?.let { onChange(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
                     open = false
-                }) { Text("Done", style = JKType.body.semibold(), color = JK.text) }
+                }) { Text("Done", style = JKType.body.semibold(), color = JKColors.text) }
             },
             dismissButton = {
-                TextButton(onClick = { open = false }) { Text("Cancel", style = JKType.body, color = JK.text) }
+                TextButton(onClick = { open = false }) { Text("Cancel", style = JKType.body, color = JKColors.text) }
             },
         ) { DatePicker(state) }
     }
@@ -655,27 +604,26 @@ fun ChallengesView() {
                 ScreenHeader(eyebrow = "Community", title = "Challenges")
                 Loadable(challenges, error, retry = { load() }) { list ->
                     if (list.isEmpty()) {
-                        EmptyCard(systemName = "trophy", title = "No challenges running",
-                            detail = "Your coach will post the next one here.")
+                        EmptyCard(title = "No challenges running", detail = "Your coach will post the next one here.")
                     }
                     list.forEach { c ->
                         ChallengeCard(c, joining = joining, onJoin = { scope.launch { join(c) } })
                         if (c.isJoined && c.leaderboard.isNotEmpty()) {
-                            Eyebrow(text = "Leaderboard", trailing = c.title)
-                            Column(Modifier.jkCard(padding = 2.dp)) {
+                            Label(text = "Leaderboard", trailing = c.title)
+                            Column(Modifier.jkSurface(padding = 2.dp)) {
                                 c.leaderboard.forEach { row ->
                                     Row(
                                         Modifier.fillMaxWidth().padding(12.dp),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Text("${row.rank}", style = JKType.subheadline.semibold(),
-                                            color = if (row.isMe == true) JK.tertiary else JK.text,
+                                        Text("${row.rank}", style = JKType.callout.semibold(),
+                                            color = if (row.isMe == true) JKColors.textTertiary else JKColors.text,
                                             modifier = Modifier.width(18.dp))
                                         Avatar(initials = row.initials ?: Fmt.initials(row.name), size = 26.dp)
-                                        Text(if (row.isMe == true) "You" else row.name, style = JKType.subheadline.medium(),
-                                            color = JK.text, modifier = Modifier.weight(1f))
-                                        Text("${Fmt.number(row.value)} km", style = JKType.subheadline.semibold(), color = JK.text)
+                                        Text(if (row.isMe == true) "You" else row.name, style = JKType.callout,
+                                            color = JKColors.text, modifier = Modifier.weight(1f))
+                                        Text("${Fmt.number(row.value)} km", style = JKType.callout.semibold(), color = JKColors.text)
                                     }
                                 }
                             }
@@ -687,8 +635,8 @@ fun ChallengesView() {
                     }
                     Text(
                         "Distance comes from Health Connect (walking, running and rowing). Turn it on under Account › Health & devices.",
-                        style = JKType.caption2,
-                        color = JK.tertiary,
+                        style = JKType.caption,
+                        color = JKColors.textTertiary,
                     )
                 }
             }
@@ -699,30 +647,30 @@ fun ChallengesView() {
 
 @Composable
 private fun ChallengeCard(c: Challenge, joining: String?, onJoin: () -> Unit) {
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         c.daysLeft?.let { days ->
             Text(
                 if (days == 1) "1 day left" else "$days days left",
-                style = JKType.caption2,
-                color = JK.secondary,
-                modifier = Modifier.background(JK.cardRaised, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
+                style = JKType.caption,
+                color = JKColors.textSecondary,
+                modifier = Modifier.background(JKColors.raised, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
             )
         }
         Spacer(Modifier.height(30.dp))
-        Text(c.title, style = JKType.title3.semibold(), color = JK.text)
+        Text(c.title, style = JKType.headline, color = JKColors.text)
         Text(
             listOfNotNull(c.detail, c.members?.let { "$it members taking part." }).joinToString(" "),
             style = JKType.caption,
-            color = JK.secondary,
+            color = JKColors.textSecondary,
         )
         if (c.isJoined) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 ThinBar(fraction = if (c.target > 0) c.myValue / c.target else 0.0, height = 4.dp, modifier = Modifier.weight(1f))
-                Text("${Fmt.number(c.myValue)} / ${Fmt.number(c.target)} km", style = JKType.caption.semibold(), color = JK.text)
+                Text("${Fmt.number(c.myValue)} / ${Fmt.number(c.target)} km", style = JKType.caption.semibold(), color = JKColors.text)
             }
         } else {
-            ChromeButton(onClick = onJoin, enabled = joining == null) {
-                if (joining == c.id) ProgressView(tint = Color.Black) else Text("Join challenge")
+            PrimaryButton(onClick = onJoin, enabled = joining == null) {
+                if (joining == c.id) ProgressView() else Text("Join challenge")
             }
         }
     }
@@ -731,12 +679,12 @@ private fun ChallengeCard(c: Challenge, joining: String?, onJoin: () -> Unit) {
 @Composable
 private fun BadgeTile(systemName: String, text: String, modifier: Modifier = Modifier) {
     Row(
-        modifier.jkCard(padding = 10.dp),
+        modifier.jkSurface(padding = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile(systemName = systemName, size = 32.dp)
-        Text(text, style = JKType.caption.semibold(), color = JK.text)
+        RowGlyph(IconKey.fromSymbol(systemName), slot = 32.dp)
+        Text(text, style = JKType.caption.semibold(), color = JKColors.text)
     }
 }
 
@@ -813,51 +761,50 @@ fun WeeklyCheckInView() {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("How did this week feel, ${session.me?.firstName ?: ""}?", style = JKType.title2.semibold(), color = JK.text)
-                Text("$coachName reviews these every week.", style = JKType.caption, color = JK.secondary)
+                Text("How did this week feel, ${session.me?.firstName ?: ""}?", style = JKType.display, color = JKColors.text)
+                Text("$coachName reviews these every week.", style = JKType.caption, color = JKColors.textSecondary)
             }
             loadError?.let { ErrorBanner(it) }
             RatingCard(title = "Energy levels", hint = "1 = drained, 5 = excellent", value = energy) { energy = it }
             RatingCard(title = "Sleep quality", hint = null, value = sleep) { sleep = it }
-            Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Any pain or niggles?", style = JKType.subheadline.semibold(), color = JK.text)
+            Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Any pain or niggles?", style = JKType.callout.semibold(), color = JKColors.text)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Chip(label = "None", selected = pain.isEmpty()) { pain = emptySet() }
                     painOptions.forEach { p ->
                         Chip(label = p, selected = p in pain) { pain = if (p in pain) pain - p else pain + p }
                     }
                 }
-                val noteStyle = JKType.footnote.copy(color = JK.text)
+                val noteStyle = JKType.caption.copy(color = JKColors.text)
                 BasicTextField(
                     value = note,
                     onValueChange = { note = it },
                     textStyle = noteStyle,
                     minLines = 2,
                     maxLines = 5,
-                    cursorBrush = SolidColor(JK.text),
+                    cursorBrush = SolidColor(JKColors.text),
                     modifier = Modifier.fillMaxWidth(),
                     decorationBox = { field ->
-                        Box(Modifier.fillMaxWidth().background(JK.cardRaised, rounded(8.dp)).padding(10.dp)) {
-                            if (note.isEmpty()) Text("Tell $coachName more", style = noteStyle, color = JK.tertiary)
+                        Box(Modifier.fillMaxWidth().background(JKColors.raised, JKShape.chip).padding(10.dp)) {
+                            if (note.isEmpty()) Text("Tell $coachName more", style = noteStyle, color = JKColors.textTertiary)
                             field()
                         }
                     },
                 )
             }
-            Row(Modifier.navLink { ProgressScreen() }.jkCard(), verticalAlignment = Alignment.CenterVertically) {
-                Label("Add weekly photos", systemImage = "camera", style = JKType.subheadline.medium(), color = JK.text,
-                    modifier = Modifier.weight(1f))
-                Text("Optional", style = JKType.caption2, color = JK.tertiary)
+            Row(Modifier.navLink { ProgressScreen() }.jkSurface(), verticalAlignment = Alignment.CenterVertically) {
+                IconLabel("Add weekly photos", icon = IconKey.mealPhoto, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                Text("Optional", style = JKType.caption, color = JKColors.textTertiary)
             }
             error?.let { ErrorBanner(it) }
-            ChromeButton(onClick = { scope.launch { submit() } }, enabled = !saving) {
-                if (saving) ProgressView(tint = Color.Black)
+            PrimaryButton(onClick = { scope.launch { submit() } }, enabled = !saving) {
+                if (saving) ProgressView()
                 else Text(if (sent) "Sent ✓" else if (current() == null) "Send check-in" else "Update check-in")
             }
 
             history?.checkins?.firstOrNull { it.reply?.isEmpty() == false }?.let { last ->
-                Eyebrow(text = "Latest reply · week of ${Fmt.dayMonth(last.week)}")
-                Text(last.reply ?: "", style = JKType.footnote, color = JK.text, modifier = Modifier.jkCard())
+                Label(text = "Latest reply · week of ${Fmt.dayMonth(last.week)}")
+                Text(last.reply ?: "", style = JKType.caption, color = JKColors.text, modifier = Modifier.jkSurface())
             }
         }
     }
@@ -865,23 +812,23 @@ fun WeeklyCheckInView() {
 
 @Composable
 private fun RatingCard(title: String, hint: String?, value: Int, onChange: (Int) -> Unit) {
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = JKType.subheadline.semibold(), color = JK.text)
-        if (hint != null) Text(hint, style = JKType.caption2, color = JK.tertiary)
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = JKType.callout.semibold(), color = JKColors.text)
+        if (hint != null) Text(hint, style = JKType.caption, color = JKColors.textTertiary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             (1..5).forEach { n ->
                 val on = value == n
-                val shape = rounded(8.dp)
+                val shape = JKShape.chip
                 Box(
                     Modifier
                         .weight(1f)
                         .clip(shape)
                         .clickable { onChange(n) }
-                        .background(if (on) JK.chrome else SolidColor(JK.cardRaised), shape)
+                        .background(if (on) SolidColor(JKColors.accentControl) else SolidColor(JKColors.raised), shape)
                         .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("$n", style = JKType.subheadline.semibold(), color = if (on) Color.Black else JK.text)
+                    Text("$n", style = JKType.callout.semibold(), color = if (on) JKColors.primaryLabel else JKColors.text)
                 }
             }
         }

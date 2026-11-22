@@ -30,33 +30,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.AnnualPriceLine
-import com.jkperformance.app.design.BarButton
-import com.jkperformance.app.design.ErrorAlert
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.FeatureTile
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKField
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.LocalNav
-import com.jkperformance.app.design.PopularBadge
-import com.jkperformance.app.design.Price
-import com.jkperformance.app.design.PriceLabel
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.Sheet
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.parseNumber
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.Business
 import com.jkperformance.app.net.Feature
@@ -68,21 +41,23 @@ import com.jkperformance.app.net.readable
 import com.jkperformance.app.net.seg
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /** The row on Business (and the coach's Account) that opens Plans & prices. */
 @Composable
 fun PlansPricesLink() {
     Row(
-        Modifier.clip(rounded(JK.corner)).navLink { PlansEditorView() }.jkCard(padding = 12.dp),
+        Modifier.clip(JKShape.card).navLink { PlansEditorView() }.jkSurface(padding = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile(systemName = "creditcard")
+        RowGlyph(IconKey.card)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Plans & prices", style = JKType.subheadline.semibold(), color = JK.text)
-            Text("Names, prices, sessions and what each plan includes", style = JKType.caption2, color = JK.tertiary)
+            Text("Plans & prices", style = JKType.callout.semibold(), color = JKColors.text)
+            Text("Names, prices, sessions and what each plan includes", style = JKType.caption, color = JKColors.textTertiary)
         }
-        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -132,22 +107,22 @@ fun PlansEditorView() {
 
     PushedScreen(spacing = 12.dp, onRefresh = load) {
         ScreenHeader(eyebrow = "Coach", title = "Plans & prices")
-        Text("What your clients see and pay. Tap a plan to change it.", style = JKType.footnote, color = JK.secondary)
+        Text("What your clients see and pay. Tap a plan to change it.", style = JKType.caption, color = JKColors.textSecondary)
         Loadable(value = reply, error = error, retry = load) { r ->
             r.plans.forEach { p ->
                 PlanSettingsCard(p, members[p.id]) { PlanEditorView(p, r.features) { fresh -> reply = fresh } }
             }
-            GhostButton(onClick = { showPreview = true }, modifier = Modifier.padding(top = 6.dp)) {
+            SecondaryButton(onClick = { showPreview = true }, modifier = Modifier.padding(top = 6.dp)) {
                 Text("Preview as a client")
             }
             Text(
                 if (resetting) "Resetting…" else "Reset to defaults",
-                style = JKType.subheadline,
-                color = if (resetting) JK.tertiary else JK.urgent,
+                style = JKType.callout,
+                color = if (resetting) JKColors.textTertiary else JKColors.urgent,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(rounded(10.dp))
+                    .clip(JKShape.control)
                     .clickable(enabled = !resetting) { confirmReset = true }
                     .padding(vertical = 12.dp),
             )
@@ -171,16 +146,16 @@ fun PlansEditorView() {
 @Composable
 private fun PlanSettingsCard(p: Plan, members: Int?, destination: @Composable () -> Unit) {
     Column(
-        Modifier.clip(rounded(JK.corner)).navLink(destination = destination).jkCard(),
+        Modifier.clip(JKShape.card).navLink(destination = destination).jkSurface(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(p.name, style = JKType.headline, color = JK.text)
+            Text(p.name, style = JKType.headline, color = JKColors.text)
             if (p.isFeatured) PopularBadge()
             Box(Modifier.weight(1f))
-            SystemImage("chevron.right", JKType.caption, JK.tertiary)
+            Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
         }
-        Text(p.detail, style = JKType.caption, color = JK.tertiary)
+        Text(p.detail, style = JKType.caption, color = JKColors.textTertiary)
         if (!p.isFree) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PriceLabel(p.monthlyPence)
@@ -193,7 +168,7 @@ private fun PlanSettingsCard(p: Plan, members: Int?, destination: @Composable ()
             add(if (p.featureIds.size == 1) "1 feature" else "${p.featureIds.size} features")
             if (members != null) add(if (members == 1) "1 member" else "$members members")
         }
-        Text(facts.joinToString(" · "), style = JKType.caption, color = JK.secondary)
+        Text(facts.joinToString(" · "), style = JKType.caption, color = JKColors.textSecondary)
     }
 }
 
@@ -267,22 +242,22 @@ fun PlanEditorView(plan: Plan, catalogue: List<Feature>, onSaved: (PlansResponse
 
     Column(Modifier.jkScreen()) {
         TopBar(plan.name) {
-            if (saving) Box(Modifier.padding(horizontal = 12.dp)) { ProgressView(tint = JK.text) }
+            if (saving) Box(Modifier.padding(horizontal = 12.dp)) { ProgressView(tint = JKColors.text) }
             else BarButton("Save", bold = true, enabled = problem == null) { save() }
         }
         ScrollScreen(spacing = 12.dp, modifier = Modifier.weight(1f)) {
-            Eyebrow("How clients see it")
-            Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Label("How clients see it")
+            Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 JKField("Name · ${name.length}/30", name, { name = it.take(30) }, prompt = "Foundation")
                 JKField("Tagline · ${detail.length}/90", detail, { detail = it.take(90) }, prompt = "One line under the name")
                 PitchField(pitch) { pitch = it.take(400) }
             }
 
             if (free) {
-                Text("The free plan is always free.", style = JKType.footnote, color = JK.secondary)
+                Text("The free plan is always free.", style = JKType.caption, color = JKColors.textSecondary)
             } else {
-                Eyebrow("Price")
-                Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Label("Price")
+                Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         JKField("Monthly (£)", monthly, { monthly = it }, Modifier.weight(1f), prompt = "59", keyboard = KeyboardType.Decimal)
                         JKField("Annual (£)", annual, { annual = it }, Modifier.weight(1f), prompt = "602", keyboard = KeyboardType.Decimal)
@@ -292,7 +267,7 @@ fun PlanEditorView(plan: Plan, catalogue: List<Feature>, onSaved: (PlansResponse
                         val save = annualPence?.let { Price.savePercent(m, it) }
                         Text(
                             "12 × monthly is ${Fmt.pounds(twelve)}" + (save?.let { " · saves $it%" } ?: ""),
-                            style = JKType.caption, color = JK.tertiary,
+                            style = JKType.caption, color = JKColors.textTertiary,
                         )
                     }
                     CoachStepper(
@@ -301,8 +276,8 @@ fun PlanEditorView(plan: Plan, catalogue: List<Feature>, onSaved: (PlansResponse
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Most popular", style = JKType.subheadline, color = JK.text)
-                            Text("One plan at a time wears the badge", style = JKType.caption2, color = JK.tertiary)
+                            Text("Most popular", style = JKType.callout, color = JKColors.text)
+                            Text("One plan at a time wears the badge", style = JKType.caption, color = JKColors.textTertiary)
                         }
                         CoachSwitch(featured) { featured = it }
                     }
@@ -310,12 +285,12 @@ fun PlanEditorView(plan: Plan, catalogue: List<Feature>, onSaved: (PlansResponse
                 Text(
                     "Clients see the new price straight away. Nobody is charged while payments are off; " +
                         "once App Store billing is on, change the price in App Store Connect too.",
-                    style = JKType.caption2, color = JK.tertiary,
+                    style = JKType.caption, color = JKColors.textTertiary,
                 )
             }
 
-            Eyebrow("What's included", trailing = "${features.size} of ${catalogue.size}")
-            Column(Modifier.jkCard(padding = 4.dp)) {
+            Label("What's included", trailing = "${features.size} of ${catalogue.size}")
+            Column(Modifier.jkSurface(padding = 4.dp)) {
                 catalogue.forEach { f ->
                     val on = f.id in features
                     Row(
@@ -325,14 +300,14 @@ fun PlanEditorView(plan: Plan, catalogue: List<Feature>, onSaved: (PlansResponse
                     ) {
                         FeatureTile(f.id, size = 34.dp)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(f.title, style = JKType.subheadline.semibold(), color = JK.text)
-                            Text(f.detail, style = JKType.caption2, color = JK.tertiary, maxLines = 2)
+                            Text(f.title, style = JKType.callout.semibold(), color = JKColors.text)
+                            Text(f.detail, style = JKType.caption, color = JKColors.textTertiary, maxLines = 2)
                         }
                         CoachSwitch(on) { wanted -> features = if (wanted) features + f.id else features - f.id }
                     }
                 }
             }
-            problem?.let { Text(it, style = JKType.caption, color = JK.secondary) }
+            problem?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
         }
     }
     // The server's reason (sessions need credits, say), wherever the coach has scrolled to.
@@ -342,21 +317,21 @@ fun PlanEditorView(plan: Plan, catalogue: List<Feature>, onSaved: (PlansResponse
 /** The pitch: a few lines, with a counter in the label. */
 @Composable
 private fun PitchField(text: String, onChange: (String) -> Unit) {
-    val style = JKType.subheadline.copy(color = JK.text)
+    val style = JKType.callout.copy(color = JKColors.text)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Pitch · ${text.length}/400", style = JKType.system(10), color = JK.tertiary)
+        Text("Pitch · ${text.length}/400", style = JKType.caption, color = JKColors.textTertiary)
         BasicTextField(
             value = text,
             onValueChange = onChange,
             textStyle = style,
-            cursorBrush = SolidColor(JK.text),
+            cursorBrush = SolidColor(JKColors.text),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Pitch" },
             decorationBox = { field ->
                 Box(
-                    Modifier.fillMaxWidth().heightIn(min = 96.dp).background(JK.cardRaised, rounded(8.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 96.dp).background(JKColors.raised, JKShape.chip).padding(horizontal = 10.dp, vertical = 8.dp),
                 ) {
-                    if (text.isEmpty()) Text("Who it's for and what they get", style = style, color = JK.tertiary)
+                    if (text.isEmpty()) Text("Who it's for and what they get", style = style, color = JKColors.textTertiary)
                     field()
                 }
             },

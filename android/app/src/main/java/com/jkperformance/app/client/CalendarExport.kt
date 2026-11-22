@@ -22,15 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.jkperformance.app.design.ChromeButton
-import com.jkperformance.app.design.ErrorBanner
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.CalendarFeed
@@ -39,6 +30,8 @@ import com.jkperformance.app.net.readable
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /** A session to put in the phone's calendar. */
 data class CalendarEventDraft(
@@ -155,20 +148,20 @@ fun CalendarSubscribeCard() {
         }
     }
 
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconTile("calendar.badge.plus")
+            RowGlyph(IconKey.book)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     if (active == true) "In your calendar" else "Add all to your calendar",
-                    style = JKType.subheadline.semibold(),
-                    color = JK.text,
+                    style = JKType.callout.semibold(),
+                    color = JKColors.text,
                 )
                 Text(
                     if (isCoach) "Every booking and class, kept up to date"
                     else "Your sessions, classes and timed workouts, kept up to date",
-                    style = JKType.caption2,
-                    color = JK.tertiary,
+                    style = JKType.caption,
+                    color = JKColors.textTertiary,
                 )
             }
         }
@@ -177,15 +170,15 @@ fun CalendarSubscribeCard() {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val link = saved
                 if (link != null) {
-                    GhostButton("Open again", onClick = { context.subscribe(link) }, modifier = Modifier.weight(1f), enabled = !busy)
+                    SecondaryButton("Open again", onClick = { context.subscribe(link) }, modifier = Modifier.weight(1f), enabled = !busy)
                 } else {
-                    GhostButton("New link", onClick = { subscribe() }, modifier = Modifier.weight(1f), enabled = !busy)
+                    SecondaryButton("New link", onClick = { subscribe() }, modifier = Modifier.weight(1f), enabled = !busy)
                 }
-                GhostButton("Stop", onClick = { stop() }, modifier = Modifier.weight(1f), enabled = !busy)
+                SecondaryButton("Stop", onClick = { stop() }, modifier = Modifier.weight(1f), enabled = !busy)
             }
         } else {
-            ChromeButton(onClick = { subscribe() }, enabled = !busy && active != null) {
-                if (busy) ProgressView(tint = Color.Black) else Text("Subscribe in Calendar")
+            PrimaryButton(onClick = { subscribe() }, enabled = !busy && active != null) {
+                if (busy) ProgressView() else Text("Subscribe in Calendar")
             }
         }
     }

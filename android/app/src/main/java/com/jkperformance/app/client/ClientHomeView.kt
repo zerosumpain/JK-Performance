@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,45 +46,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.ChromeButton
-import com.jkperformance.app.design.CheckCircle
-import com.jkperformance.app.design.Dot
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.ErrorAlert
-import com.jkperformance.app.design.ErrorBanner
-import com.jkperformance.app.design.ErrorCard
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKField
-import com.jkperformance.app.design.JKRefreshable
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Label
-import com.jkperformance.app.design.LoadingCard
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.LocalDismiss
-import com.jkperformance.app.design.LocalNav
-import com.jkperformance.app.design.ProgressRing
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.ThinBar
-import com.jkperformance.app.design.TopBar
-import com.jkperformance.app.design.BarButton
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.Sheet
-import com.jkperformance.app.design.UpcomingRow
-import com.jkperformance.app.design.bold
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.medium
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.parseNumber
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
-import com.jkperformance.app.design.symbol
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Booking
@@ -106,17 +68,17 @@ import java.time.LocalDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
-/** iOS's `.red`, for the Health prompt's heart. */
-private val SystemRed = Color(1f, 0.23f, 0.19f)
 
 /**
  * A card that is also a NavigationLink: the press dim is clipped to the
  * card's rounded corners rather than its bounding box.
  */
 @Composable
-private fun Modifier.cardLink(corner: Dp = JK.corner, destination: @Composable () -> Unit): Modifier =
-    this.clip(rounded(corner)).navLink(destination = destination)
+private fun Modifier.cardLink(corner: Dp = JKRadius.card, destination: @Composable () -> Unit): Modifier =
+    this.clip(RoundedCornerShape(corner)).navLink(destination = destination)
 
 /**
  * "Morning, Sam": one card for today, the next booking, and four doors
@@ -184,12 +146,7 @@ fun ClientHomeView() {
                 eyebrow = Fmt.longDay(LocalDate.now(Day.zone)),
                 title = "${Fmt.greeting()}, ${session.me?.firstName ?: "there"}",
             ) {
-                Box(
-                    Modifier.size(30.dp).border(1.dp, JK.secondary, rounded(7.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("JK", style = JKType.caption.bold(), color = JK.text)
-                }
+                CoachAvatar(session.me?.coach?.avatarMediaId, size = JKSize.avatar)
             }
 
             if (session.me?.membership?.isActive == false) TourCard { showTour = true }
@@ -218,7 +175,7 @@ fun ClientHomeView() {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         HomeTile("Habits", habitsValue, "checklist", Modifier.weight(1f)) { DailyHabitsView() }
-                        HomeTile("Progress", "Weight, records", "chart.line.downtrend.xyaxis", Modifier.weight(1f)) { ProgressScreen() }
+                        HomeTile("Progress", "Weight, records", "chart.line.uptrend.xyaxis", Modifier.weight(1f)) { ProgressScreen() }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         HomeTile("Check-in", checkinValue, "square.and.pencil", Modifier.weight(1f), highlight = checkinValue == "Due") {
@@ -239,12 +196,12 @@ fun ClientHomeView() {
 /** For a client on the free plan: a way into the plan walkthrough. */
 @Composable
 private fun TourCard(open: () -> Unit) {
-    Column(Modifier.jkCard(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Eyebrow(text = "Coaching")
-        Text("See what coaching includes", style = JKType.title3.semibold(), color = JK.text)
+    Column(Modifier.jkSurface(padding = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Label(text = "Coaching")
+        Text("See what coaching includes", style = JKType.headline, color = JKColors.text)
         Text("A programme written for you, a coach a message away, and more. Step through each plan.",
-            style = JKType.caption, color = JK.secondary)
-        ChromeButton("Take the tour", onClick = open, modifier = Modifier.padding(top = 4.dp))
+            style = JKType.caption, color = JKColors.textSecondary)
+        PrimaryButton("Take the tour", onClick = open, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -265,47 +222,43 @@ private fun TodayCard(week: List<WorkoutSummary>?) {
         val w = todayWorkout
         val nav = LocalNav.current
         val starts = w.startsAt?.let { Day.at(LocalDate.now(Day.zone), it) }
-        Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Eyebrow(text = "Today", modifier = Modifier.weight(1f))
+                Label(text = "Today", modifier = Modifier.weight(1f))
                 val badge = if (w.completedAt != null) "Done" else starts?.let { Fmt.countdown(it) }
                 if (badge != null) {
                     Text(
                         badge,
-                        style = JKType.caption2,
-                        color = JK.secondary,
-                        modifier = Modifier.background(JK.cardRaised, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
+                        style = JKType.caption,
+                        color = JKColors.textSecondary,
+                        modifier = Modifier.background(JKColors.raised, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
                     )
                 }
             }
-            Text(w.title, style = JKType.title3.semibold(), color = JK.text)
+            Text(w.title, style = JKType.headline, color = JKColors.text)
             Text(
                 listOfNotNull(w.startsAt, w.location?.takeIf { it.isNotEmpty() }).joinToString(" · ") +
                     (if (w.completedAt == null) "" else " · ${w.doneCount} of ${w.itemCount} exercises"),
                 style = JKType.caption,
-                color = JK.secondary,
+                color = JKColors.textSecondary,
             )
-            ChromeButton(onClick = { nav.push { WorkoutDetailLoader(workoutId = w.id) } }, modifier = Modifier.padding(top = 4.dp)) {
-                Label(
-                    if (w.completedAt == null) "Start workout" else "View workout",
-                    systemImage = if (w.completedAt == null) "play.fill" else "checkmark",
-                    style = JKType.subheadline.semibold(),
-                )
+            PrimaryButton(onClick = { nav.push { WorkoutDetailLoader(workoutId = w.id) } }, modifier = Modifier.padding(top = 4.dp)) {
+                IconLabel(if (w.completedAt == null) "Start workout" else "View workout", icon = if (w.completedAt == null) IconKey.playArrow else IconKey.done, style = JKType.callout.semibold())
             }
-            if (weekLine.isNotEmpty()) Text(weekLine, style = JKType.caption2, color = JK.tertiary)
+            if (weekLine.isNotEmpty()) Text(weekLine, style = JKType.caption, color = JKColors.textTertiary)
         }
     } else {
-        Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Eyebrow(text = "Today")
-            Text("Rest day", style = JKType.title3.semibold(), color = JK.text)
+        Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Label(text = "Today")
+            Text("Rest day", style = JKType.headline, color = JKColors.text)
             Text(
                 nextWorkout?.let { w ->
                     "Next: ${w.title}, ${Day.date(w.date)?.let { Fmt.weekday(it) } ?: w.date}" + (w.startsAt?.let { " $it" } ?: "")
                 } ?: "Walk, recover and tick off your habits.",
                 style = JKType.caption,
-                color = JK.secondary,
+                color = JKColors.textSecondary,
             )
-            if (weekLine.isNotEmpty()) Text(weekLine, style = JKType.caption2, color = JK.tertiary)
+            if (weekLine.isNotEmpty()) Text(weekLine, style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
@@ -320,7 +273,7 @@ private fun NextBooking(bookings: List<Booking>?) {
         day = "${day.dayOfMonth}",
         title = b.title ?: b.kindLabel,
         detail = listOfNotNull(Fmt.time(b.start), b.location).joinToString(" · "),
-        modifier = Modifier.cardLink { MyCalendarView(initialDay = day, embedded = true) }.jkCard(padding = 4.dp),
+        modifier = Modifier.cardLink { MyCalendarView(initialDay = day, embedded = true) }.jkSurface(padding = 4.dp),
     )
 }
 
@@ -329,16 +282,16 @@ private fun NewFeedback(reports: ReportsResponse?, coachName: String) {
     val r = reports?.reports?.firstOrNull { it.isUnread } ?: return
     val id = r.id ?: return
     Row(
-        Modifier.cardLink { ReportDetailView(reportId = id) }.jkCard(padding = 12.dp),
+        Modifier.cardLink { ReportDetailView(reportId = id) }.jkSurface(padding = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile("text.bubble.fill")
+        RowGlyph(IconKey.messages)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("New feedback from $coachName", style = JKType.subheadline.semibold(), color = JK.text)
-            Text(r.weekLabel, style = JKType.caption2, color = JK.tertiary)
+            Text("New feedback from $coachName", style = JKType.callout.semibold(), color = JKColors.text)
+            Text(r.weekLabel, style = JKType.caption, color = JKColors.textTertiary)
         }
-        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -357,7 +310,7 @@ private fun HealthPrompt() {
                 val line = 1.dp.toPx()
                 val dash = 4.dp.toPx()
                 drawRoundRect(
-                    color = JK.stroke,
+                    color = JKColors.hairline,
                     topLeft = Offset(line / 2, line / 2),
                     size = Size(size.width - line, size.height - line),
                     cornerRadius = CornerRadius(12.dp.toPx() - line / 2),
@@ -368,9 +321,9 @@ private fun HealthPrompt() {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SystemImage("heart.fill", JKType.body, SystemRed)
-        Text("Connect Health Connect", style = JKType.subheadline.medium(), color = JK.text, modifier = Modifier.weight(1f))
-        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        Glyph(IconKey.fromHealth, JKType.body, JKColors.textSecondary)
+        Text("Connect Health Connect", style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -384,15 +337,15 @@ private fun HomeTile(
     highlight: Boolean = false,
     destination: @Composable () -> Unit,
 ) {
-    Column(modifier.cardLink(destination = destination).jkCard(padding = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.cardLink(destination = destination).jkSurface(padding = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SystemImage(systemName, JKType.title3, JK.text)
+            Glyph(IconKey.fromSymbol(systemName), JKType.headline, JKColors.text)
             Spacer(Modifier.weight(1f))
-            if (highlight) Dot(JK.text, size = 7.dp)
+            if (highlight) Dot(JKColors.text, size = 7.dp)
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = JKType.subheadline.semibold(), color = JK.text)
-            Text(value, style = JKType.caption2, color = if (highlight) JK.text else JK.tertiary, maxLines = 1)
+            Text(title, style = JKType.callout.semibold(), color = JKColors.text)
+            Text(value, style = JKType.caption, color = if (highlight) JKColors.text else JKColors.textTertiary, maxLines = 1)
         }
     }
 }
@@ -460,9 +413,9 @@ fun DailyHabitsView() {
                         onLog = { logging = true },
                         onDelete = { entry -> scope.launch { deleteEntry(entry) } },
                     )
-                    Eyebrow(text = "Habits set by ${session.me?.coach?.name ?: "your coach"}")
+                    Label(text = "Habits set by ${session.me?.coach?.name ?: "your coach"}")
                     if (d.habits.isEmpty()) {
-                        EmptyCard(systemName = "checklist", title = "No habits yet", detail = "Your coach will add daily habits here.")
+                        EmptyCard(title = "No habits yet", detail = "Your coach will add daily habits here.")
                     }
                     d.habits.forEach { habit ->
                         HabitRow(habit) {
@@ -485,11 +438,11 @@ fun DailyHabitsView() {
                                     Modifier
                                         .weight(1f)
                                         .height(3.dp)
-                                        .background(if (i < minOf(d.streak, 7)) JK.text else JK.track, CircleShape),
+                                        .background(if (i < minOf(d.streak, 7)) JKColors.accent else JKColors.track, CircleShape),
                                 )
                             }
                         }
-                        Text("${d.streak}-day habit streak", style = JKType.caption2, color = JK.tertiary)
+                        Text("${d.streak}-day habit streak", style = JKType.caption, color = JKColors.textTertiary)
                     }
                 }
             }
@@ -514,17 +467,17 @@ fun DailyHabitsView() {
 @Composable
 private fun HabitRow(habit: Habit, onTap: () -> Unit) {
     Row(
-        Modifier.clip(rounded(JK.corner)).clickable(onClick = onTap).jkCard(padding = 12.dp),
+        Modifier.clip(JKShape.card).clickable(onClick = onTap).jkSurface(padding = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile(symbol(habit.icon))
+        RowGlyph(IconKey.fromSymbol(habit.icon), filled = habit.done, tint = if (habit.done) JKColors.accent else JKColors.textSecondary)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(habit.name, style = JKType.subheadline.semibold(), color = JK.text)
-            Text(habitDetail(habit), style = JKType.caption2, color = JK.tertiary)
-            ThinBar(fraction = if (habit.done) 1.0 else if (habit.target > 0) (habit.value ?: 0.0) / habit.target else 0.0)
+            Text(habit.name, style = JKType.callout.semibold(), color = JKColors.text)
+            Text(habitDetail(habit), style = JKType.caption, color = JKColors.textTertiary)
+            ThinBar(fraction = if (habit.done) 1.0 else if (habit.target > 0) (habit.value ?: 0.0) / habit.target else 0.0, color = JKColors.accent)
         }
-        CheckCircle(on = habit.done)
+        CheckCircle(on = habit.done, tint = JKColors.accent)
     }
 }
 
@@ -542,21 +495,21 @@ private fun habitDetail(habit: Habit): String {
 @Composable
 private fun NutritionCard(n: Nutrition, onLog: () -> Unit, onDelete: (FoodEntry) -> Unit) {
     val target = n.targets
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Eyebrow(text = "Nutrition · Today", trailing = if (target == null) "No target set" else "Coach target")
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Label(text = "Nutrition · Today", trailing = if (target == null) "No target set" else "Coach target")
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             val kcalTarget = target?.kcal ?: 0.0
-            ProgressRing(
+            Ring(
                 fraction = if (kcalTarget > 0) minOf(1.0, n.totals.kcal / kcalTarget) else 0.0,
                 lineWidth = 6.dp,
                 modifier = Modifier.size(82.dp),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(Fmt.number(n.totals.kcal, digits = 0), style = JKType.title3.semibold(), color = JK.text)
+                    Text(Fmt.number(n.totals.kcal, digits = 0), style = JKType.headline, color = JKColors.text)
                     Text(
                         target?.let { "of ${Fmt.number(it.kcal, digits = 0)}" } ?: "kcal",
-                        style = JKType.system(9),
-                        color = JK.tertiary,
+                        style = JKType.caption,
+                        color = JKColors.textTertiary,
                     )
                 }
             }
@@ -570,28 +523,23 @@ private fun NutritionCard(n: Nutrition, onLog: () -> Unit, onDelete: (FoodEntry)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 n.entries.forEach { entry ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(entry.name, style = JKType.caption, color = JK.text, modifier = Modifier.weight(1f))
-                        Text("${Fmt.number(entry.kcal, digits = 0)} kcal", style = JKType.caption2, color = JK.tertiary)
-                        SystemImage(
-                            "xmark",
-                            JKType.caption2,
-                            JK.tertiary,
-                            Modifier
+                        Text(entry.name, style = JKType.caption, color = JKColors.text, modifier = Modifier.weight(1f))
+                        Text("${Fmt.number(entry.kcal, digits = 0)} kcal", style = JKType.caption, color = JKColors.textTertiary)
+                        Glyph(IconKey.close, JKType.caption, JKColors.textTertiary, Modifier
                                 .padding(start = 8.dp)
                                 .clickable { onDelete(entry) }
-                                .semantics { contentDescription = "Remove ${entry.name}" },
-                        )
+                                .semantics { contentDescription = "Remove ${entry.name}" })
                     }
                 }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // No photo recognition yet: both open the same quick log.
-            GhostButton(onClick = onLog, modifier = Modifier.weight(1f)) {
-                Label("Snap a meal", systemImage = "camera", style = JKType.subheadline.semibold())
+            SecondaryButton(onClick = onLog, modifier = Modifier.weight(1f)) {
+                IconLabel("Snap a meal", icon = IconKey.mealPhoto, style = JKType.callout.semibold())
             }
-            GhostButton(onClick = onLog, modifier = Modifier.weight(1f)) {
-                Label("Log food", systemImage = "magnifyingglass", style = JKType.subheadline.semibold())
+            SecondaryButton(onClick = onLog, modifier = Modifier.weight(1f)) {
+                IconLabel("Log food", icon = IconKey.search, style = JKType.callout.semibold())
             }
         }
     }
@@ -601,12 +549,12 @@ private fun NutritionCard(n: Nutrition, onLog: () -> Unit, onDelete: (FoodEntry)
 private fun MacroRow(name: String, value: Double, target: Double?) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row {
-            Text(name, style = JKType.caption2, color = JK.tertiary, modifier = Modifier.weight(1f))
+            Text(name, style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.weight(1f))
             Text(
                 target?.let { "${Fmt.number(value, digits = 0)} / ${Fmt.number(it, digits = 0)} g" }
                     ?: "${Fmt.number(value, digits = 0)} g",
-                style = JKType.caption2,
-                color = JK.secondary,
+                style = JKType.caption,
+                color = JKColors.textSecondary,
             )
         }
         ThinBar(fraction = if ((target ?: 0.0) > 0) value / target!! else 0.0)
@@ -632,16 +580,16 @@ private fun HabitValueSheet(habit: Habit, onDismiss: () -> Unit, save: suspend (
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = state,
-        containerColor = JK.bg,
-        contentColor = JK.text,
+        containerColor = JKColors.bg,
+        contentColor = JKColors.text,
         dragHandle = null,
-        shape = rounded(14.dp),
+        shape = JKShape.card,
     ) {
         Column(
             Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(habit.name, style = JKType.title3.semibold(), color = JK.text)
+            Text(habit.name, style = JKType.headline, color = JKColors.text)
             JKField(
                 label = "Today (${habit.unit}) · target ${Fmt.number(habit.target)}",
                 text = text,
@@ -649,9 +597,9 @@ private fun HabitValueSheet(habit: Habit, onDismiss: () -> Unit, save: suspend (
                 prompt = "0",
                 keyboard = KeyboardType.Decimal,
             )
-            ChromeButton(
+            PrimaryButton(
                 onClick = {
-                    val value = parseNumber(text) ?: return@ChromeButton
+                    val value = parseNumber(text) ?: return@PrimaryButton
                     saving = true
                     scope.launch {
                         save(value)
@@ -661,7 +609,7 @@ private fun HabitValueSheet(habit: Habit, onDismiss: () -> Unit, save: suspend (
                 },
                 enabled = parseNumber(text) != null && !saving,
             ) {
-                if (saving) ProgressView(tint = Color.Black) else Text("Save")
+                if (saving) ProgressView() else Text("Save")
             }
         }
     }
@@ -714,8 +662,8 @@ fun FoodLogSheet(save: suspend (FoodInput) -> Unit) {
                 JKField("Fat (g)", fat, { fat = it }, Modifier.weight(1f), prompt = "0", keyboard = KeyboardType.Decimal)
             }
             error?.let { ErrorBanner(it) }
-            ChromeButton(onClick = { scope.launch { submit() } }, enabled = valid && !saving) {
-                if (saving) ProgressView(tint = Color.Black) else Text("Log food")
+            PrimaryButton(onClick = { scope.launch { submit() } }, enabled = valid && !saving) {
+                if (saving) ProgressView() else Text("Log food")
             }
         }
     }
