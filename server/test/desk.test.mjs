@@ -40,20 +40,27 @@ before(async () => {
 after(() => server.close());
 
 describe('Coach desk', () => {
-  test('serves the page and its script under a strict CSP', async () => {
+  test('serves the page and its modules under a strict CSP', async () => {
     const page = await call('GET', '/desk');
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-type'), /text\/html/);
-    assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
-    assert.doesNotMatch(page.headers.get('content-security-policy'), /unsafe/);
-    assert.match(page.body, /\/desk\/app\.js/);
-    const js = await call('GET', '/desk/app.js');
-    assert.equal(js.status, 200);
-    assert.match(js.headers.get('content-type'), /javascript/);
-    // The desk has the Messages tab and keeps unsaved feedback per client and week.
-    assert.match(js.body, /\['messages', 'Messages'\]/);
-    assert.match(js.body, /jk\.desk\.draft\./);
+    const csp = page.headers.get('content-security-policy');
+    assert.match(csp, /script-src 'self' https:\/\/accounts\.google\.com\/gsi\/client(;|$)/, 'only our modules and Google\'s sign-in button');
+    assert.doesNotMatch(csp, /unsafe/);
+    assert.match(page.body, /<script type="module" src="\/desk\/main\.js">/);
+    assert.match(page.body, /href="\/desk\/app\.css"/);
+    for (const name of ['main.js', 'core.js', 'today.js', 'clients.js', 'schedule.js', 'messages.js', 'programs.js', 'guides.js']) {
+      const js = await call('GET', `/desk/${name}`);
+      assert.equal(js.status, 200, name);
+      assert.match(js.headers.get('content-type'), /javascript/);
+    }
+    assert.match((await call('GET', '/desk/core.js')).body, /jk\.desk\.token/);
     assert.equal((await call('GET', '/desk/app.css')).status, 200);
+    assert.equal((await call('GET', '/desk/nope.js')).status, 404, 'only files in server/desk/');
+    assert.equal((await call('GET', '/desk/..%2Fapp.mjs')).status, 404);
+    const login = await fetch(base + '/login', { redirect: 'manual' });
+    assert.equal(login.status, 302);
+    assert.equal(login.headers.get('location'), '/desk');
   });
 
   test('a coach makes a one-time code; a client cannot', async () => {
