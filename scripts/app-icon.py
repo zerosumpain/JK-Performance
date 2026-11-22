@@ -1,52 +1,55 @@
 #!/usr/bin/env python3
-"""Render the app icon: the "JK" badge from the top-right corner of the app,
-scaled up. A bold white "JK" inside a thin rounded square (60% white) on black,
-in the badge's own proportions (30 pt square, 7 pt corners, 1 pt line, 12 pt
-bold type).
+"""Render the app icon: the champagne JK monogram (scripts/monogram.py) on the
+warm off-black ground, with a fine bone ring echoing the weight plate of the
+opening animation. Atelier tokens: bg #0E0D0C, accent #C8A970, text #F2EEE7.
 
-Needs Pillow and a bold sans font close to SF Pro (Inter Bold is the usual
-open stand-in). porkserv has no imaging library, so run it in a container:
+Needs Pillow. porkserv has no imaging library, so run it in a container:
 
-    docker run --rm -v "$PWD:/w" -v "$FONT_DIR:/font:ro" -w /w python:3.12-slim \
-      sh -c "pip install -q pillow && python scripts/app-icon.py /font/inter-700.woff"
+    docker run --rm -v "$PWD:/w" -w /w python:3.12-slim \
+      sh -c "pip install -q pillow && python scripts/app-icon.py"
 
-RGB with no alpha channel, because App Store Connect refuses an icon that has one.
+Pass an output path to render a preview elsewhere. RGB with no alpha channel,
+because App Store Connect refuses an icon that has one.
 """
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from monogram import polygons  # noqa: E402
 
 SIZE = 1024
 OUT = Path(__file__).resolve().parent.parent / "ios/JKPerformance/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 
-# The badge in points, and how many pixels a point becomes.
-BADGE, CORNER, LINE, TYPE = 30, 7, 1, 12
-SCALE = 20  # a 600 px badge in the 1024 px icon
+BG = (0x0E, 0x0D, 0x0C)
+ACCENT = (0xC8, 0xA9, 0x70)
+# Bone at about 18% over the ground: present, never louder than the monogram.
+RING = (0x37, 0x35, 0x33)
+
+MONOGRAM = 0.62  # the monogram's 100-unit square as a share of the icon
+RING_RADIUS = 0.40  # of the icon side
+RING_WIDTH = 6  # px at 1024
 
 
-def main(font_path):
-    # Draw at 4x and scale down for smooth edges.
-    k = 4
-    img = Image.new("RGB", (SIZE * k, SIZE * k), (0, 0, 0))
+def main(out):
+    k = 4  # draw at 4x and scale down for smooth edges
+    big = SIZE * k
+    img = Image.new("RGB", (big, big), BG)
     d = ImageDraw.Draw(img)
-    side = BADGE * SCALE * k
-    lo = (SIZE * k - side) // 2
-    line = LINE * SCALE * k
-    d.rounded_rectangle([lo, lo, lo + side, lo + side], radius=CORNER * SCALE * k, outline=(153, 153, 153), width=line)
 
-    font = ImageFont.truetype(font_path, TYPE * SCALE * k)
-    # Centre on the letters' ink, not the font's line box, as SwiftUI's frame does visually.
-    left, top, right, bottom = d.textbbox((0, 0), "JK", font=font)
-    x = (SIZE * k - (right - left)) / 2 - left
-    y = (SIZE * k - (bottom - top)) / 2 - top
-    d.text((x, y), "JK", font=font, fill=(255, 255, 255))
+    r = RING_RADIUS * big
+    c = big / 2
+    d.ellipse([c - r, c - r, c + r, c + r], outline=RING, width=RING_WIDTH * k)
 
-    img.resize((SIZE, SIZE), Image.LANCZOS).save(OUT, "PNG", optimize=True)
-    print(f"Wrote {OUT}")
+    unit = MONOGRAM * big / 100
+    lo = (big - 100 * unit) / 2
+    for poly in polygons():
+        d.polygon([(lo + x * unit, lo + y * unit) for x, y in poly], fill=ACCENT)
+
+    img.resize((SIZE, SIZE), Image.LANCZOS).save(out, "PNG", optimize=True)
+    print(f"Wrote {out}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit("usage: app-icon.py <bold-font.ttf|.otf|.woff>")
-    main(sys.argv[1])
+    main(Path(sys.argv[1]) if len(sys.argv) > 1 else OUT)

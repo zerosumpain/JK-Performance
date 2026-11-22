@@ -48,7 +48,7 @@ Environment `testflight` holds:
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` | secrets | the same App Store Connect API key as SR-AppleApp (Admin role) |
 | `DISTRIBUTION_P12_BASE64`, `DISTRIBUTION_P12_PASSWORD` | secrets | the same Apple Distribution certificate as SR-AppleApp |
 
-App icon: `python3 scripts/app-icon.py` (placeholder silver JK mark).
+App icon: `scripts/app-icon.py` (the interim champagne JK monogram from `scripts/monogram.py`, also in `docs/design/brand/jk-monogram.svg`; it needs Pillow, see the script header).
 
 ## Android
 
