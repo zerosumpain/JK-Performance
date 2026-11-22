@@ -1,85 +1,84 @@
 import SwiftUI
 
-// MARK: - Account (client tab root)
+// MARK: - Account sheet
 
-struct AccountView: View {
+/// Account is a sheet from the avatar on Today (atelier-spec.md, IA): one
+/// inset grouped list of eight rows. Membership and the plan tour live only
+/// here.
+struct AccountSheet: View {
     @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
+    @State private var path: [AccountRoute] = []
     @State private var editingName = false
     @State private var name = ""
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var confirmDelete = false
+    @State private var confirmSignOut = false
     @State private var deleting = false
     @State private var error: String?
+
+    enum AccountRoute: Hashable { case membership, health, notifications, privacy }
 
     private var api: APIClient { APIClient.shared }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(eyebrow: "Account", title: session.me?.name ?? "Account") {
-                        Button {
+                VStack(alignment: .leading, spacing: JK.Space.xxl) {
+                    if session.canReturnToCoach { demoNote }
+                    VStack(spacing: 0) {
+                        row(.settings, "Name", session.me?.name ?? "") {
                             name = session.me?.name ?? ""
                             editingName = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .frame(width: 30, height: 30)
-                                .overlay(RoundedRectangle(cornerRadius: JK.Radius.chip).stroke(JK.hairline, lineWidth: 1))
                         }
-                        .foregroundStyle(JK.text)
-                        .accessibilityLabel("Edit name")
-                    }
-                    if let email = session.me?.email {
-                        Text(email).font(.jkCaption).foregroundStyle(JK.textTertiary)
-                    }
-                    if session.canReturnToCoach {
-                        Button {
-                            Task { await session.returnToCoach() }
-                        } label: {
-                            Label("Back to coach", systemImage: "arrow.uturn.backward")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        Text("You're looking round as the demo client. Nothing here is a real client's data.")
-                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
-                    }
-                    VStack(spacing: 8) {
-                        AccountLink(title: "Membership", detail: membershipDetail, systemName: "creditcard") { MembershipView() }
-                        AccountLink(title: "Apple Health", detail: healthDetail, systemName: "heart") { HealthDevicesView() }
-                        remindersRow
-                    }
-
-                    Eyebrow(text: "Your data")
-                    VStack(spacing: 8) {
+                        GroupDivider()
+                        link(.membership, .goal, "Membership", membershipDetail)
+                        GroupDivider()
+                        link(.health, .fromHealth, "Apple Health", healthDetail)
+                        GroupDivider()
+                        link(.notifications, .reply, "Notifications", notificationsDetail)
+                        GroupDivider()
                         exportRow
-                        Link(destination: api.privacyURL) {
-                            rowLabel(title: "Privacy policy", detail: "What we store and why", systemName: "hand.raised",
-                                     trailing: "arrow.up.right")
-                        }
-                        Button {
-                            confirmDelete = true
-                        } label: {
-                            rowLabel(title: "Delete account", detail: "Erases your account, workouts and photos",
-                                     systemName: "trash", trailing: deleting ? nil : "chevron.right")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(deleting)
+                        GroupDivider()
+                        link(.privacy, .lock, "Privacy", "What we store and why")
                     }
-
+                    .surface(.group)
+                    VStack(spacing: 0) {
+                        row(.chevron, "Sign out", nil) { confirmSignOut = true }
+                        GroupDivider()
+                        row(.chevron, "Delete account", deleting ? "Deleting…" : "Erases your account, sessions and photos") {
+                            confirmDelete = true
+                        }
+                    }
+                    .surface(.group)
                     if let error { ErrorBanner(message: error) }
-                    Button("Sign out") { Task { await session.signOut() } }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .padding(.top, 20)
                 }
-                .padding(16)
+                .padding(JK.Space.gutter)
             }
             .jkScreen()
-            .jkRefreshable { await session.refreshMe() }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .navigationDestination(for: AccountRoute.self) { route in
+                switch route {
+                case .membership: MembershipView()
+                case .health: HealthDevicesView()
+                case .notifications: NotificationsView()
+                case .privacy: PrivacyView()
+                }
+            }
             .alert("Your name", isPresented: $editingName) {
                 TextField("Name", text: $name)
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { Task { await saveName() } }
+            }
+            .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) {
+                    dismiss()
+                    Task { await session.signOut() }
+                }
+                Button("Cancel", role: .cancel) {}
             }
             .confirmationDialog("Delete your account?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete account and all data", role: .destructive) { Task { await deleteAccount() } }
@@ -87,77 +86,63 @@ struct AccountView: View {
             } message: {
                 Text("This permanently erases your account and everything stored about you, photos included. It can't be undone.")
             }
+            .onAppear {
+                if TabRouter.shared.showMembership {
+                    TabRouter.shared.showMembership = false
+                    path = [.membership]
+                }
+            }
+        }
+        .tint(JK.accentControl)
+    }
+
+    private var demoNote: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Text("You're looking round as the demo client. Nothing here is a real client's data.")
+                .font(.jkCaption).foregroundStyle(JK.textSecondary)
+            Button("Back to coach") { Task { await session.returnToCoach() } }
+                .buttonStyle(SecondaryButtonStyle())
         }
     }
 
-    private var remindersRow: some View {
-        HStack(spacing: 12) {
-            Glyph(systemName: "bell")
-            Toggle(isOn: Binding(get: { Reminders.shared.enabled }, set: { on in
-                Task {
-                    if on {
-                        if !(await Reminders.shared.enable()) {
-                            error = "Notifications are off for JK Performance. Turn them on in Settings › Notifications."
-                        }
-                    } else {
-                        Reminders.shared.disable()
-                    }
-                }
-            })) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Notifications").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("Replies and feedback · an hour before sessions · Friday check-in").font(.jkCaption).foregroundStyle(JK.textTertiary)
-                }
-            }
-            .tint(JK.accentControl)
-        }
-        .jkCard(padding: 12)
+    private func link(_ route: AccountRoute, _ icon: IconKey, _ title: String, _ detail: String?) -> some View {
+        NavigationLink(value: route) { AccountRowLabel(icon: icon, title: title, detail: detail, chevron: true) }
+            .buttonStyle(.plain)
+    }
+
+    private func row(_ icon: IconKey, _ title: String, _ detail: String?, action: @escaping () -> Void) -> some View {
+        Button(action: action) { AccountRowLabel(icon: icon, title: title, detail: detail, chevron: false) }
+            .buttonStyle(.plain)
     }
 
     private var healthDetail: String {
         guard HealthSync.shared.optedIn else { return "Not connected" }
-        return session.me?.healthSharing == true ? "Connected · shared with \(session.me?.coach?.name ?? "your coach")" : "Connected · only you"
+        return session.me?.healthSharing == true ? "Connected · shared with JK" : "Connected · only you"
     }
 
     private var membershipDetail: String {
-        guard let m = session.me?.membership, m.isActive else { return "No plan" }
+        guard let m = session.me?.membership, m.isActive else { return "No plan · Guides from JK" }
         return m.renewsOn.map { "\(m.displayName) · renews \(Fmt.dayMonth($0))" } ?? m.displayName
+    }
+
+    private var notificationsDetail: String {
+        guard Reminders.shared.enabled else { return "Off" }
+        return Reminders.shared.eveningTime.map { "On · evening reminder \($0)" } ?? "On"
     }
 
     @ViewBuilder
     private var exportRow: some View {
         if let exportURL {
             ShareLink(item: exportURL) {
-                rowLabel(title: "Share your export", detail: exportURL.lastPathComponent, systemName: "square.and.arrow.up",
-                         trailing: "square.and.arrow.up")
-            }
-        } else {
-            Button {
-                Task { await export() }
-            } label: {
-                rowLabel(title: "Export your data", detail: exporting ? "Preparing…" : "Everything stored about you, as JSON",
-                         systemName: "arrow.down.doc", trailing: exporting ? nil : "chevron.right")
+                AccountRowLabel(icon: .photos, title: "Your data", detail: "Share \(exportURL.lastPathComponent)", chevron: false)
             }
             .buttonStyle(.plain)
+        } else {
+            row(.photos, "Your data", exporting ? "Preparing…" : "Download a copy, as JSON") {
+                Task { await export() }
+            }
             .disabled(exporting)
         }
-    }
-
-    private func rowLabel(title: String, detail: String, systemName: String, trailing: String?) -> some View {
-        HStack(spacing: 12) {
-            Glyph(systemName: systemName)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
-            }
-            Spacer()
-            if let trailing {
-                Image(systemName: trailing).font(.jkCaption).foregroundStyle(JK.textTertiary)
-            } else {
-                ProgressView().controlSize(.small)
-            }
-        }
-        .jkCard(padding: 12)
     }
 
     private func saveName() async {
@@ -192,33 +177,169 @@ struct AccountView: View {
         defer { deleting = false }
         do {
             try await session.deleteAccount()
+            dismiss()
         } catch {
             self.error = error.readable
         }
     }
 }
 
-struct AccountLink<Destination: View>: View {
+/// One row of the Account sheet: glyph, title, one quiet line.
+struct AccountRowLabel: View {
+    let icon: IconKey
     let title: String
-    let detail: String
-    let systemName: String
-    @ViewBuilder var destination: () -> Destination
+    let detail: String?
+    var chevron = true
 
     var body: some View {
-        NavigationLink {
-            destination()
-        } label: {
-            HStack(spacing: 12) {
-                Glyph(systemName: systemName)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
+        HStack(spacing: JK.Space.m) {
+            Icon(key: icon).foregroundStyle(JK.textSecondary)
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                Text(title).font(.jkBody).foregroundStyle(JK.text)
+                if let detail, !detail.isEmpty {
+                    Text(detail).font(.jkCaption).foregroundStyle(JK.textSecondary)
                 }
-                Spacer()
-                Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
-            .jkCard(padding: 12)
+            Spacer(minLength: 0)
+            if chevron { Icon(key: .chevron, size: 13).foregroundStyle(JK.textSecondary) }
         }
+        .padding(.horizontal, JK.Space.l)
+        .padding(.vertical, JK.Space.m)
+        .frame(minHeight: JK.Size.touch)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Notifications
+
+/// On or off, plus one evening reminder time. Never countdown copy.
+struct NotificationsView: View {
+    @Environment(AppSession.self) private var session
+    @State private var time = Date()
+    @State private var evening = false
+    @State private var error: String?
+
+    private var reminders: Reminders { Reminders.shared }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JK.Space.xxl) {
+                VStack(spacing: 0) {
+                    Toggle(isOn: Binding(get: { reminders.enabled }, set: { on in Task { await setOn(on) } })) {
+                        VStack(alignment: .leading, spacing: JK.Space.xs) {
+                            Text("Notifications").font(.jkBody).foregroundStyle(JK.text)
+                            Text("JK's replies and letters, and an hour before each session").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                        }
+                    }
+                    .padding(JK.Space.l)
+                    if reminders.enabled {
+                        GroupDivider()
+                        Toggle(isOn: Binding(get: { evening }, set: { on in
+                            evening = on
+                            Task { await save() }
+                        })) {
+                            Text("An evening reminder").font(.jkBody).foregroundStyle(JK.text)
+                        }
+                        .padding(JK.Space.l)
+                        if evening {
+                            GroupDivider()
+                            DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                                .font(.jkBody)
+                                .foregroundStyle(JK.text)
+                                .padding(JK.Space.l)
+                                .onChange(of: time) { _, _ in Task { await save() } }
+                        }
+                    }
+                }
+                .surface(.group)
+                .tint(JK.accentControl)
+                if let error { ErrorBanner(message: error) }
+            }
+            .padding(JK.Space.gutter)
+        }
+        .jkScreen()
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            let saved = session.me?.preferences?.eveningReminderTime ?? reminders.eveningTime
+            evening = saved != nil
+            time = Day.at(Date(), time: saved ?? "20:30") ?? Date()
+        }
+    }
+
+    private func setOn(_ on: Bool) async {
+        if on {
+            if !(await reminders.enable(checkIn: session.gate.checkin)) {
+                error = "Notifications are off for JK Performance. Turn them on in Settings › Notifications."
+                return
+            }
+        } else {
+            reminders.disable()
+        }
+        error = nil
+        await save()
+    }
+
+    private func save() async {
+        let hhmm = evening ? Fmt.time(time) : nil
+        reminders.setEveningTime(hhmm)
+        await reminders.refresh(gate: session.gate, preferences: Preferences(notificationsOn: reminders.enabled, eveningReminderTime: hhmm))
+        let body = PreferencesInput(notificationsOn: reminders.enabled, eveningReminderTime: hhmm)
+        if let _: Preferences = try? await APIClient.shared.send("PUT", "/api/me/preferences", body: body) {
+            await session.refreshMe()
+        }
+    }
+}
+
+/// PUT /api/me/preferences: a null time switches the evening reminder off.
+struct PreferencesInput: Encodable {
+    var notificationsOn: Bool
+    var eveningReminderTime: String?
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(notificationsOn, forKey: .notificationsOn)
+        try c.encode(eveningReminderTime, forKey: .eveningReminderTime)
+    }
+
+    enum CodingKeys: String, CodingKey { case notificationsOn, eveningReminderTime }
+}
+
+// MARK: - Privacy
+
+struct PrivacyView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JK.Space.l) {
+                Text("Your account, sessions, habits, check-ins, messages and photos are stored so JK can coach you. Apple Health data is read only with your permission and shared with JK only if you say so. Photos are private to you and JK.")
+                    .font(.jkBody).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
+                Link("Read the privacy policy", destination: APIClient.shared.privacyURL)
+                    .buttonStyle(TextButtonStyle())
+                NavigationLink("Acknowledgements") { AcknowledgementsView() }
+                    .buttonStyle(TextButtonStyle())
+            }
+            .padding(JK.Space.gutter)
+        }
+        .jkScreen()
+        .navigationTitle("Privacy")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct AcknowledgementsView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JK.Space.m) {
+                Text("Newsreader").font(.jkHeadline).foregroundStyle(JK.text)
+                Text("Copyright 2020 The Newsreader Project Authors. Licensed under the SIL Open Font License, Version 1.1 (scripts.sil.org/OFL). JK's words, letters and guides are set in it.")
+                    .font(.jkBody).foregroundStyle(JK.textSecondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(JK.Space.gutter)
+        }
+        .jkScreen()
+        .navigationTitle("Acknowledgements")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -540,6 +661,7 @@ struct MembershipView: View {
     @State private var saving = false
     @State private var saveError: String?
     @State private var touring = false
+    @State private var featureNames: [String: String] = [:]
 
     /// `preselected`: a plan chosen in the walkthrough, picked ready to switch.
     init(preselected: String? = nil) {
@@ -553,10 +675,12 @@ struct MembershipView: View {
             VStack(spacing: 14) {
                 VStack(spacing: 6) {
                     Monogram(size: 44)
-                    Text("Choose your plan").font(.jkDisplay)
+                    Text("Membership").jkText(.display)
                     Text("Testing build: switching plans takes no payment.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 .foregroundStyle(JK.text)
+
+                current(plans)
 
                 Segmented(options: Billing.allCases, selection: $billing) { $0.rawValue }
 
@@ -607,6 +731,32 @@ struct MembershipView: View {
         .task { await load() }
         .fullScreenCover(isPresented: $touring) {
             PlanTourView(mode: .client) { chosen in picked = chosen }
+        }
+    }
+
+    /// Your plan, JK's rhythm for it in one quiet line, and what it includes.
+    @ViewBuilder
+    private func current(_ plans: [Plan]?) -> some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Text(session.me?.membership?.displayName ?? "No plan").font(.jkHeadline).foregroundStyle(JK.text)
+            Text(Self.rhythm(current)).jkText(.quoteSmall).foregroundStyle(JK.text)
+            if let plan = plans?.first(where: { $0.id == current }), !plan.featureIds.isEmpty {
+                Text(plan.featureIds.compactMap { featureNames[$0] }.joined(separator: " · "))
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .surface(.card, padding: JK.Space.l)
+    }
+
+    /// JK's rhythm for each plan (decisions.md).
+    static func rhythm(_ plan: String) -> String {
+        switch plan {
+        case "elite": return "A weekly letter from JK, with a voice or video note"
+        case "performance": return "A weekly written letter from JK"
+        case "foundation": return "Messages with JK, any day"
+        default: return "Guides from JK"
         }
     }
 
@@ -680,6 +830,7 @@ struct MembershipView: View {
         do {
             let reply: PlansResponse = try await APIClient.shared.get("/api/plans")
             plans = reply.plans
+            featureNames = Dictionary((reply.features ?? []).map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }

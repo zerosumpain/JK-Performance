@@ -108,7 +108,8 @@ struct OnboardingView: View {
 
     private var goalsStep: some View {
         StepScaffold(step: Step.goals.rawValue, count: count,
-                     title: "What are you training for?", subtitle: "Pick as many as you like.",
+                     title: "What are you training for?",
+                     subtitle: "Pick as many as you like. JK will turn this into your goal at your first session.",
                      back: { go(.welcome) }, skip: { go(.experience) }) {
             LazyVGrid(columns: grid, spacing: 10) {
                 ForEach(OnboardingCatalog.goals) { g in
@@ -249,7 +250,15 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 10) {
                 reason("bubble.left", "Your coach's replies", "As soon as \(coachName) answers.")
                 reason("calendar", "Session reminders", "An hour before each session.")
-                reason("text.bubble", "Your weekly report", "When your feedback for the week is ready.")
+                reason("envelope.open", "JK's letter", "When your letter for the week arrives.")
+                if HealthSync.shared.available && !HealthSync.shared.optedIn && session.me?.demo != true {
+                    Button("Connect Apple Health") {
+                        Task { _ = await HealthSync.shared.connect(shareWithCoach: true) }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    Text("Steps and sleep fill your habits in by themselves. You can change this in Account.")
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
             }
         } actions: {
             if Reminders.shared.enabled {
@@ -306,6 +315,9 @@ struct OnboardingView: View {
         } actions: {
             errorFooter
             if hasPlan {
+                Button("Take the tour") { touring = true }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(saving)
                 finishButton("Finish")
             } else {
                 Button("Take the tour") { touring = true }

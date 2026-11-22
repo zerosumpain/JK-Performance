@@ -1,112 +1,6 @@
 import SwiftUI
 
-// MARK: - Workout plan (Plan tab root)
-
-/// The week's day strip, the selected day's workout and its exercises with
-/// the coach's prescription. Only published workouts reach a client.
-struct WorkoutPlanView: View {
-    @State private var selected = Day.start(Date())
-    @State private var week: [WorkoutSummary]?
-    @State private var weekKey = ""
-    @State private var workout: Workout?
-    @State private var chosenId: String?
-    @State private var error: String?
-    @State private var loadingDetail = false
-
-    private var api: APIClient { APIClient.shared }
-    private var days: [Date] { Day.week(of: selected) }
-
-    private var dayWorkouts: [WorkoutSummary] {
-        (week ?? []).filter { $0.date == Day.string(selected) }.sorted { ($0.startsAt ?? "") < ($1.startsAt ?? "") }
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(eyebrow: "Week of \(Fmt.dayMonth(days[0]))", title: "Workout plan") {
-                        HStack(spacing: 8) {
-                            Button { selected = Day.add(-7, to: selected) } label: { headerIcon("chevron.left") }
-                            Button { selected = Day.add(7, to: selected) } label: { headerIcon("chevron.right") }
-                            NavigationLink { ExercisesView() } label: { headerIcon("plus") }
-                        }
-                        .foregroundStyle(JK.text)
-                    }
-                    DayStrip(days: days, selected: $selected,
-                             marked: Set((week ?? []).map(\.date)))
-
-                    if let error, week == nil {
-                        ErrorCard(message: error) { await loadWeek(force: true) }
-                    } else if week == nil {
-                        LoadingCard()
-                    } else if dayWorkouts.isEmpty {
-                        EmptyCard(systemName: "calendar", title: "Nothing planned",
-                                  detail: "No workout from your coach on \(Fmt.longDay(selected)).")
-                    } else {
-                        if let error { ErrorBanner(message: error) }
-                        if dayWorkouts.count > 1 {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 6) {
-                                    ForEach(dayWorkouts) { w in
-                                        Chip(label: w.title, selected: w.id == workout?.id) { chosenId = w.id }
-                                    }
-                                }
-                            }
-                        }
-                        if let binding = Binding($workout) {
-                            WorkoutBody(workout: binding)
-                        } else if loadingDetail {
-                            LoadingCard()
-                        }
-                    }
-                }
-                .padding(16)
-            }
-            .jkScreen()
-            .jkRefreshable { await loadWeek(force: true) }
-            .toolbar(.hidden, for: .navigationBar)
-            .task(id: Day.string(days[0])) { await loadWeek(force: false) }
-            .task(id: "\(Day.string(selected))|\(chosenId ?? "")|\(week?.count ?? -1)") { await loadDetail() }
-        }
-    }
-
-    private func headerIcon(_ name: String) -> some View {
-        Image(systemName: name)
-            .frame(width: 30, height: 30)
-            .overlay(RoundedRectangle(cornerRadius: JK.Radius.chip).stroke(JK.hairline, lineWidth: 1))
-    }
-
-    private func loadWeek(force: Bool) async {
-        let key = Day.string(days[0])
-        if !force, key == weekKey, week != nil { return }
-        do {
-            let reply: WorkoutsResponse = try await api.get("/api/workouts", query: ["from": key, "to": Day.string(days[6])])
-            week = reply.workouts
-            weekKey = key
-            error = nil
-            if force { await loadDetail() }
-        } catch {
-            if !error.isCancellation { self.error = error.readable }
-        }
-    }
-
-    private func loadDetail() async {
-        guard week != nil else { return }
-        let options = dayWorkouts
-        guard let target = options.first(where: { $0.id == chosenId }) ?? options.first(where: { $0.completedAt == nil }) ?? options.first else {
-            workout = nil
-            return
-        }
-        if workout?.id != target.id { workout = nil }
-        loadingDetail = true
-        defer { loadingDetail = false }
-        do {
-            workout = try await api.get("/api/workouts/\(seg(target.id))")
-        } catch {
-            if !error.isCancellation { self.error = error.readable }
-        }
-    }
-}
+// MARK: - Session (detail, logger and complete, one flow)
 
 /// Loads one workout by id (from Home's "Open workout").
 struct WorkoutDetailLoader: View {
@@ -143,36 +37,36 @@ struct WorkoutDetailLoader: View {
     }
 }
 
-/// A workout's summary card, its exercises and "Complete workout".
+/// A workout's summary, its exercises and "Finish session", which opens the
+/// session-complete page (feel word and note) before anything is sent.
 struct WorkoutBody: View {
     @Binding var workout: Workout
-    @State private var completing = false
-    @State private var error: String?
+    @State private var finishing = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(workout.title).font(.jkHeadline).foregroundStyle(JK.text)
-                Spacer()
-                if workout.editedBy == "coach", let at = workout.editedAt {
-                    Label("Coach · \(Fmt.relative(at))", systemImage: "person.2").font(.jkCaption).foregroundStyle(JK.textTertiary)
-                } else {
-                    Label("Shared with Coach", systemImage: "person.2").font(.jkCaption).foregroundStyle(JK.textTertiary)
-                }
-            }
+        VStack(alignment: .leading, spacing: JK.Space.l) {
+            header
+            exercises
+            footer
+        }
+        .fullScreenCover(isPresented: $finishing) {
+            SessionCompleteView(workout: workout) { workout = $0 }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Text(workout.title).jkText(.display).foregroundStyle(JK.text)
             Text(([workout.startsAt, workout.location].compactMap { $0 }.filter { !$0.isEmpty }
-                  + ["\(workout.items.count) exercises"]).joined(separator: " · "))
-                .font(.jkCaption).foregroundStyle(JK.textTertiary)
-            HStack {
-                ThinBar(fraction: workout.items.isEmpty ? 0 : Double(workout.doneCount) / Double(workout.items.count))
-                Text("\(workout.doneCount) of \(workout.items.count) done").font(.jkCaption).foregroundStyle(JK.textTertiary)
-            }
+                  + ["\(workout.items.count) exercises", "\(workout.doneCount) of \(workout.items.count) done"]).joined(separator: " · "))
+                .font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
             if let notes = workout.notes, !notes.isEmpty {
-                Label(notes, systemImage: "text.bubble").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                Text(notes).jkText(.quoteSmall).foregroundStyle(JK.text)
             }
         }
-        .jkCard()
+    }
 
+    private var exercises: some View {
         ForEach(workout.items.sorted { $0.order < $1.order }) { item in
             NavigationLink {
                 WorkoutLoggerView(workout: workout, itemId: item.id) { workout = $0 }
@@ -181,40 +75,170 @@ struct WorkoutBody: View {
             }
             .buttonStyle(.plain)
         }
+    }
 
+    @ViewBuilder
+    private var footer: some View {
         OfflineBanner()
-        if let error { ErrorBanner(message: error) }
         if let done = workout.completedAt {
-            Label("Completed \(Fmt.relative(done))", systemImage: "checkmark.seal")
-                .font(.jkCallout.weight(.semibold))
-                .foregroundStyle(JK.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-        } else if !workout.items.isEmpty {
-            Button {
-                Task { await complete() }
-            } label: {
-                if completing { ProgressView().tint(JK.onPrimary) } else { Label("Complete workout", systemImage: "checkmark") }
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                Text("Done \(Fmt.relative(done))").font(.jkCallout).foregroundStyle(JK.textSecondary)
+                if let word = workout.feelWord ?? Feel.word(workout.feel) {
+                    Text("Felt \(word.lowercased())").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(completing)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else if !workout.items.isEmpty {
+            Button("Finish session") { finishing = true }
+                .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+}
+
+/// The session-complete page, the most considered page in the app: the
+/// serif "Done.", the session in figures, any new bests, how it felt in one
+/// word, an optional note, and "JK will see this."
+struct SessionCompleteView: View {
+    let workout: Workout
+    let onDone: (Workout) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var feel: Int?
+    @State private var note = ""
+    @State private var saving = false
+    @State private var error: String?
+    @State private var records: [PersonalRecord] = []
+
+    private var sets: [LoggedSet] { workout.items.flatMap(\.logged) }
+    private var volume: Double {
+        sets.reduce(0) { sum, s in sum + (parseNumber(s.load) ?? 0) * Double(s.reps) }
+    }
+    private var minutes: Double? {
+        let times = sets.compactMap(\.at).sorted()
+        guard let first = times.first, let last = times.last, last > first else { return nil }
+        return last.timeIntervalSince(first) / 60
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: JK.Space.xxl) {
+                    Text("Done. \(workout.title).")
+                        .jkText(.letterHeadline)
+                        .foregroundStyle(JK.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    figures
+                    if !records.isEmpty {
+                        FlowChips(texts: records.map { "New best · \($0.exercise) \(Fmt.number($0.kg)) kg" })
+                    }
+                    VStack(alignment: .leading, spacing: JK.Space.m) {
+                        Text("How did that feel?").font(.jkHeadline).foregroundStyle(JK.text)
+                        FeelRow(selection: $feel)
+                    }
+                    VStack(alignment: .leading, spacing: JK.Space.xs) {
+                        JKField(label: "A note (optional)", text: $note, prompt: "Knee felt fine on the last set")
+                        Text("JK will see this.").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    }
+                    OfflineBanner()
+                    if let error { ErrorBanner(message: error) }
+                    PrimaryButton("Done", busy: saving) { Task { await finish() } }
+                }
+                .padding(JK.Space.gutter)
+            }
+            .jkScreen()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Back") { dismiss() } }
+            }
+            .task {
+                let today = Day.today
+                if let p: ProgressData = try? await APIClient.shared.get("/api/progress") {
+                    let names = Set(workout.items.map(\.exercise.name))
+                    records = p.records.filter { $0.date == today && names.contains($0.exercise) }
+                }
+            }
         }
     }
 
-    private func complete() async {
-        completing = true
-        defer { completing = false }
+    private var figures: some View {
+        AdaptiveStack(verticalAlignment: .top, spacing: JK.Space.xl) {
+            figure("\(sets.count)", "Sets")
+            figure(volume > 0 ? "\(Fmt.number(volume, digits: 0)) kg" : "–", "Volume")
+            figure(minutes.map { Fmt.duration($0) } ?? "–", "Duration")
+        }
+    }
+
+    private func figure(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: JK.Space.xs) {
+            Text(value).jkText(.numberTile).foregroundStyle(JK.text).lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.jkCaption).foregroundStyle(JK.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func finish() async {
+        saving = true
+        defer { saving = false }
         let path = "/api/workouts/\(seg(workout.id))/complete"
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = CompleteInput(note: trimmed.isEmpty ? nil : trimmed, feel: feel)
         do {
-            workout = try await APIClient.shared.send("POST", path, body: NoteInput(note: nil))
-            error = nil
+            let fresh: Workout = try await APIClient.shared.send("POST", path, body: input)
+            onDone(fresh)
+            dismiss()
         } catch let failure where Outbox.isOffline(failure) {
             // Queued after the sets logged offline, so the server sees them first.
-            Outbox.shared.enqueue("POST", path, body: NoteInput(note: nil))
-            workout.completedAt = Date()
-            self.error = nil
+            Outbox.shared.enqueue("POST", path, body: input)
+            var local = workout
+            local.completedAt = Date()
+            local.feel = feel
+            onDone(local)
+            dismiss()
         } catch {
             self.error = error.readable
+        }
+    }
+}
+
+/// "How did that feel?": five words in one quiet segmented row, each at least
+/// 44pt high. No numbers, no emoji, no animation.
+struct FeelRow: View {
+    @Binding var selection: Int?
+
+    var body: some View {
+        AdaptiveStack(spacing: JK.Space.xs) {
+            ForEach(Array(Feel.words.enumerated()), id: \.offset) { i, word in
+                let on = selection == i + 1
+                Button { selection = on ? nil : i + 1 } label: {
+                    Text(word)
+                        .font(.jkCallout)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity, minHeight: JK.Size.touch)
+                        .foregroundStyle(on ? JK.onPrimary : JK.text)
+                        .background(on ? JK.primaryFill : JK.surface,
+                                    in: RoundedRectangle(cornerRadius: JK.Radius.chip, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+    }
+}
+
+/// Hairline pills in champagne text: "New best · Squat 102.5 kg".
+struct FlowChips: View {
+    let texts: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            ForEach(texts, id: \.self) { t in
+                Text(t)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.accent)
+                    .padding(.horizontal, JK.Space.m)
+                    .padding(.vertical, JK.Space.xs)
+                    .overlay(Capsule().strokeBorder(JK.hairline, lineWidth: JK.Size.hairline))
+            }
         }
     }
 }
@@ -437,6 +461,7 @@ struct ExercisePickerSheet: View {
 /// Logging one exercise: coach demo, set table (PUT/DELETE per set), rest
 /// timer (local only).
 struct WorkoutLoggerView: View {
+    @Environment(AppSession.self) private var session
     @State var workout: Workout
     @State var itemId: String
     let onChange: (Workout) -> Void
@@ -594,45 +619,29 @@ struct WorkoutLoggerView: View {
     }
 
     private func demo(_ item: WorkoutItem) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
-                Rectangle().fill(JK.raised).frame(height: 150)
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Text(item.exercise.name).jkText(.display).foregroundStyle(JK.text)
+            Text(["\(item.sets) × \(item.reps)", item.load.isEmpty ? nil : item.load,
+                  item.rpe.map { "RPE \($0)" }].compactMap { $0 }.joined(separator: " · "))
+                .font(.jkCallout.monospacedDigit()).foregroundStyle(JK.textSecondary)
+            if let note = item.note, !note.isEmpty {
+                Text(note).jkText(.quoteSmall).foregroundStyle(JK.text)
+            }
+            AdaptiveStack(spacing: JK.Space.s) {
                 if let url = item.exercise.videoUrl.flatMap(URL.init(string:)) {
-                    Link(destination: url) {
-                        Image(systemName: "play.fill")
-                            .foregroundStyle(JK.text)
-                            .frame(width: 44, height: 44)
-                            .background(JK.surface, in: Circle())
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Text("Coach demo")
-                        .font(.jkCaption)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(JK.surface, in: Capsule())
-                        .foregroundStyle(JK.textSecondary)
-                        .padding(10)
+                    Link(destination: url) { Label("How to do this", systemImage: IconKey.play.symbol) }
+                        .buttonStyle(TextButtonStyle())
                 } else {
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.largeTitle)
-                        .foregroundStyle(JK.textTertiary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    NavigationLink { ExercisesView() } label: { Label("How to do this", systemImage: IconKey.guide.symbol) }
+                        .buttonStyle(TextButtonStyle())
                 }
-            }
-            .frame(height: 150)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.exercise.name).font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
-                Text(["\(item.sets) × \(item.reps)", item.load.isEmpty ? nil : item.load,
-                      item.rpe.map { "RPE \($0)" }].compactMap { $0 }.joined(separator: " · "))
-                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
-                if let note = item.note, !note.isEmpty {
-                    Text(note).font(.jkCaption).foregroundStyle(JK.textSecondary).padding(.top, 4)
+                if session.gate.formChecks {
+                    FormCheckButton(exerciseId: item.exercise.id, exerciseName: item.exercise.name, workoutId: workout.id)
                 }
+                Spacer(minLength: 0)
             }
-            .padding(14)
         }
-        .background(JK.surface)
-        .clipShape(RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.hairline, lineWidth: 1))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func setTable(_ item: WorkoutItem) -> some View {

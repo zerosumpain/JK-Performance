@@ -2,10 +2,12 @@ import Foundation
 import Observation
 import UserNotifications
 
-/// Reminders scheduled on the phone itself: the weekly check-in on Friday
-/// evening, and an hour before each session or timed workout in the next
-/// fortnight. Rescheduled whenever Home loads. `enabled` is also the switch
-/// for push notifications from the server (see `Push`).
+/// Reminders scheduled on the phone itself: one evening reminder at the time
+/// the client chose (atelier-spec.md: notifications are on/off plus one
+/// time), the weekly check-in on Friday (plans with 'checkin'), and an hour
+/// before each session or timed workout in the next fortnight. Rescheduled
+/// whenever Today loads. `enabled` is also the switch for push notifications
+/// from the server (see `Push`). Never countdown copy.
 @Observable
 @MainActor
 final class Reminders {
@@ -14,8 +16,14 @@ final class Reminders {
     private static let key = "jk.reminders.on"
     private static let sessionPrefix = "jk.session."
     private static let checkInId = "jk.checkin"
+    private static let eveningId = "jk.evening"
+    private static let eveningKey = "jk.reminders.evening"
 
     private(set) var enabled: Bool
+    /// "HH:MM", or nil for no evening reminder.
+    private(set) var eveningTime: String? = UserDefaults.standard.string(forKey: "jk.reminders.evening")
+    /// Whether this client's plan has the weekly check-in.
+    @ObservationIgnored private var checkInOn = true
     @ObservationIgnored private let center = UNUserNotificationCenter.current()
 
     init() { enabled = UserDefaults.standard.bool(forKey: Self.key) }
@@ -54,14 +62,51 @@ final class Reminders {
         UserDefaults.standard.set(value, forKey: Self.key)
     }
 
-    private func scheduleCheckIn() {
+    func setEveningTime(_ time: String?) {
+        eveningTime = time
+        UserDefaults.standard.set(time, forKey: Self.eveningKey)
+    }
+
+    /// Today's refresh: the server's preferences win, then everything is rescheduled.
+    func refresh(gate: Gate, preferences: Preferences?) async {
+        if let prefs = preferences, prefs.notificationsOn != nil || prefs.eveningReminderTime != nil {
+            setEveningTime(prefs.eveningReminderTime)
+        }
+        checkInOn = gate.checkin
+        guard enabled else { return }
+        scheduleEvening()
+        if !checkInOn { center.removePendingNotificationRequests(withIdentifiers: [Self.checkInId]) }
+        let from = Day.today, to = Day.string(Day.add(14, to: Date()))
+        let bookings: BookingsResponse? = try? await APIClient.shared.get("/api/bookings", query: ["from": from, "to": to])
+        let workouts: WorkoutsResponse? = try? await APIClient.shared.get("/api/workouts", query: ["from": from, "to": to])
+        await schedule(bookings: bookings?.bookings ?? [], workouts: workouts?.workouts ?? [])
+    }
+
+    private func scheduleEvening() {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.eveningId])
+        guard let time = eveningTime, let at = Day.at(Date(), time: time) else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Weekly check-in"
-        content.body = "Two minutes: how did your week go? Your coach reads it before planning the next one."
+        content.title = "Today's habits"
+        content.body = "A quiet minute to tick off what you did today."
         content.sound = .default
         var when = DateComponents()
-        when.weekday = 6 // Friday
-        when.hour = 18
+        when.hour = Day.calendar.component(.hour, from: at)
+        when.minute = Day.calendar.component(.minute, from: at)
+        center.add(UNNotificationRequest(identifier: Self.eveningId, content: content,
+                                         trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: true)))
+    }
+
+    private func scheduleCheckIn() {
+        guard checkInOn else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Your weekly check-in"
+        content.body = "A minute on your week. JK reads it before he writes your letter."
+        content.sound = .default
+        var when = DateComponents()
+        when.weekday = 6 // Friday, at the evening time if one is set
+        let at = eveningTime.flatMap { Day.at(Date(), time: $0) }
+        when.hour = at.map { Day.calendar.component(.hour, from: $0) } ?? 18
+        when.minute = at.map { Day.calendar.component(.minute, from: $0) } ?? 0
         center.add(UNNotificationRequest(identifier: Self.checkInId, content: content,
                                          trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: true)))
     }

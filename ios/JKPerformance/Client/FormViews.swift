@@ -1,56 +1,5 @@
 import SwiftUI
 
-/// Forms the coach is waiting on, at the top of the client's Home screen.
-/// Shows nothing when there are none.
-struct ClientFormsCard: View {
-    @State private var waiting: [FormRequest] = []
-    @State private var open: FormRequest?
-    let refresh: Int
-
-    var body: some View {
-        Group {
-            if !waiting.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Eyebrow(text: waiting.count == 1 ? "A form from your coach" : "\(waiting.count) forms from your coach")
-                    ForEach(waiting) { r in
-                        Button { open = r } label: {
-                            HStack(spacing: 12) {
-                                Glyph(systemName: "doc.text", size: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(r.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                                    Text("\(r.questions.count) questions · about \(max(1, r.questions.count / 2)) min")
-                                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
-                                }
-                                Spacer()
-                                Text("Fill in")
-                                    .font(.jkCaption.weight(.semibold))
-                                    .padding(.horizontal, 10).padding(.vertical, 6)
-                                    .background(JK.primaryFill, in: Capsule())
-                                    .foregroundStyle(JK.onPrimary)
-                            }
-                            .jkCard(padding: 12)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .task(id: refresh) { await load() }
-        .sheet(item: $open, onDismiss: { Task { await load() } }) { r in
-            FormFillView(request: r)
-        }
-    }
-
-    private func load() async {
-        do {
-            let reply: FormRequestsResponse = try await APIClient.shared.get("/api/form-requests")
-            waiting = reply.requests.filter { $0.submittedAt == nil }
-        } catch {
-            // The card is a nudge; Home shows its own errors.
-        }
-    }
-}
-
 /// Answer a form, one question per card, and send it once.
 struct FormFillView: View {
     let request: FormRequest
