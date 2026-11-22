@@ -33,3 +33,42 @@ test('the demo world has months of history and a nightly rebuild keeps everyone 
   assert.equal(count('SELECT COUNT(*) n FROM workouts WHERE client_id=? AND completed_at IS NOT NULL') > 0, true);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM users WHERE is_demo=0").get().n, 0, 'nothing real touched');
 });
+
+test('Sam\'s Today reads like the design; the demo coach gets a portrait from a file when one is given', async () => {
+  const { todayFor } = await import('../today.mjs');
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const db = openStore(':memory:');
+  seedCatalogue(db);
+  const dataDir = mkdtempSync(join(tmpdir(), 'jk-demo-'));
+  const file = join(dataDir, 'portrait.jpg');
+  writeFileSync(file, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(100)]));
+  process.env.DEMO_COACH_PORTRAIT_FILE = file;
+  try {
+    seedDemo(db, londonDay(), { dataDir });
+  } finally {
+    delete process.env.DEMO_COACH_PORTRAIT_FILE;
+  }
+  const sam = db.prepare("SELECT * FROM users WHERE apple_sub='demo-client'").get();
+  const t = todayFor(db, { dataDir }, sam);
+  assert.equal(t.goal.title, 'Down to 75 kg by March');
+  assert.equal(t.goal.remainingLabel, '4.8 kg to go');
+  assert.deepEqual(t.habits.map(h => h.name), ['Water', 'Sleep', 'Steps', 'Creatine', 'Protein']);
+  assert.deepEqual(t.habits.map(h => h.iconKey), ['water', 'sleep', 'steps', 'energy', 'protein']);
+  assert.equal(t.coachLine.source, 'letter');
+  assert.ok(['This week: protein at breakfast, and lights out by 10:30.', 'Strongest week yet.'].includes(t.coachLine.text), t.coachLine.text);
+  assert.equal(t.week.length, 7);
+  assert.ok(t.consistency.done > 15, JSON.stringify(t.consistency));
+  const letters = db.prepare("SELECT * FROM reports WHERE client_id=? AND headline IS NOT NULL AND question IS NOT NULL AND media_id IS NULL").all(sam.id);
+  assert.ok(letters.length >= 3);
+  assert.ok(db.prepare("SELECT COUNT(*) n FROM checkins WHERE client_id=? AND win IS NOT NULL AND stress IS NOT NULL").get(sam.id).n >= 10);
+  assert.ok(db.prepare("SELECT COUNT(*) n FROM workouts WHERE client_id=? AND feel IS NOT NULL").get(sam.id).n >= 20);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE client_id=? AND kind='letter' AND read_at IS NULL").get(sam.id).n, 0, 'no flood of letter notes');
+  const coach = db.prepare("SELECT * FROM users WHERE apple_sub='demo-coach'").get();
+  const avatar = JSON.parse(coach.coach_settings).avatarMediaId;
+  assert.match(avatar, /^md_/);
+  // Without a file nothing breaks and nothing changes.
+  seedDemo(db, addDays(londonDay(), 1), { dataDir });
+  assert.equal(JSON.parse(db.prepare("SELECT coach_settings FROM users WHERE apple_sub='demo-coach'").get().coach_settings).avatarMediaId, avatar);
+});
