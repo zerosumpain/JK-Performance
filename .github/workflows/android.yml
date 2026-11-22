@@ -5,10 +5,10 @@ name: Android
 # PUBLIC: nothing secret may be echoed.
 on:
   pull_request:
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths: ['android/**', '.github/workflows/android.yml', 'scripts/lint-design.sh', 'scripts/contrast-check.mjs']
   push:
     branches: [main]
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths: ['android/**', '.github/workflows/android.yml', 'scripts/lint-design.sh', 'scripts/contrast-check.mjs']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +24,11 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+      - name: Design lint and contrast (Atelier tokens)
+        working-directory: .
+        run: |
+          scripts/lint-design.sh android
+          node scripts/contrast-check.mjs
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
