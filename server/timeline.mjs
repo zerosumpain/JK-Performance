@@ -20,10 +20,11 @@ function timeline(_req, ctx) {
   const { db } = ctx;
   const client = clientFor(ctx, ctx.query.clientId);
   const f = featuresOf(db, client);
-  const before = ctx.query.before ? instant(ctx.query.before, 'before') : '9999';
+  // Nothing dated in the future (a workout published ahead of time stays out until then).
+  const now = nowIso();
+  const before = ctx.query.before && instant(ctx.query.before, 'before') < now ? instant(ctx.query.before, 'before') : now;
   const limit = ctx.query.limit === undefined ? 50 : num(Number(ctx.query.limit), 'limit', { min: 1, max: 200, int: true });
   if (ctx.user.role === 'client') deliverDue(db, ctx.config, { clientId: client.id });
-  const now = nowIso();
   const items = [];
 
   if (f.messaging) {
