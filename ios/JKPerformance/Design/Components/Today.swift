@@ -18,10 +18,9 @@ struct GoalLine: View {
             case .set(let sentence, let progress, let remaining):
                 Text(sentence).jkText(.title).foregroundStyle(JK.text)
                 rule(progress)
-                Text(remaining).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
+                Text(remaining).jkText(.numberTile).foregroundStyle(JK.text)
             case .notSet:
-                Text("JK will set your goal with you.").jkText(.title).foregroundStyle(JK.textSecondary)
-                rule(0)
+                Text("JK will set your goal with you this week.").jkText(.quote).foregroundStyle(JK.text)
             case .reached(let sentence):
                 Text(sentence).jkText(.title).foregroundStyle(JK.text)
                 rule(1)

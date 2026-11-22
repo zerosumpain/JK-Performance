@@ -3,28 +3,91 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-/// Which tab is showing. A tapped notification moves it (a message opens
-/// Messages, a booking the calendar), so the tab bars bind to this.
+/// A screen pushed inside a client tab (Today or JK). One enum so a tapped
+/// notification can open the right one.
+enum ClientRoute: Hashable {
+    /// Your week, scrolled to this "YYYY-MM-DD" day (nil: today).
+    case yourWeek(String?)
+    /// A workout: detail, logger and the session-complete page.
+    case session(String)
+    case letter(String)
+    case guides
+    case guide(String)
+    case challenges
+}
+
+/// Which tab is showing and what is pushed in it. A tapped notification moves
+/// it (a message opens JK, a letter opens the letter, a booking Your week), so
+/// the tab bars and stacks bind to this.
 @Observable
 @MainActor
 final class TabRouter {
     static let shared = TabRouter()
 
-    enum Client: Hashable { case home, plan, calendar, messages, account }
-    enum Coach: Hashable { case today, clients, schedule, messages, guides }
+    /// The three client tabs (atelier-spec.md, IA).
+    enum Client: Hashable { case today, progress, jk }
+    enum Coach: Hashable { case today, clients, messages }
 
-    var client: Client = .home
+    var client: Client = .today
     var coach: Coach = .today
+    var todayPath: [ClientRoute] = []
+    var jkPath: [ClientRoute] = []
+    /// The Account sheet over Today (Account is no longer a tab).
+    var showAccount = false
+    /// Open the Account sheet at Membership.
+    var showMembership = false
+    /// Opens the composer quoting a letter ("Reply to JK").
+    var replyQuote: ReplyQuote?
+    /// Text to start the JK composer with ("Ask JK for a rest day").
+    var composerDraft: String?
 
-    func open(kind: String?) {
-        switch kind {
-        case "message": client = .messages; coach = .messages
-        case "report": client = .home
-        case "booking": client = .calendar; coach = .schedule
-        case "checkin": coach = .today
-        case "form": client = .home; coach = .today
+    struct ReplyQuote: Equatable {
+        let reportId: String
+        let headline: String
+    }
+
+    /// The old tab names, kept so existing payloads and links still land:
+    /// home → today; plan and calendar → today, then Your week; messages → JK;
+    /// account → today, then the Account sheet.
+    func openLegacy(_ name: String) {
+        switch name {
+        case "home": client = .today
+        case "plan", "calendar":
+            client = .today
+            todayPath = [.yourWeek(nil)]
+        case "messages": client = .jk
+        case "account":
+            client = .today
+            showAccount = true
         default: break
         }
+    }
+
+    func open(kind: String?, id: String? = nil) {
+        switch kind {
+        case "message":
+            client = .jk
+            coach = .messages
+        case "report":
+            client = .jk
+            if let id { jkPath = [.letter(id)] }
+        case "booking":
+            client = .today
+            todayPath = [.yourWeek(nil)]
+            coach = .today
+        case "checkin": coach = .today
+        case "form":
+            client = .today
+            coach = .today
+        case let other?: openLegacy(other)
+        default: break
+        }
+    }
+
+    /// Your week from Today, scrolled to a day.
+    func openWeek(_ day: String?) {
+        client = .today
+        todayPath.append(.yourWeek(day))
     }
 }
 
@@ -91,8 +154,10 @@ final class Push: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
-        let kind = response.notification.request.content.userInfo["kind"] as? String
-        await MainActor.run { TabRouter.shared.open(kind: kind) }
+        let info = response.notification.request.content.userInfo
+        let kind = info["kind"] as? String
+        let id = info["id"] as? String
+        await MainActor.run { TabRouter.shared.open(kind: kind, id: id) }
     }
 }
 

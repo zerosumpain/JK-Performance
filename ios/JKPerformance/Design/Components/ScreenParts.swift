@@ -62,54 +62,6 @@ struct UpcomingRow: View {
     }
 }
 
-/// A square door on Home: icon, name, one line of state.
-struct HomeTile<Destination: View>: View {
-    let title: String
-    let value: String
-    let systemName: String
-    var highlight = false
-    @ViewBuilder var destination: () -> Destination
-
-    var body: some View {
-        NavigationLink {
-            destination()
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: systemName).font(.jkHeadline).foregroundStyle(JK.text)
-                    Spacer()
-                    if highlight { Circle().fill(JK.text).frame(width: 7, height: 7) }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(value).font(.jkCaption).foregroundStyle(highlight ? JK.text : JK.textTertiary).lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .jkCard(padding: 14)
-        }
-    }
-}
-
-struct MacroRow: View {
-    let name: String
-    let value: Double
-    let target: Double?
-
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text(name).font(.jkCaption).foregroundStyle(JK.textTertiary)
-                Spacer()
-                Text(target.map { "\(Fmt.number(value, digits: 0)) / \(Fmt.number($0, digits: 0)) g" }
-                     ?? "\(Fmt.number(value, digits: 0)) g")
-                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
-            }
-            ThinBar(fraction: (target ?? 0) > 0 ? value / target! : 0)
-        }
-    }
-}
-
 struct DeltaBadge: View {
     let text: String
 

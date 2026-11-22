@@ -75,6 +75,8 @@ enum Fmt {
     private static let monthYearF = make("MMM yyyy")
     private static let monthNameF = make("MMMM")
     private static let weekdayShortF = make("EEE")
+    private static let weekdayLongF = make("EEEE")
+    private static let fullDayF = make("EEEE d MMMM")
     private static let hourMinuteF: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_GB")
@@ -90,6 +92,12 @@ enum Fmt {
     static func monthYear(_ d: Date) -> String { monthYearF.string(from: d) }
     static func month(_ d: Date) -> String { monthNameF.string(from: d) }
     static func weekday(_ d: Date) -> String { weekdayShortF.string(from: d) }
+    /// "Tuesday".
+    static func weekdayName(_ d: Date) -> String { weekdayLongF.string(from: d) }
+    /// "Sunday 22 November": Today's date caption.
+    static func fullDay(_ d: Date) -> String { fullDayF.string(from: d).replacingOccurrences(of: ",", with: "") }
+    /// "Tuesday 17 Nov" from "YYYY-MM-DD".
+    static func longDay(_ s: String) -> String { Day.date(s).map(longDay) ?? s }
     static func time(_ d: Date) -> String { hourMinuteF.string(from: d) }
 
     /// "2026-12-01" → "1 Dec", or the input if it doesn't parse.
