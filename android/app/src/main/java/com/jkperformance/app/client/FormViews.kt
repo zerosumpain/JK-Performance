@@ -42,66 +42,6 @@ import kotlinx.coroutines.launch
 import com.jkperformance.app.design.*
 import com.jkperformance.app.design.components.*
 
-/**
- * Forms the coach is waiting on, at the top of the client's Home screen.
- * Shows nothing when there are none. Re-reads whenever `refresh` changes
- * (each Home load) and when a form sheet closes.
- */
-@Composable
-fun ClientFormsCard(refresh: Int) {
-    val scope = rememberCoroutineScope()
-    var waiting by remember { mutableStateOf<List<FormRequest>>(emptyList()) }
-    var open by remember { mutableStateOf<FormRequest?>(null) }
-
-    suspend fun load() {
-        try {
-            val reply: FormRequestsResponse = APIClient.get("/api/form-requests")
-            waiting = reply.requests.filter { it.submittedAt == null }
-        } catch (e: Exception) {
-            // The card is a nudge; Home shows its own errors.
-            if (e.isCancellation) throw e
-        }
-    }
-
-    LaunchedEffect(refresh) { load() }
-
-    if (waiting.isNotEmpty()) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Label(text = if (waiting.size == 1) "A form from your coach" else "${waiting.size} forms from your coach")
-            waiting.forEach { r ->
-                Row(
-                    Modifier.clip(JKShape.card).clickable { open = r }.jkSurface(padding = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RowGlyph(IconKey.form, slot = 34.dp)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(r.name, style = JKType.callout.semibold(), color = JKColors.text)
-                        Text(
-                            "${r.questions.size} questions · about ${maxOf(1, r.questions.size / 2)} min",
-                            style = JKType.caption,
-                            color = JKColors.textTertiary,
-                        )
-                    }
-                    Text(
-                        "Fill in",
-                        style = JKType.caption.semibold(),
-                        color = JKColors.primaryLabel,
-                        modifier = Modifier.background(SolidColor(JKColors.accentControl), CircleShape).padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
-            }
-        }
-    }
-
-    open?.let { r ->
-        Sheet(onDismiss = {
-            open = null
-            scope.launch { load() }
-        }) { FormFillView(request = r) }
-    }
-}
-
 /** Answer a form, one question per card, and send it once. */
 @Composable
 fun FormFillView(request: FormRequest) {
@@ -158,7 +98,7 @@ fun FormFillView(request: FormRequest) {
             }
             error?.let { ErrorBanner(it) }
             PrimaryButton(onClick = { scope.launch { submit() } }, enabled = !saving && missing.isEmpty()) {
-                if (saving) ProgressView() else Text("Send to coach")
+                if (saving) ProgressView() else Text("Send to JK")
             }
             if (missing.isNotEmpty()) {
                 Text(

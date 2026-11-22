@@ -32,9 +32,11 @@ import com.jkperformance.app.design.*
 import com.jkperformance.app.design.components.*
 
 /**
- * Reminders scheduled on the phone itself: the weekly check-in on Friday
- * evening, and an hour before each session or timed workout in the next
- * fortnight. Rescheduled whenever Home loads. `enabled` is also the switch
+ * Reminders scheduled on the phone itself: one evening reminder at the time
+ * the client chose (atelier-spec.md: notifications are on/off plus one time),
+ * the weekly check-in on Friday (plans with 'checkin'), and an hour before
+ * each session or timed workout in the next fortnight. Rescheduled whenever
+ * Today loads. Never countdown copy. `enabled` is also the switch
  * for push notifications from the server (see [Push]).
  *
  * iOS keeps pending local notifications itself, across reboots. Android's
@@ -51,6 +53,8 @@ object Reminders {
     private const val SCHEDULED_KEY = "jk.reminders.scheduled"
     private const val SESSION_PREFIX = "jk.session."
     private const val CHECK_IN_ID = "jk.checkin"
+    private const val EVENING_ID = "jk.evening"
+    private const val EVENING_KEY = "jk.reminders.evening"
 
     /** Channel for the phone's own reminders, apart from the coach's pushes. */
     const val CHANNEL_ID = "reminders"
@@ -63,6 +67,8 @@ object Reminders {
         val body: String,
         val atMillis: Long,
         val weekly: Boolean = false,
+        /** Repeats every day (the evening reminder). */
+        val daily: Boolean = false,
     )
 
     private lateinit var context: Context
@@ -71,11 +77,19 @@ object Reminders {
     var enabled: Boolean by mutableStateOf(false)
         private set
 
+    /** "HH:MM", or null for no evening reminder. */
+    val eveningTime: String? get() = evening
+    private var evening: String? by mutableStateOf(null)
+
+    /** Whether this client's plan has the weekly check-in. */
+    private var checkInOn = true
+
     fun init(context: Context) {
         this.context = context.applicationContext
         enabled = prefs().getBoolean(KEY, false)
+        evening = prefs().getString(EVENING_KEY, null)
         val channel = NotificationChannel(CHANNEL_ID, "Reminders", NotificationManager.IMPORTANCE_DEFAULT)
-            .apply { description = "Weekly check-in, and an hour before each session" }
+            .apply { description = "An evening reminder, the weekly check-in, and an hour before each session" }
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
@@ -115,21 +129,78 @@ object Reminders {
         prefs().edit { putBoolean(KEY, value) }
     }
 
+    fun setEveningTime(time: String?) {
+        evening = time
+        prefs().edit { putString(EVENING_KEY, time) }
+    }
+
+    /** Today's refresh: the server's preferences win, then everything is rescheduled. */
+    suspend fun refresh(gate: com.jkperformance.app.net.Gate, preferences: com.jkperformance.app.net.Preferences?) {
+        if (preferences != null && (preferences.notificationsOn != null || preferences.eveningReminderTime != null)) {
+            setEveningTime(preferences.eveningReminderTime)
+        }
+        checkInOn = gate.checkin
+        if (!enabled) return
+        scheduleEvening()
+        if (!checkInOn) {
+            cancelAlarm(CHECK_IN_ID)
+            store(stored().filterNot { it.id == CHECK_IN_ID })
+        }
+        val from = Day.today
+        val to = Day.string(Day.add(14, java.time.LocalDate.now(Day.zone)))
+        val query = mapOf("from" to from, "to" to to)
+        val bookings = runCatching { com.jkperformance.app.net.APIClient.get<com.jkperformance.app.net.BookingsResponse>("/api/bookings", query) }.getOrNull()
+        val workouts = runCatching { com.jkperformance.app.net.APIClient.get<com.jkperformance.app.net.WorkoutsResponse>("/api/workouts", query) }.getOrNull()
+        schedule(bookings?.bookings ?: emptyList(), workouts?.workouts ?: emptyList())
+    }
+
+    private fun eveningAt(time: String): Pair<Int, Int>? {
+        val parts = time.split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: return null
+        return if (h in 0..23 && m in 0..59) h to m else null
+    }
+
+    /** The next time today or tomorrow at the evening time, strictly after now. */
+    private fun nextEvening(after: ZonedDateTime): Long? {
+        val (h, m) = eveningTime?.let(::eveningAt) ?: return null
+        var at = after.toLocalDate().atTime(h, m).atZone(Day.zone)
+        if (!at.isAfter(after)) at = at.plusDays(1)
+        return at.toInstant().toEpochMilli()
+    }
+
+    private fun scheduleEvening() {
+        cancelAlarm(EVENING_ID)
+        store(stored().filterNot { it.id == EVENING_ID })
+        val at = nextEvening(ZonedDateTime.now(Day.zone)) ?: return
+        add(
+            Scheduled(
+                id = EVENING_ID,
+                title = "Today's habits",
+                body = "A quiet minute to tick off what you did today.",
+                atMillis = at,
+                daily = true,
+            ),
+        )
+    }
+
     private fun scheduleCheckIn() {
+        if (!checkInOn) return
         add(
             Scheduled(
                 id = CHECK_IN_ID,
-                title = "Weekly check-in",
-                body = "Two minutes: how did your week go? Your coach reads it before planning the next one.",
+                title = "Your weekly check-in",
+                body = "A minute on your week. JK reads it before he writes your letter.",
                 atMillis = nextCheckIn(after = ZonedDateTime.now(Day.zone)),
                 weekly = true,
             ),
         )
     }
 
-    /** The next Friday 18:00 on the phone's clock, strictly after `after`. */
+    /** The next Friday at the evening time (else 18:00) on the phone's clock, strictly after `after`. */
     private fun nextCheckIn(after: ZonedDateTime): Long {
-        var at = after.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY)).toLocalDate().atTime(18, 0).atZone(Day.zone)
+        val (h, m) = eveningTime?.let(::eveningAt) ?: (18 to 0)
+        var at = after.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY)).toLocalDate().atTime(h, m).atZone(Day.zone)
         if (!at.isAfter(after)) at = at.plusWeeks(1)
         return at.toInstant().toEpochMilli()
     }
@@ -229,6 +300,9 @@ object Reminders {
         val reminder = stored().firstOrNull { it.id == id } ?: return
         if (reminder.weekly) {
             add(reminder.copy(atMillis = nextCheckIn(after = ZonedDateTime.now(Day.zone))))
+        } else if (reminder.daily) {
+            nextEvening(ZonedDateTime.now(Day.zone))?.let { add(reminder.copy(atMillis = it)) }
+                ?: store(stored().filterNot { it.id == id })
         } else {
             store(stored().filterNot { it.id == id })
         }
@@ -242,6 +316,7 @@ object Reminders {
             when {
                 r.atMillis > now -> r
                 r.weekly -> r.copy(atMillis = nextCheckIn(after = ZonedDateTime.now(Day.zone)))
+                r.daily -> nextEvening(ZonedDateTime.now(Day.zone))?.let { r.copy(atMillis = it) }
                 else -> null
             }
         }
