@@ -3,7 +3,9 @@ import { bookingOut } from './bookings.mjs';
 import { profileOf } from './account.mjs';
 import { CLIENT_GUIDES, GUIDES } from './catalogue.mjs';
 import { hasFeature } from './settings.mjs';
-import { habitWeekOf } from './daily.mjs';
+import { checkinDraft, checkinOut, habitWeekOf } from './daily.mjs';
+import { goalOut } from './goals.mjs';
+import { clientSettingsOut } from './settings.mjs';
 import { monthlyPricesAt, plansFor } from './plans.mjs';
 import { dueWeek } from './daily.mjs';
 import { flaggedAnswers } from './forms.mjs';
@@ -100,9 +102,18 @@ function clientDetail(_req, ctx) {
   const today = londonDay();
   const next = ctx.db.prepare('SELECT * FROM workouts WHERE client_id=? AND date>=? ORDER BY date, starts_at LIMIT 1').get(c.id, today);
   const shared = healthVisible(ctx.user, c);
+  const latest = ctx.db.prepare('SELECT * FROM checkins WHERE client_id=? ORDER BY week DESC LIMIT 1').get(c.id);
+  const nextBooking = ctx.db.prepare(`SELECT * FROM bookings WHERE cancelled_at IS NULL AND start>=? AND (client_id=? OR id IN (SELECT booking_id FROM class_attendees WHERE user_id=?)) ORDER BY start LIMIT 1`)
+    .get(new Date().toISOString(), c.id, c.id);
   return {
     client: clientSummary(ctx.db, c, today), profile: profileOf(c), healthShared: shared, health: shared ? healthDay(ctx.db, c.id, today) : null,
     nextWorkout: next ? workoutOut(ctx.db, next) : null,
+    // The Overview: goals (active first, then drafts), coaching settings, rest days, the latest check-in with session ratings, next session.
+    goals: ctx.db.prepare("SELECT * FROM goals WHERE client_id=? AND status IN ('active','draft') ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, updated_at DESC").all(c.id).map(g => goalOut(ctx.db, g)),
+    settings: clientSettingsOut(ctx.db, c),
+    restDays: ctx.db.prepare('SELECT date, reason FROM rest_days WHERE client_id=? AND date>=? ORDER BY date').all(c.id, addDays(today, -7)),
+    latestCheckin: latest ? { ...checkinOut(latest), week: checkinDraft(ctx.db, ctx.user, c, latest.week) } : null,
+    nextBooking: nextBooking ? bookingOut(ctx.db, nextBooking, ctx.user) : null,
   };
 }
 
