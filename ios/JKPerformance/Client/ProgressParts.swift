@@ -72,7 +72,7 @@ struct AuthedPhoto: View {
     }
 }
 
-private struct MeasurementSheet: View {
+struct MeasurementSheet: View {
     let save: (MeasurementInput) async throws -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var kind = "weight"

@@ -168,9 +168,8 @@ private struct Bubble: View {
                     Text(message.text).font(.jkBody).foregroundStyle(JK.text)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if message.mediaId != nil {
-                    Text(message.kind == "formCheck" ? "Video attached · open it on the web desk" : "Photo attached")
-                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                if let id = message.mediaId {
+                    MessageMedia(mediaId: id, isVideo: message.kind == "formCheck")
                 }
                 Text(Fmt.time(message.at)).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
