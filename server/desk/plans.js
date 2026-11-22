@@ -46,7 +46,7 @@ function planCard(p, members, onEdit) {
       p.credits ? chip(`${p.credits} session${p.credits === 1 ? '' : 's'} a month`) : null,
       members === null || members === undefined ? null : chip(`${members} member${members === 1 ? '' : 's'}`),
       p.updatedAt ? h('span', { class: 'tiny faint' }, 'Changed by you') : h('span', { class: 'tiny faint' }, 'Default')),
-    h('div', { class: 'row end' }, button(h('span', { class: 'row gap4' }, icon('pencil', 15), 'Edit'), () => onEdit(p), { small: true })));
+    h('div', { class: 'row end' }, button(h('span', { class: 'row gap4' }, icon('pencil', 18), 'Edit'), () => onEdit(p), { small: true })));
 }
 
 /** What a client reads for this plan, drawn live from the form. */
@@ -129,7 +129,7 @@ function editPlan(p, features) {
 route('/business/plans', async (el, _params, view) => {
   const body = h('div');
   el.append(
-    h('div', { class: 'cl-crumb' }, link('/business', { class: 'small muted' }, icon('back', 14), 'Business')),
+    h('div', { class: 'cl-crumb' }, link('/business', { class: 'small muted' }, icon('back', 18), 'Business')),
     screenHeader('Business', 'Plans & prices'),
     h('p', { class: 'muted small' }, 'What each membership costs and includes. Your clients see these in the app, and new clients step through them in the plan walkthrough.'),
     body);

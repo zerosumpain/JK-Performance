@@ -6,7 +6,7 @@
 .sched-weeknav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 10px;color:var(--muted)}
 .sched-filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px}
 .sched-filters .chip{cursor:pointer;background:none;font-size:12.5px;padding:3px 11px}
-.sched-filters .chip.on{background:var(--silver);color:#000}
+.sched-filters .chip.on{background:var(--accent-control);color:var(--primary-label)}
 .sched-legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 4px}
 .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
 .swatch.big{width:6px;height:auto;align-self:stretch;border-radius:3px}
@@ -15,8 +15,8 @@
 .week-grid{display:grid;grid-template-columns:46px repeat(7,minmax(0,1fr));gap:4px;background:var(--card);border:1px solid var(--stroke);border-radius:var(--corner);padding:10px 10px 12px 4px}
 .wg-head{height:30px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--faint);border-radius:7px}
 .wg-head strong{font-weight:600;color:var(--muted)}
-.wg-head.today{background:var(--chrome);color:#000}
-.wg-head.today strong{color:#000}
+.wg-head.today{background:var(--primary-fill);color:var(--primary-label)}
+.wg-head.today strong{color:var(--primary-label)}
 .wg-hour{font-size:10.5px;color:var(--faint);text-align:right;padding-right:6px;transform:translateY(-6px);font-variant-numeric:tabular-nums}
 .wg-body{position:relative;overflow:hidden}
 .wg-line{position:absolute;left:0;right:0;height:1px;background:var(--stroke)}
@@ -33,11 +33,11 @@
 .day-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .day-pill{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 0;background:var(--card);border:1px solid var(--stroke);border-radius:10px;cursor:pointer;color:var(--text)}
 .day-pill.today:not(.on){border-color:var(--stroke-strong)}
-.day-pill.on{background:var(--chrome);color:#000;border-color:transparent}
+.day-pill.on{background:var(--primary-fill);color:var(--primary-label);border-color:transparent}
 .day-pill:disabled{opacity:.35;cursor:default}
 .day-pill .mark{width:4px;height:4px;border-radius:50%}
 .day-pill .mark.on{background:var(--muted)}
-.day-pill.on .mark.on{background:#000}
+.day-pill.on .mark.on{background:var(--primary-label)}
 
 @media (max-width:720px){
   .week-grid{display:none}
@@ -50,12 +50,12 @@
 .sr-times{width:40px;flex:none;font-variant-numeric:tabular-nums}
 .sr-end{font-size:10px;color:var(--faint)}
 .sr-card{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px;background:var(--card);border:1px solid var(--stroke);border-radius:12px;text-decoration:none;color:var(--text)}
-.sr-card:hover{background:#171717}
+.sr-card:hover{background:var(--raised)}
 .sr-card.next{border-color:var(--muted)}
 .sr-bar{width:3px;height:28px;border-radius:2px;flex:none}
 .session-row.done .sr-times,.session-row.done .sr-card{color:var(--faint)}
 .session-row.done .sr-bar{opacity:.4}
-.next-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--text);color:#000}
+.next-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--primary-fill);color:var(--primary-label)}
 
 /* Class detail */
 .back-link{display:inline-flex;align-items:center;gap:4px;color:var(--muted);text-decoration:none;font-size:13px;margin-bottom:10px}
@@ -68,7 +68,7 @@
 .slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
 .slot{padding:11px 0;background:var(--card);border:1px solid var(--stroke);border-radius:10px;font-weight:600;cursor:pointer;color:var(--text);font-variant-numeric:tabular-nums}
 .slot:hover:not(:disabled){border-color:var(--stroke-strong)}
-.slot.on{background:var(--chrome);color:#000;border-color:transparent}
+.slot.on{background:var(--primary-fill);color:var(--primary-label);border-color:transparent}
 .slot.taken{color:var(--faint);text-decoration:line-through;border-style:dashed;cursor:default}
 .wide-btn{width:100%;margin-top:4px}
 

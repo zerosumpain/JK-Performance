@@ -371,7 +371,9 @@ separate demo world with five other clients and a few weeks of history. Demo acc
 file is `<DATA_DIR>/android/jk-performance.apk` + `version.json`, put there by `scripts/android-publish.sh`),
 `/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach web app:
 everything the coach can do in the apps, over this API; sign in with Google, Apple, a link code from the app or the demo
-coach code; `/login` redirects there). Its files are the ES modules and stylesheets in `server/desk/`.
+coach code; `/login` redirects there). Its files are the ES modules and stylesheets in `server/desk/`, plus the
+self-hosted Newsreader serif at `/desk/fonts/<name>.woff2` (SIL OFL 1.1, text in `server/desk/fonts/OFL-Newsreader.txt`).
+Icons are Material Symbols Rounded (Apache 2.0) drawn inline from `server/desk/symbols.js`.
 
 ## Atelier redesign additions
 
