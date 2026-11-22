@@ -19,6 +19,10 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -54,6 +58,8 @@ import com.jkperformance.app.net.MessageInput
 import com.jkperformance.app.net.MessageThread
 import com.jkperformance.app.net.MessagesResponse
 import com.jkperformance.app.net.ThreadsResponse
+import com.jkperformance.app.net.PlansResponse
+import com.jkperformance.app.net.ClientsResponse
 import com.jkperformance.app.net.isCancellation
 import com.jkperformance.app.net.readable
 import java.time.Instant
@@ -163,7 +169,7 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
                     item(key = m.id) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             if (index == 0 || !Day.same(shown[index - 1].at, m.at)) {
-                                Text(dayLabel(m.at), style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.padding(top = 8.dp))
+                                Text(dayLabel(m.at), style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.padding(top = 8.dp))
                                 Spacer(Modifier.height(10.dp))
                             }
                             Bubble(message = m, mine = m.fromId == myId)
@@ -198,10 +204,10 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
                         Modifier
                             .fillMaxWidth()
                             .background(JKColors.surface, field)
-                            .border(1.dp, JKColors.hairline, field)
+                            .border(JKSize.hairline, JKColors.inputBorder, field)
                             .padding(horizontal = 12.dp, vertical = 9.dp),
                     ) {
-                        if (draft.isEmpty()) Text("Message", style = style, color = JKColors.textTertiary)
+                        if (draft.isEmpty()) Text("Message", style = style, color = JKColors.textSecondary)
                         inner()
                     }
                 },
@@ -211,7 +217,7 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
                 Modifier
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(SolidColor(JKColors.accentControl), CircleShape)
+                    .background(JKColors.primaryFill, CircleShape)
                     .clickable(enabled = canSend) { scope.launch { send() } },
                 contentAlignment = Alignment.Center,
             ) {
@@ -275,47 +281,56 @@ private fun Modifier.keyboardAware(): Modifier {
         .padding(bottom = with(density) { (ime - below).coerceAtLeast(0).toDp() })
 }
 
+/** What a non-text message is, in a word or two. */
+private fun bubbleTag(message: Message, mine: Boolean): Pair<IconKey, String>? = when (message.kind) {
+    "formCheck" -> IconKey.formCheck to "Form check"
+    "mealPhoto" -> IconKey.mealPhoto to "Meal photo"
+    "answer" -> IconKey.reply to (if (mine) "Your answer to the letter" else "Answered your letter")
+    "letter" -> IconKey.letter to "Letter delivered"
+    else -> if (message.workoutId != null) IconKey.workout to "Plan updated" else null
+}
+
 /**
- * One message. As on the iPhone, a bubble takes the width the row's
- * spacer leaves it (half the row, at most 280), mine on the right in chrome.
+ * One message: your own words sit raised, the other side's on surface. Form
+ * checks and meal photos play or show their media.
  */
 @Composable
 private fun Bubble(message: Message, mine: Boolean) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val width = minOf(280.dp, (maxWidth - 8.dp) / 2)
-        val shape = JKShape.card
-        val ink = JKColors.text
+        val width = minOf(300.dp, maxWidth - JKSpace.huge)
         Column(
             Modifier
                 .align(if (mine) Alignment.CenterEnd else Alignment.CenterStart)
-                .width(width)
-                .background(if (mine) JKColors.raised else JKColors.surface, shape)
-                .padding(12.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .widthIn(max = width)
+                .background(if (mine) JKColors.raised else JKColors.surface, JKShape.card)
+                .padding(JKSpace.m)
+                .semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(JKSpace.xs),
         ) {
-            if (message.workoutId != null) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RowGlyph(IconKey.workout, slot = 28.dp)
-                    Column {
-                        Text("Workout", style = JKType.caption.semibold(), color = ink)
-                        Text("Plan updated · see your Plan tab", style = JKType.caption, color = JKColors.textSecondary)
-                    }
+            bubbleTag(message, mine)?.let { (key, text) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.xs), verticalAlignment = Alignment.CenterVertically) {
+                    Glyph(key, size = JKSize.iconSmall, tint = JKColors.textSecondary)
+                    Text(text, style = JKType.caption, color = JKColors.textSecondary)
                 }
             }
-            if (message.text.isNotEmpty()) {
-                Text(message.text, style = JKType.caption, color = ink, modifier = Modifier.fillMaxWidth())
-            }
-            Text(Fmt.time(message.at), style = JKType.caption, color = JKColors.textSecondary)
+            if (message.text.isNotEmpty()) Text(message.text, style = JKType.body, color = JKColors.text)
+            message.mediaId?.let { MessageMedia(it, isVideo = message.kind == "formCheck") }
+            Text(Fmt.time(message.at), style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.align(Alignment.End))
         }
     }
 }
 
 // MARK: - Coach: thread list
 
+/**
+ * The coach's conversations, newest first. Threads from clients on a plan
+ * with 'priority' carry the word "Priority".
+ */
 @Composable
 fun CoachThreadsView() {
     var threads by remember { mutableStateOf<List<MessageThread>?>(null) }
+    var priority by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var plans by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
@@ -328,6 +343,16 @@ fun CoachThreadsView() {
         }
     }
 
+    /** Which clients are on a plan that includes 'priority'. */
+    suspend fun loadPlans() {
+        val catalogue = runCatching { APIClient.get<PlansResponse>("/api/plans") }.getOrNull() ?: return
+        val clients = runCatching { APIClient.get<ClientsResponse>("/api/coach/clients") }.getOrNull() ?: return
+        val priorityPlans = catalogue.plans.filter { "priority" in it.featureIds }.map { it.id }.toSet()
+        priority = clients.clients.filter { (it.plan ?: "") in priorityPlans }.map { it.id }.toSet()
+        plans = clients.clients.associate { it.id to (it.plan ?: "none") }
+    }
+
+    LaunchedEffect(Unit) { loadPlans() }
     LaunchedEffect(Unit) {
         while (isActive) {
             load()
@@ -337,16 +362,20 @@ fun CoachThreadsView() {
 
     JKRefreshable(onRefresh = { load() }, modifier = Modifier.jkScreen()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.l),
         ) {
-            ScreenHeader(eyebrow = "Coach", title = "Messages")
+            Text("Messages", style = JKType.display, color = JKColors.text, modifier = Modifier.semantics { heading() })
             Loadable(value = threads, error = error, retry = { load() }) { list ->
                 if (list.isEmpty()) {
-                    EmptyCard(title = "No conversations yet")
+                    EmptyState("No conversations yet.")
                 } else {
-                    Column(Modifier.jkSurface(padding = 2.dp)) {
-                        list.forEach { t -> ThreadRow(t) }
+                    Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
+                        list.forEachIndexed { i, t ->
+                            val isPriority = t.client.id in priority
+                            ThreadRow(t, isPriority, subtitle = if (isPriority) "Priority · same-day reply" else Fmt.planName(plans[t.client.id]))
+                            if (i < list.lastIndex) GroupDivider(Modifier.padding(start = JKSpace.l + JKSize.avatar + JKSpace.m))
+                        }
                     }
                 }
             }
@@ -355,37 +384,52 @@ fun CoachThreadsView() {
 }
 
 @Composable
-private fun ThreadRow(t: MessageThread) {
+private fun ThreadRow(t: MessageThread, priority: Boolean, subtitle: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(JKShape.card)
-            .navLink { MessagesThreadView(clientId = t.client.id, otherName = t.client.name, subtitle = "Client") }
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .navLink { MessagesThreadView(clientId = t.client.id, otherName = t.client.name, subtitle = subtitle) }
+            .padding(horizontal = JKSpace.l, vertical = JKSpace.m),
+        horizontalArrangement = Arrangement.spacedBy(JKSpace.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(initials = t.client.displayInitials, size = 34.dp)
+        Avatar(initials = t.client.displayInitials)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t.client.name, style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s), verticalAlignment = Alignment.CenterVertically) {
+                Text(t.client.name, style = JKType.callout, color = JKColors.text, maxLines = 1)
+                if (priority) Text("Priority", style = JKType.caption, color = JKColors.textSecondary)
+                Spacer(Modifier.weight(1f))
                 t.last?.at?.let { at ->
                     Text(
                         if (Day.same(at, Instant.now())) Fmt.time(at) else Fmt.dayMonth(at),
                         style = JKType.caption,
-                        color = JKColors.textTertiary,
+                        color = JKColors.textSecondary,
                     )
                 }
             }
-            Text(t.last?.text ?: "No messages", style = JKType.caption, color = JKColors.textTertiary, maxLines = 1)
+            Text(threadPreview(t), style = JKType.caption, color = JKColors.textSecondary, maxLines = 1)
         }
         if (t.unread > 0) {
             Text(
                 "${t.unread}",
-                style = JKType.caption.semibold(),
+                style = JKType.caption,
                 color = JKColors.primaryLabel,
-                modifier = Modifier.background(JKColors.text, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier
+                    .background(JKColors.primaryFill, CircleShape)
+                    .padding(horizontal = JKSpace.s, vertical = 2.dp)
+                    .semantics { contentDescription = "${t.unread} unread" },
             )
         }
+    }
+}
+
+private fun threadPreview(t: MessageThread): String {
+    val last = t.last ?: return "No messages"
+    val tail = if (last.text.isEmpty()) "" else " · ${last.text}"
+    return when (last.kind) {
+        "formCheck" -> "Form check$tail"
+        "mealPhoto" -> "Meal photo$tail"
+        "answer" -> "Answered your letter · ${last.text}"
+        else -> last.text
     }
 }
