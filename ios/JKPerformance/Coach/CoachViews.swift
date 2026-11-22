@@ -1,37 +1,27 @@
+import PhotosUI
 import Charts
 import SwiftUI
 
 // MARK: - Today (coach tab root)
 
 struct CoachTodayView: View {
-    @State private var today: CoachToday?
+    @Environment(AppSession.self) private var session
+    @State private var data: NeedsYou?
     @State private var error: String?
     @State private var showAccount = false
+    @State private var lettersOnly = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(eyebrow: "Coach · \(Fmt.shortDay(Date()))", title: "Today") {
-                        Button { showAccount = true } label: {
-                            Image(systemName: "person.crop.circle")
-                                .font(.jkHeadline)
-                                .frame(width: 30, height: 30)
-                        }
-                        .foregroundStyle(JK.text)
-                        .accessibilityLabel("Account")
-                        NavigationLink { BusinessView() } label: {
-                            Monogram(size: 30)
-                                .frame(width: JK.Size.touch, height: JK.Size.touch)
-                        }
-                        .foregroundStyle(JK.text)
-                        .accessibilityLabel("Business")
-                    }
-                    Loadable(value: today, error: error, retry: load) { t in
-                        TodayCards(today: t)
+                VStack(alignment: .leading, spacing: JK.Space.xl) {
+                    header
+                    Loadable(value: data, error: error, retry: load) { d in
+                        NeedsYouList(data: d, lettersOnly: $lettersOnly)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, JK.Space.gutter)
+                .padding(.vertical, JK.Space.l)
             }
             .jkScreen()
             .jkRefreshable { await load() }
@@ -41,96 +31,32 @@ struct CoachTodayView: View {
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                Text(Fmt.fullDay(Date())).font(.jkCaption).foregroundStyle(JK.textSecondary)
+                Text("\(Fmt.greeting()), \(Fmt.firstWord(session.me?.name ?? "Coach"))")
+                    .jkText(.display)
+                    .foregroundStyle(JK.text)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            Spacer(minLength: JK.Space.s)
+            Button { showAccount = true } label: {
+                Avatar(initials: Fmt.initials(session.me?.name ?? "Coach"), mediaId: session.me?.coachSettings?.avatarMediaId)
+                    .frame(minWidth: JK.Size.touch, minHeight: JK.Size.touch)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Account")
+        }
+    }
+
     private func load() async {
         do {
-            today = try await APIClient.shared.get("/api/coach/today", query: ["date": Day.today])
+            data = try await APIClient.shared.get("/api/coach/needs-you")
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
-        }
-    }
-}
-
-/// Clients whose feedback for the week isn't published yet.
-struct FeedbackDueView: View {
-    let due: FeedbackDue
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ScreenHeader(eyebrow: "Week of \(Fmt.dayMonth(due.week))", title: "Feedback to write")
-                ForEach(due.clients) { c in
-                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name, initialTab: .feedback) } label: {
-                        HStack(spacing: 12) {
-                            Avatar(initials: c.displayInitials, size: 32)
-                            Text(c.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
-                        }
-                        .jkCard(padding: 12)
-                    }
-                }
-            }
-            .padding(16)
-        }
-        .jkScreen()
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-struct SessionRow: View {
-    let session: Booking
-    let isNext: Bool
-
-    private var done: Bool { session.end < Date() }
-    private var who: String {
-        if let c = session.client { return c.name }
-        return session.title ?? "Group"
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(Fmt.time(session.start)).font(.jkCaption.weight(.semibold))
-                Text(Fmt.time(session.end)).font(.jkMicro).foregroundStyle(JK.textTertiary)
-            }
-            .frame(width: 38, alignment: .leading)
-            .foregroundStyle(done ? JK.textTertiary : JK.text)
-            NavigationLink {
-                if let c = session.client {
-                    ClientDetailView(clientId: c.id, name: c.name)
-                } else {
-                    ClassDetailView(booking: session)
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Capsule().fill(JK.slot(session.kind).opacity(done ? 0.4 : 1)).frame(width: 3, height: 28)
-                    Avatar(initials: session.client.map { $0.displayInitials } ?? "G", size: 28)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(session.isGroup ? "\(who) · \(session.attendeeCount ?? session.attendees?.count ?? 0) clients" : who)
-                            .font(.jkCallout.weight(.semibold))
-                        Text([session.title, session.kindLabel].compactMap { $0 }.joined(separator: " · "))
-                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
-                    }
-                    Spacer()
-                    if isNext {
-                        Text("Next")
-                            .font(.jkMicro.weight(.semibold))
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(JK.text, in: Capsule())
-                            .foregroundStyle(JK.onPrimary)
-                    } else if done {
-                        Image(systemName: "checkmark").font(.jkCaption)
-                    } else {
-                        Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
-                    }
-                }
-                .foregroundStyle(done ? JK.textTertiary : JK.text)
-                .padding(10)
-                .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous)
-                    .stroke(isNext ? JK.textSecondary : JK.hairline, lineWidth: 1))
-            }
         }
     }
 }
@@ -322,6 +248,7 @@ struct PlansPricesLink: View {
 // MARK: - Clients (coach tab root)
 
 struct ClientsView: View {
+    @Environment(AppSession.self) private var session
     @State private var clients: [ClientSummary]?
     @State private var error: String?
     @State private var query = ""
@@ -330,14 +257,13 @@ struct ClientsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(eyebrow: "Coach", title: "Clients") {
-                        NavigationLink { ProgramsView() } label: {
-                            Label("Programs", systemImage: "square.stack")
-                                .font(.jkCaption.weight(.semibold))
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
+                    HStack(alignment: .bottom) {
+                        Text("Clients").jkText(.display).foregroundStyle(JK.text).accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        if session.studioTools {
+                            NavigationLink { ProgramsView() } label: { Text("Programs") }
+                                .buttonStyle(SmallPillStyle())
                         }
-                        .foregroundStyle(JK.text)
                     }
                     HStack {
                         Image(systemName: "magnifyingglass").foregroundStyle(JK.textTertiary)
@@ -374,15 +300,17 @@ struct ClientsView: View {
     @ViewBuilder
     private func clientGroup(_ title: String?, _ list: [ClientSummary]) -> some View {
         if !list.isEmpty {
-            if let title { Eyebrow(text: title, trailing: "\(list.count)") }
+            if let title { CoachSectionTitle(title, trailing: "\(list.count)") }
             VStack(spacing: 0) {
                 ForEach(list) { c in
-                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name, initialTab: ClientText.tab(for: c)) } label: {
+                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name) } label: {
                         ClientRow(client: c)
                     }
+                    .buttonStyle(.plain)
+                    if c.id != list.last?.id { GroupDivider(inset: JK.Space.l + JK.Size.avatar + JK.Space.m) }
                 }
             }
-            .jkCard(padding: 2)
+            .surface(.group)
         }
     }
 
@@ -401,26 +329,30 @@ private struct ClientRow: View {
     let client: ClientSummary
 
     var body: some View {
-        HStack(spacing: 12) {
-            Avatar(initials: client.displayInitials, size: 34)
-                .overlay(alignment: .topTrailing) {
-                    if let tint = ClientText.tint(client) { Dot(color: tint, size: 9).overlay(Circle().stroke(JK.surface, lineWidth: 2)) }
+        HStack(spacing: JK.Space.m) {
+            Avatar(initials: client.displayInitials)
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                HStack(spacing: JK.Space.s) {
+                    Text(client.name).font(.jkCallout).foregroundStyle(JK.text)
+                    if let unread = client.unread, unread > 0 {
+                        Icon(key: .unread, filled: true, size: 13, label: "Unread message").foregroundStyle(JK.textSecondary)
+                    }
                 }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(client.name).font(.jkCallout.weight(.semibold))
                 Text(ClientText.reason(client))
                     .font(.jkCaption)
-                    .foregroundStyle(client.demand?.kind == "urgent" ? JK.urgent : JK.textTertiary)
+                    .foregroundStyle(JK.textSecondary)
                     .lineLimit(1)
+                if let week = client.habitWeek, !week.isEmpty {
+                    ClientWeekDots(week: week).frame(maxWidth: 160, alignment: .leading)
+                }
             }
-            Spacer()
-            if let unread = client.unread, unread > 0 {
-                Image(systemName: "bubble.left.fill").font(.jkCaption).foregroundStyle(JK.textSecondary)
-            }
-            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
+            Spacer(minLength: 0)
+            Image(systemName: IconKey.chevron.symbol).font(.jkCaption).foregroundStyle(JK.textSecondary)
+                .accessibilityHidden(true)
         }
-        .foregroundStyle(JK.text)
-        .padding(12)
+        .padding(.horizontal, JK.Space.l)
+        .padding(.vertical, JK.Space.m)
+        .contentShape(Rectangle())
     }
 }
 
@@ -446,14 +378,6 @@ enum ClientText {
         return reason
     }
 
-    /// The tab that answers what they need.
-    static func tab(for c: ClientSummary) -> ClientDetailView.Tab {
-        switch c.demand?.kind {
-        case "urgent", "form", "checkin": return .feedback
-        default: return .plan
-        }
-    }
-
     static func flag(_ f: String) -> String {
         if f == "no-workout-yet" { return "no workout yet" }
         if f == "checkin-overdue" { return "check-in overdue" }
@@ -467,8 +391,6 @@ enum ClientText {
         var parts = [Fmt.planName(c.plan)]
         if let first = c.flags?.first {
             parts.append(flag(first))
-        } else if let a = c.adherence {
-            parts.append("adherence \(a)%")
         } else if c.checkinDue == true {
             parts.append("check-in due")
         }
@@ -855,10 +777,8 @@ struct AssignProgramSheet: View {
 
 // MARK: - Hints & guides (coach tab root)
 
+/// The coach's library of tips (the old Guides tab, now a row in Account).
 struct GuidesView: View {
-    @State private var switchError: String?
-    @State private var showDesk = false
-    @Environment(AppSession.self) private var session
     @State private var query = ""
     @State private var filter = "All"
     @State private var guides: GuidesResponse?
@@ -878,7 +798,7 @@ struct GuidesView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(eyebrow: "Coach library", title: "Hints & guides")
@@ -920,31 +840,13 @@ struct GuidesView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    Button { showDesk = true } label: {
-                        Label("Coach desk on the web", systemImage: "desktopcomputer")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .padding(.top, 20)
-                    Text("Write weekly feedback and plans from a computer.")
-                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
-                    Button {
-                        Task {
-                            do { try await session.switchToDemoClient() } catch { switchError = error.readable }
-                        }
-                    } label: {
-                        Label("View the app as a client (demo: Sam Carter)", systemImage: "arrow.left.arrow.right")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    if let switchError { ErrorBanner(message: switchError) }
-                    Button("Sign out") { Task { await session.signOut() } }
-                        .buttonStyle(SecondaryButtonStyle())
                 }
                 .padding(16)
             }
             .jkScreen()
             .jkRefreshable { await load() }
-            .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showDesk) { WebDeskSheet() }
+            .navigationTitle("Hints & guides")
+            .navigationBarTitleDisplayMode(.inline)
             .task { await load() }
             .sheet(item: $open) { g in
                 ScrollView {
@@ -1000,46 +902,55 @@ struct GuidesView: View {
 
 // MARK: - Coach account
 
-/// The coach's own account: who is signed in, privacy, and signing out (to
-/// switch to another account, such as the demo client with "I have a code").
+/// The coach's account (atelier-spec.md, Coach screens 6): the web desk,
+/// preview as a client, notifications, studio tools, letter rhythm, the two
+/// reply lines, portrait, a one-line pulse. The desk-only editors (Programs,
+/// Forms, Autoflows, Plans & prices, Business, availability) appear here only
+/// with "Show studio tools" on; nothing is deleted in this release.
 struct CoachAccountView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var confirmSignOut = false
+    @State private var showDesk = false
+    @State private var switchError: String?
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 12) {
-                        Avatar(initials: initialsOf(session.me?.name ?? "Coach"), size: 48)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(session.me?.name ?? "Coach").font(.jkDisplay).foregroundStyle(JK.text)
-                            Text(session.me?.email ?? "Coach account").font(.jkCaption).foregroundStyle(JK.textTertiary)
+                VStack(alignment: .leading, spacing: JK.Space.xl) {
+                    identity
+                    PulseLine()
+                    group {
+                        Button { showDesk = true } label: { CoachRowLabel(icon: .settings, title: "Open the web desk", detail: "Programmes, forms and prices live there") }
+                            .buttonStyle(.plain)
+                        GroupDivider()
+                        Button { Task { await previewAsClient() } } label: {
+                            CoachRowLabel(icon: .clients, title: "Preview as client", detail: "Look round as the demo client, Sam Carter")
                         }
+                        .buttonStyle(.plain)
+                        GroupDivider()
+                        NavigationLink { GuidesView() } label: { CoachRowLabel(icon: .guide, title: "Hints & guides") }
+                            .buttonStyle(.plain)
                     }
-                    Text("Signed in as the coach. Clients who sign up are assigned to you.")
-                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
-                    Link(destination: APIClient.shared.privacyURL) {
-                        HStack(spacing: 12) {
-                            Glyph(systemName: "hand.raised")
-                            Text("Privacy policy").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
-                            Spacer()
-                            Image(systemName: "arrow.up.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
-                        }
-                        .jkCard(padding: 12)
-                    }
-                    PlansPricesLink()
+                    if let switchError { ErrorBanner(message: switchError) }
                     CoachNotificationsRow()
+                    StudioToolsRow()
+                    if session.studioTools { studioTools }
+                    RhythmSection(settings: session.me?.coachSettings)
+                    ReplyLinesSection(settings: session.me?.coachSettings)
+                    PortraitRow()
                     CalendarSubscribeCard()
                     WebSessionsRow()
+                    group {
+                        Link(destination: APIClient.shared.privacyURL) {
+                            CoachRowLabel(icon: .lock, title: "Privacy policy", chevron: false)
+                        }
+                    }
                     Button("Sign out") { confirmSignOut = true }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .padding(.top, 12)
-                    Text("To see the client side, use Guides › View the app as a client.")
-                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
+                        .buttonStyle(SecondaryButtonStyle())
                 }
-                .padding(16)
+                .padding(.horizontal, JK.Space.gutter)
+                .padding(.vertical, JK.Space.l)
             }
             .jkScreen()
             .navigationTitle("Account")
@@ -1047,6 +958,7 @@ struct CoachAccountView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
+            .sheet(isPresented: $showDesk) { WebDeskSheet() }
             .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) {
                     dismiss()
@@ -1057,8 +969,245 @@ struct CoachAccountView: View {
         }
     }
 
-    private func initialsOf(_ name: String) -> String {
-        name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+    private var identity: some View {
+        HStack(spacing: JK.Space.m) {
+            CoachAvatar(coach: PersonRef(id: session.me?.id ?? "", name: session.me?.name ?? "Coach",
+                                         avatarMediaId: session.me?.coachSettings?.avatarMediaId),
+                        size: JK.Size.avatar + JK.Space.m)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.me?.name ?? "Coach").font(.jkHeadline).foregroundStyle(JK.text)
+                Text(session.me?.email ?? "Coach account").font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+        }
+    }
+
+    private var studioTools: some View {
+        group {
+            NavigationLink { ProgramsView() } label: { CoachRowLabel(icon: .workout, title: "Programs, autoflows and forms") }
+                .buttonStyle(.plain)
+            GroupDivider()
+            NavigationLink { PlansPricesView() } label: { CoachRowLabel(icon: .settings, title: "Plans & prices") }
+                .buttonStyle(.plain)
+            GroupDivider()
+            NavigationLink { BusinessView() } label: { CoachRowLabel(icon: .progress, title: "Business") }
+                .buttonStyle(.plain)
+            GroupDivider()
+            NavigationLink { AvailabilityScreen() } label: { CoachRowLabel(icon: .week, title: "Availability") }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }.surface(.group)
+    }
+
+    private func previewAsClient() async {
+        do {
+            dismiss()
+            try await session.switchToDemoClient()
+        } catch {
+            switchError = error.readable
+        }
+    }
+}
+
+/// "Show studio tools": the desk editors on the phone. Off by default.
+private struct StudioToolsRow: View {
+    @Environment(AppSession.self) private var session
+    @State private var error: String?
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Toggle(isOn: Binding(get: { session.studioTools }, set: { on in Task { await set(on) } })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show studio tools").font(.jkCallout).foregroundStyle(JK.text)
+                    Text("Programs, forms, autoflows, plans and prices, business and availability on the phone. They stay on the web desk either way.")
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
+            }
+            .tint(JK.accentControl)
+            .disabled(busy)
+            if let error { Text(error).font(.jkCaption).foregroundStyle(JK.textSecondary) }
+        }
+        .surface(.card, padding: JK.Space.l)
+    }
+
+    private func set(_ on: Bool) async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await session.updateCoachSettings(CoachSettingsPatch(studioTools: on))
+            error = nil
+        } catch {
+            self.error = error.readable
+        }
+    }
+}
+
+/// Letter rhythm per plan, as set on the desk.
+private struct RhythmSection: View {
+    let settings: CoachSettings?
+
+    private let plans: [(id: String, name: String)] = [("elite", "Elite"), ("performance", "Performance"), ("foundation", "Foundation"), ("none", "Free")]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            CoachSectionTitle("Letter rhythm")
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                ForEach(plans, id: \.id) { plan in
+                    HStack {
+                        Text(plan.name).font(.jkCallout).foregroundStyle(JK.text)
+                        Spacer()
+                        Text(line(settings?.letterRhythm?[plan.id])).font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    }
+                    .frame(minHeight: JK.Size.touch)
+                }
+            }
+            .surface(.card, padding: JK.Space.l)
+            Text("Per client, a letter can go fortnightly from their page on the desk.")
+                .font(.jkCaption).foregroundStyle(JK.textSecondary)
+        }
+    }
+
+    private func line(_ r: RhythmSetting?) -> String {
+        guard let r, r.every != "none" else { return "No letters" }
+        let every = r.every == "fortnightly" ? "Fortnightly" : "Weekly"
+        return r.media == true ? "\(every), with a voice or video note" : "\(every), written"
+    }
+}
+
+/// The two reply lines clients see under JK's name.
+private struct ReplyLinesSection: View {
+    @Environment(AppSession.self) private var session
+    let settings: CoachSettings?
+    @State private var standard = ""
+    @State private var priority = ""
+    @State private var busy = false
+    @State private var notice: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            CoachSectionTitle("Reply lines")
+            VStack(alignment: .leading, spacing: JK.Space.m) {
+                JKField(label: "Standard", text: $standard, prompt: "JK replies most evenings")
+                JKField(label: "Plans with priority replies", text: $priority, prompt: "Same-day replies")
+                if let notice { Text(notice).font(.jkCaption).foregroundStyle(JK.textSecondary) }
+                Button("Save reply lines") { Task { await save() } }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(busy || standard.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .surface(.card, padding: JK.Space.l)
+        }
+        .onAppear {
+            standard = settings?.replyExpectation?.standard ?? "JK replies most evenings"
+            priority = settings?.replyExpectation?.priority ?? "Same-day replies"
+        }
+    }
+
+    private func save() async {
+        busy = true
+        defer { busy = false }
+        do {
+            let lines = ReplyExpectation(standard: standard.trimmingCharacters(in: .whitespaces),
+                                         priority: priority.trimmingCharacters(in: .whitespaces))
+            try await session.updateCoachSettings(CoachSettingsPatch(replyExpectation: lines))
+            notice = "Saved."
+        } catch {
+            notice = error.readable
+        }
+    }
+}
+
+/// JK's portrait: the JK tab, From JK on Today, letters. Black and white sits best.
+private struct PortraitRow: View {
+    @Environment(AppSession.self) private var session
+    @State private var picked: PhotosPickerItem?
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            PhotosPicker(selection: $picked, matching: .images) {
+                CoachRowLabel(icon: .photos, title: busy ? "Uploading…" : "Change portrait",
+                              detail: "Shown on the JK tab, Today and letters")
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+            .surface(.group)
+            if let error { ErrorBanner(message: error) }
+        }
+        .onChange(of: picked) { _, item in
+            guard let item else { return }
+            Task { await upload(item) }
+        }
+    }
+
+    private func upload(_ item: PhotosPickerItem) async {
+        busy = true
+        defer {
+            busy = false
+            picked = nil
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data),
+                  let jpeg = Self.portraitJPEG(image) else {
+                error = "Couldn't read that photo."
+                return
+            }
+            let _: Media = try await APIClient.shared.upload("/api/media", data: jpeg, contentType: "image/jpeg",
+                                                            query: ["purpose": "avatar"])
+            await session.refreshMe()
+            error = nil
+        } catch {
+            self.error = error.readable
+        }
+    }
+}
+
+extension PortraitRow {
+    /// A square-ish portrait, at most 1024 px on the long side, as JPEG.
+    static func portraitJPEG(_ image: UIImage) -> Data? {
+        let longest = max(image.size.width, image.size.height)
+        let scale = longest > 1024 ? 1024 / longest : 1
+        let size = CGSize(width: (image.size.width * scale).rounded(), height: (image.size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
+    }
+}
+
+/// "12 active · £1,840 a month", from the business figures.
+private struct PulseLine: View {
+    @State private var business: Business?
+
+    var body: some View {
+        Text(line)
+            .font(.jkCallout.monospacedDigit())
+            .foregroundStyle(JK.textSecondary)
+            .task { business = try? await APIClient.shared.get("/api/coach/business", query: ["period": "month"]) }
+    }
+
+    private var line: String {
+        guard let b = business else { return " " }
+        return "\(b.active) active · \(Fmt.pounds(b.mrrPence)) a month"
+    }
+}
+
+/// Weekly availability, pushed from Account when studio tools are on.
+struct AvailabilityScreen: View {
+    @State private var open = false
+
+    var body: some View {
+        CoachSubpage(title: "Availability") {
+            Text("Weekly hours clients can book. The web desk has the same editor.")
+                .font(.jkCaption).foregroundStyle(JK.textSecondary)
+            Button("Edit availability") { open = true }.buttonStyle(PrimaryButtonStyle())
+        }
+        .sheet(isPresented: $open) { AvailabilityEditor() }
     }
 }
 
