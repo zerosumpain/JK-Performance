@@ -17,6 +17,9 @@ final class AppSession {
     private(set) var me: Me?
     /// Set when restoring fails for a reason other than a 401 (offline).
     var restoreError: String?
+    /// Onboarding couldn't be saved and the client chose "Continue anyway":
+    /// show the tabs for this launch; it comes back next launch.
+    var onboardingDeferred = false
 
     @ObservationIgnored let api = APIClient.shared
 
@@ -83,6 +86,7 @@ final class AppSession {
         Outbox.shared.adopt(userId: session.me.id)
         me = session.me
         restoreError = nil
+        onboardingDeferred = false
         phase = .signedIn
         // Never sync this phone's Apple Health into a shared demo account.
         if !session.me.isCoach && !session.me.demo { HealthSync.shared.syncIfDue(force: true) }
@@ -136,6 +140,7 @@ final class AppSession {
         Keychain.save(nil, account: Self.coachSlot)
         me = nil
         restoreError = nil
+        onboardingDeferred = false
         phase = .signedOut
     }
 }

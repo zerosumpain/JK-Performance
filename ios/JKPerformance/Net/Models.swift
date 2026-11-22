@@ -23,8 +23,14 @@ struct Me: Codable, Equatable {
     var coach: PersonRef?
     /// Clients: whether they've said yes to their coach seeing Apple Health.
     var healthSharing: Bool?
+    /// Clients: false until they've finished the first-run questions. Older servers leave it out (treated as done).
+    var onboarded: Bool?
+    /// Clients: the first-run answers, null until answered.
+    var profile: Profile?
 
     var isCoach: Bool { role == "coach" }
+    /// A client who hasn't been through onboarding yet. Coaches never are.
+    var needsOnboarding: Bool { !isCoach && onboarded == false }
     var demo: Bool { isDemo == true }
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
 }
@@ -50,16 +56,78 @@ struct PersonRef: Codable, Hashable, Identifiable {
     var displayInitials: String { initials ?? Fmt.initials(name) }
 }
 
+/// A client's first-run answers. Every field may be missing: each question can be skipped.
+struct Profile: Codable, Equatable, Hashable {
+    var goals: [String]?
+    /// `new` | `some` | `experienced`
+    var experience: String?
+    var daysPerWeek: Int?
+    /// `morning` | `midday` | `evening` | `varies`
+    var preferredTime: String?
+    var injuries: String?
+    var answeredAt: Date?
+
+    var isEmpty: Bool {
+        (goals ?? []).isEmpty && experience == nil && daysPerWeek == nil && preferredTime == nil
+            && (injuries ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+/// PUT /api/me/onboarding. Nil fields are left out (skipped questions).
+struct OnboardingInput: Encodable {
+    var goals: [String]?
+    var experience: String?
+    var daysPerWeek: Int?
+    var preferredTime: String?
+    var injuries: String?
+    var done: Bool
+}
+
 struct Plan: Codable, Identifiable, Hashable {
     let id: String
     let name: String
+    /// The one-line tagline.
     let detail: String
     let monthlyPence: Int
     let annualPence: Int
     let credits: Int
+    /// The longer sales line for the walkthrough.
+    var pitch: String?
+    /// The one "most popular" plan.
+    var featured: Bool?
+    /// Feature ids, in catalogue order.
+    var features: [String]?
+    var updatedAt: Date?
+
+    var isFree: Bool { id == "none" }
+    var isFeatured: Bool { featured == true }
+    var featureIds: [String] { features ?? [] }
 }
 
-struct PlansResponse: Codable { let plans: [Plan] }
+/// One entry in the fixed feature catalogue the walkthrough steps through.
+struct Feature: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let detail: String
+    var points: [String]?
+}
+
+struct PlansResponse: Codable {
+    let plans: [Plan]
+    var features: [Feature]?
+}
+
+/// PUT /api/coach/plans/:id. The free plan leaves out price, credits and featured.
+struct PlanInput: Encodable {
+    var name: String
+    var detail: String
+    var pitch: String
+    var monthlyPence: Int?
+    var annualPence: Int?
+    var credits: Int?
+    var featured: Bool?
+    var features: [String]
+}
 
 struct OK: Codable {
     var ok: Bool?
@@ -720,6 +788,8 @@ struct ClientsResponse: Codable { let clients: [ClientSummary] }
 
 struct ClientDetail: Codable {
     let client: ClientSummary
+    /// The client's first-run answers; null until answered.
+    var profile: Profile?
     var healthShared: Bool?
     var health: HealthSummary?
     var nextWorkout: Workout?
@@ -739,6 +809,7 @@ struct AttentionItem: Codable, Hashable {
 struct PlanCount: Codable, Hashable {
     let id: String
     let name: String
+    var monthlyPence: Int?
     let members: Int
 }
 
