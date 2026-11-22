@@ -307,18 +307,17 @@ private fun ProgressTiles(p: ProgressData, goal: Goal?, history: HabitHistory?, 
                 goal.remainingLabel ?: if (goal.isReached) "Reached" else "–",
                 m,
                 status = goal.onTrack?.let { if (it) "On track" else "Worth a look" },
-                source = goal.sourceLabel,
             )
         })
         history?.consistency?.let { c ->
             add(TrendKind.consistency to { m ->
-                MetricTile("Consistency", "${c.done} of ${c.days}", m, status = ConsistencyText.status(c), trend = consistencyTrend(history), source = "Days at JK's minimum")
+                MetricTile("Consistency", "${c.done} of ${c.days}", m, status = ConsistencyText.status(c), trend = consistencyTrend(history))
             })
         }
         val bodyGoal = goal?.metric in listOf("weight", "waist")
         val body = if (bodyGoal) bodyTile(p) else null
         if (body != null) {
-            add(TrendKind.body to { m -> MetricTile("Body", body.first, m, trend = body.second, source = body.third) })
+            add(TrendKind.body to { m -> MetricTile("Body", body.first, m, trend = body.second) })
         } else if (strength != null) {
             add(TrendKind.strength to { m ->
                 MetricTile(
@@ -326,7 +325,6 @@ private fun ProgressTiles(p: ProgressData, goal: Goal?, history: HabitHistory?, 
                     Fmt.delta(strength.percent, digits = 0) + "%",
                     m,
                     trend = if (strength.percent > 0) Trend.Up else Trend.Flat,
-                    source = strength.since?.let { "Best lifts since $it" } ?: "Best logged lifts",
                 )
             })
         }
@@ -511,7 +509,7 @@ private fun LiftRow(record: PersonalRecord) {
         }
         Column(horizontalAlignment = Alignment.End) {
             Text("${Fmt.number(record.kg)} kg", style = JKType.callout.monospacedDigit(), color = JKColors.text)
-            record.gain?.let { Text("${Fmt.delta(it)} kg", style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary) }
+            record.gain?.takeIf { it != 0.0 }?.let { Text("${Fmt.delta(it)} kg", style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary) }
         }
     }
 }

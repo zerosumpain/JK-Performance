@@ -205,6 +205,10 @@ private fun JKTimelineView() {
     }
 
     Column(Modifier.jkScreen().jkKeyboardAware()) {
+        // Pinned above the timeline, so Past letters and Guides stay in reach however long the history.
+        Box(Modifier.padding(start = JKSpace.gutter, end = JKSpace.gutter, top = JKSpace.gutter)) {
+            JKHeader(lettersOnly) { lettersOnly = it }
+        }
         JKRefreshable(onRefresh = { refresh() }, modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 Modifier.fillMaxSize(),
@@ -212,7 +216,6 @@ private fun JKTimelineView() {
                 contentPadding = PaddingValues(JKSpace.gutter),
                 verticalArrangement = Arrangement.spacedBy(JKSpace.l),
             ) {
-                item(key = "header") { JKHeader(lettersOnly) { lettersOnly = it } }
                 if (lettersOnly) {
                     if (letters.isEmpty()) item(key = "noLetters") { EmptyState("JK's letters will gather here.") }
                     letters.forEach { r ->
@@ -577,13 +580,13 @@ private fun JKComposer(onSent: suspend () -> Unit) {
                 Modifier
                     .sizeIn(minWidth = JKSize.touchTarget, minHeight = JKSize.touchTarget)
                     .clip(CircleShape)
-                    .background(JKColors.primaryFill, CircleShape)
+                    .background(if (canSend || sending) JKColors.primaryFill else JKColors.raised, CircleShape)
                     .clickable(enabled = canSend, role = Role.Button) { scope.launch { send() } }
                     .semantics { contentDescription = "Send" },
                 contentAlignment = Alignment.Center,
             ) {
                 if (sending) ProgressView(tint = JKColors.primaryLabel)
-                else Glyph(IconKey.send, size = JKSize.iconInline, tint = if (canSend) JKColors.primaryLabel else JKColors.primaryPressed)
+                else Glyph(IconKey.send, size = JKSize.iconInline, tint = if (canSend) JKColors.primaryLabel else JKColors.textSecondary)
             }
         }
         if (gate.formChecks || gate.mealPhotos) {

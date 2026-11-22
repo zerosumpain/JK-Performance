@@ -166,8 +166,7 @@ fun DayAgendaView() {
                     else -> {
                         if (currentError != null) ErrorBanner(currentError)
                         if (sessions.isEmpty()) {
-                            EmptyState("Nothing booked. A quiet day.")
-                            SecondaryButton("Book a session", onClick = { booking = true })
+                            EmptyState("A quiet day.")
                         } else {
                             Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) {
                                 sessions.forEachIndexed { i, b ->

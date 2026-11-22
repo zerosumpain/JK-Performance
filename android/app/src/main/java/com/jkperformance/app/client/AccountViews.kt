@@ -189,7 +189,7 @@ fun AccountSheet() {
                 }
             }
             Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
-                AccountRowLabel(IconKey.settings, "Name", session.me?.name ?: "", chevron = false) {
+                AccountRowLabel(IconKey.account, "Name", session.me?.name ?: "", chevron = false) {
                     name = session.me?.name ?: ""
                     editingName = true
                 }
@@ -198,14 +198,14 @@ fun AccountSheet() {
                 GroupDivider()
                 AccountRowLabel(IconKey.fromHealth, "Health Connect", healthDetail) { open(AccountRoute.health) }
                 GroupDivider()
-                AccountRowLabel(IconKey.reply, "Notifications", notificationsDetail) { open(AccountRoute.notifications) }
+                AccountRowLabel(IconKey.notifications, "Notifications", notificationsDetail) { open(AccountRoute.notifications) }
                 GroupDivider()
                 val file = exportFile
                 if (file != null) {
-                    AccountRowLabel(IconKey.photos, "Your data", "Share ${file.name}", chevron = false) { shareFile(context, file) }
+                    AccountRowLabel(IconKey.download, "Your data", "Share ${file.name}", chevron = false) { shareFile(context, file) }
                 } else {
                     AccountRowLabel(
-                        IconKey.photos, "Your data", if (exporting) "Preparing…" else "Download a copy, as JSON",
+                        IconKey.download, "Your data", if (exporting) "Preparing…" else "Download a copy, as JSON",
                         chevron = false, enabled = !exporting,
                     ) { scope.launch { export() } }
                 }
@@ -213,10 +213,10 @@ fun AccountSheet() {
                 AccountRowLabel(IconKey.lock, "Privacy", "What we store and why") { open(AccountRoute.privacy) }
             }
             Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
-                AccountRowLabel(IconKey.chevron, "Sign out", null, chevron = false) { confirmSignOut = true }
+                AccountRowLabel(IconKey.close, "Sign out", null, chevron = false) { confirmSignOut = true }
                 GroupDivider()
                 AccountRowLabel(
-                    IconKey.chevron, "Delete account",
+                    IconKey.delete, "Delete account",
                     if (deleting) "Deleting…" else "Erases your account, sessions and photos",
                     chevron = false, enabled = !deleting,
                 ) { confirmDelete = true }

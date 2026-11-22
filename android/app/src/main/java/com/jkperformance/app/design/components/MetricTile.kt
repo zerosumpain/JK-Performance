@@ -37,7 +37,7 @@ fun MetricTile(
 ) {
     Column(modifier.jkSurface(SurfaceVariant.Card, padding = JKSpace.l), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
         Text(label, style = JKType.caption, color = JKColors.textSecondary)
-        FittingText(value, style = JKType.numberTile, color = JKColors.text, minimumScaleFactor = 0.6f)
+        FittingText(value, style = JKType.numberTile, color = JKColors.text, minimumScaleFactor = 0.45f)
         if (status != null || trend != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
                 if (trend != null) Glyph(trend.icon, size = JKSize.iconSmall, tint = JKColors.textSecondary, contentDescription = trend.spoken)
