@@ -21,6 +21,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import java.time.ZoneOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,93 +69,457 @@ import kotlinx.coroutines.launch
 import com.jkperformance.app.design.*
 import com.jkperformance.app.design.components.*
 
-/** Swift `ClientDetailView.Tab`. */
-enum class ClientDetailTab(val label: String) { plan("Plan"), feedback("Feedback"), health("Health"), habits("Habits"), sessions("Sessions") }
-
 /**
- * One client, for the coach: header from the summary, then Plan (edit and
- * publish workouts), Feedback (weekly write-ups and check-in replies),
- * Health (their phone's health data, if shared), Habits (habits and nutrition targets)
- * and Sessions (their bookings).
+ * One client, for the coach (atelier-spec.md, Coach screens 3): an Overview
+ * with no segments. Goal, habit week with rest days, the latest check-in and
+ * "Write this week's letter", the next session and three health numbers;
+ * rows below open the plan, sessions, letters, forms and health detail.
  */
 @Composable
-fun ClientDetailView(clientId: String, name: String, initialTab: ClientDetailTab = ClientDetailTab.plan) {
-    // Saveable, so coming back from the message thread lands on the same tab.
-    var tab by rememberSaveable { mutableStateOf(initialTab) }
+fun ClientDetailView(clientId: String, name: String) {
+    val scope = rememberCoroutineScope()
+    val nav = LocalNav.current
     var detail by remember { mutableStateOf<ClientDetail?>(null) }
+    var history by remember { mutableStateOf<HabitHistory?>(null) }
+    var health by remember { mutableStateOf<HealthWeek?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val fullName = detail?.client?.name ?: name
-    val firstName = fullName.split(" ").firstOrNull { it.isNotEmpty() } ?: fullName
+    var actionError by remember { mutableStateOf<String?>(null) }
+    var editingGoal by remember { mutableStateOf<Pair<Goal?, Boolean>?>(null) }
+    var givingRest by remember { mutableStateOf(false) }
 
-    LaunchedEffect(clientId) {
+    val fullName = detail?.client?.name ?: name
+    val firstName = Fmt.firstWord(fullName)
+    val person = PersonRef(id = clientId, name = fullName, initials = detail?.client?.initials)
+    val goal = detail?.goals.orEmpty().let { goals ->
+        goals.firstOrNull { it.status == "active" } ?: goals.firstOrNull { it.isDraft } ?: goals.firstOrNull()
+    }
+    val lettersOn = (detail?.settings?.letterRhythm?.every ?: "weekly") != "none"
+
+    suspend fun load() {
         try {
             detail = APIClient.get<ClientDetail>("/api/coach/clients/${seg(clientId)}")
             error = null
         } catch (e: Throwable) {
             if (!e.isCancellation) error = e.readable
         }
+        val week = Day.add(-6, LocalDate.now(Day.zone))
+        history = runCatching {
+            APIClient.get<HabitHistory>("/api/habits/history", mapOf("clientId" to clientId, "from" to Day.string(week), "to" to Day.today))
+        }.getOrNull()
+        health = runCatching { APIClient.get<HealthWeek>("/api/health/week", mapOf("clientId" to clientId)) }.getOrNull()
     }
 
+    suspend fun removeRest(rest: RestDay) {
+        try {
+            APIClient.send<OK>("DELETE", "/api/clients/${seg(clientId)}/rest-days/${seg(rest.date)}")
+            load()
+        } catch (e: Throwable) {
+            actionError = e.readable
+        }
+    }
+
+    LaunchedEffect(clientId) { load() }
+
     Column(Modifier.jkScreen()) {
-        TopBar("Clients") {
+        TopBar(firstName) {
             Box(
                 Modifier
-                    .navLink { MessagesThreadView(clientId = clientId, otherName = fullName, subtitle = "Client") }
-                    .padding(10.dp),
-            ) { Glyph(IconKey.messages, JKType.body, JKColors.text) }
+                    .size(JKSize.touchTarget)
+                    .navLink { MessagesThreadView(clientId = clientId, otherName = fullName, subtitle = Fmt.planName(detail?.client?.plan)) }
+                    .semantics { contentDescription = "Messages with $firstName" },
+                contentAlignment = Alignment.Center,
+            ) { Glyph(IconKey.messages, tint = JKColors.text) }
         }
-        Column(
-            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            ClientHeader(detail, name, error)
-            detail?.let { ClientAboutCard(it.profile) }
-            Segmented(ClientDetailTab.entries, tab, { tab = it }) { it.label }
-            when (tab) {
-                ClientDetailTab.plan -> CoachPlanTab(clientId, fullName)
-                ClientDetailTab.feedback -> {
-                    CoachReportsSection(clientId = clientId, clientName = firstName)
-                    Label(text = "Check-ins")
-                    CoachNotesTab(clientId)
-                    ClientAutomationSection(client = PersonRef(id = clientId, name = fullName))
+        JKRefreshable(onRefresh = { load() }, modifier = Modifier.weight(1f)) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+                verticalArrangement = Arrangement.spacedBy(JKSpace.xxl),
+            ) {
+                val d = detail
+                val currentError = error
+                when {
+                    d == null && currentError != null -> ErrorCard(currentError, retry = { load() })
+                    d == null -> LoadingCard()
+                    else -> {
+                        if (currentError != null) ErrorBanner(currentError)
+                        OverviewHeader(d, name)
+                        GoalCard(goal, onEdit = { editingGoal = goal to true })
+
+                        // Habits and rest days
+                        Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+                            val count = history?.habits?.size ?: 0
+                            val minimum = d.settings?.dayMinimum
+                            CoachSectionTitle("Habit week", trailing = if (minimum != null && count > 0) "Day done at $minimum of $count" else null)
+                            val h = history
+                            if (h != null) HabitWeekGrid(h, d.restDays.orEmpty())
+                            else Text("Habit week unavailable.", style = JKType.caption, color = JKColors.textSecondary)
+                            val upcoming = d.restDays.orEmpty().filter { it.date >= Day.today }
+                            if (upcoming.isNotEmpty()) {
+                                Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) {
+                                    upcoming.forEach { rest ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            CoachRowLabel(Fmt.longDay(rest.date), Modifier.weight(1f), icon = IconKey.rest, detail = rest.reason, chevron = false)
+                                            TextButton("Remove", onClick = { scope.launch { removeRest(rest) } },
+                                                modifier = Modifier.padding(end = JKSpace.m).semantics { contentDescription = "Remove the rest day on ${Fmt.longDay(rest.date)}" })
+                                        }
+                                    }
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                                SecondaryButton("Edit habits", modifier = Modifier.weight(1f), onClick = {
+                                    nav.push { CoachSubpage("Habits") { CoachHabitsTab(clientId, dayMinimum = d.settings?.dayMinimum) } }
+                                })
+                                SecondaryButton("Give a rest day", modifier = Modifier.weight(1f), onClick = { givingRest = true })
+                            }
+                        }
+
+                        // Check-in and letter
+                        Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+                            CoachSectionTitle("Latest check-in", trailing = d.latestCheckin?.submittedAt?.let { Fmt.relative(it) })
+                            val c = d.latestCheckin
+                            if (c != null) LatestCheckInCard(c)
+                            else Text("No check-in yet.", style = JKType.caption, color = JKColors.textSecondary)
+                            if (lettersOn) {
+                                PrimaryButton("Write this week's letter", onClick = {
+                                    nav.push { LetterComposer(client = person, week = c?.week?.week) }
+                                })
+                            }
+                        }
+
+                        // Next session
+                        d.nextBooking?.let { b ->
+                            Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                                CoachSectionTitle("Next session")
+                                Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) { DayAgendaRow(b) }
+                                Text(Fmt.longDay(b.start), style = JKType.caption, color = JKColors.textSecondary)
+                            }
+                        }
+
+                        // Health
+                        health?.let { h ->
+                            Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+                                CoachSectionTitle("Health", trailing = if (h.shared) "Last 7 days" else null)
+                                if (h.shared) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+                                        HealthTile("Steps", h.days.lastOrNull()?.steps?.let { Fmt.number(it, digits = 0) }, h.days.map { it.steps }, Modifier.weight(1f))
+                                        HealthTile("Sleep", h.days.lastOrNull()?.sleepMinutes?.let { Fmt.minutes(it) }, h.days.map { it.sleepMinutes }, Modifier.weight(1f))
+                                        HealthTile("Resting HR", h.days.lastOrNull()?.restingHr?.let { Fmt.number(it, digits = 0) }, h.days.map { it.restingHr }, Modifier.weight(1f))
+                                    }
+                                } else {
+                                    Text("$firstName hasn't shared their health data with you.", style = JKType.caption, color = JKColors.textSecondary)
+                                }
+                            }
+                        }
+
+                        // Links
+                        Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) {
+                            CoachRowLabel("Plan", Modifier.navLink { CoachSubpage("Plan") { CoachPlanTab(clientId, fullName) } },
+                                icon = IconKey.workout, detail = "This week, swap an exercise, add a note")
+                            GroupDivider()
+                            CoachRowLabel("Sessions", Modifier.navLink { CoachSubpage("Sessions") { CoachSessionsTab(person) } }, icon = IconKey.week)
+                            GroupDivider()
+                            CoachRowLabel("Letters and check-ins", Modifier.navLink {
+                                CoachSubpage("Letters") {
+                                    CoachReportsSection(clientId = clientId, clientName = firstName, client = person)
+                                    CoachSectionTitle("Check-ins")
+                                    CoachNotesTab(clientId)
+                                }
+                            }, icon = IconKey.letter)
+                            GroupDivider()
+                            CoachRowLabel("Assign programme, send a form, read answers",
+                                Modifier.navLink { CoachSubpage("Programme and forms") { ClientAutomationSection(client = person) } }, icon = IconKey.form)
+                            GroupDivider()
+                            CoachRowLabel("Health detail", Modifier.navLink {
+                                CoachSubpage("Health") { CoachHealthTab(clientId = clientId, clientName = firstName) }
+                            }, icon = IconKey.fromHealth)
+                            val profile = d.profile
+                            if (profile != null && !profile.isEmpty) {
+                                GroupDivider()
+                                CoachRowLabel("First-run answers", Modifier.navLink {
+                                    CoachSubpage("About $firstName") { ClientAboutCard(profile) }
+                                }, icon = IconKey.clients)
+                            }
+                        }
+                    }
                 }
-                ClientDetailTab.health -> CoachHealthTab(clientId = clientId, clientName = firstName)
-                ClientDetailTab.habits -> CoachHabitsTab(clientId)
-                ClientDetailTab.sessions -> CoachSessionsTab(PersonRef(id = clientId, name = fullName))
             }
+        }
+    }
+
+    editingGoal?.let { (g, _) ->
+        Sheet(onDismiss = { editingGoal = null }) { GoalEditorSheet(clientId, g) { load() } }
+    }
+    if (givingRest) Sheet(onDismiss = { givingRest = false }) { RestDaySheet(clientId, firstName) { load() } }
+    ErrorAlert(actionError) { actionError = null }
+}
+
+@Composable
+private fun OverviewHeader(d: ClientDetail, name: String) {
+    val c = d.client
+    val subtitle = buildList {
+        add(Fmt.planName(c.plan))
+        c.since?.let(Day::date)?.let { add("since ${Fmt.monthYear(it)}") }
+    }.joinToString(" · ")
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.m), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(initials = c.displayInitials, size = JKSize.avatar + JKSpace.m)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(c.name.ifEmpty { name }, style = JKType.headline, color = JKColors.text)
+                Text(subtitle, style = JKType.caption, color = JKColors.textSecondary)
+            }
+        }
+        val pills = overviewPills(d)
+        if (pills.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s)) { pills.forEach { (text, color) -> StatusPill(text, color) } }
         }
     }
 }
 
+/** At most two: a word plus a dot. */
 @Composable
-private fun ClientHeader(detail: ClientDetail?, name: String, error: String?) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(initials = detail?.client?.displayInitials ?: Fmt.initials(name), size = 48.dp)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(detail?.client?.name ?: name, style = JKType.display, color = JKColors.text)
-                Text(subtitle(detail), style = JKType.caption, color = JKColors.textTertiary)
-            }
+private fun overviewPills(d: ClientDetail): List<Pair<String, androidx.compose.ui.graphics.Color>> {
+    val out = mutableListOf<Pair<String, androidx.compose.ui.graphics.Color>>()
+    val check = d.latestCheckin
+    if (!check?.pain.isNullOrEmpty() && check?.reviewedAt == null) out += "Pain flagged" to JKColors.urgent
+    else if (!d.client.demand?.urgent.isNullOrEmpty()) out += "Needs you" to JKColors.urgent
+    if (check != null && check.reviewedAt == null) out += "Check-in in" to JKColors.attention
+    if ((d.client.unread ?: 0) > 0) out += "Message in" to JKColors.attention
+    if (d.client.demand?.kind == "quiet" || d.client.demand?.kind == "inactive") out += "Gone quiet" to JKColors.textSecondary
+    if (out.isEmpty()) out += "On track" to JKColors.onTrack
+    return out.take(2)
+}
+
+@Composable
+private fun HealthTile(label: String, value: String?, series: List<Double?>, modifier: Modifier = Modifier) {
+    Column(
+        modifier.background(JKColors.surface, JKShape.card).padding(JKSpace.m).semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(JKSpace.xs),
+    ) {
+        Text(label, style = JKType.caption, color = JKColors.textSecondary)
+        Text(value ?: "–", style = JKType.callout.monospacedDigit(), color = JKColors.text, maxLines = 1)
+        Sparkline(series, Modifier.height(28.dp))
+    }
+}
+
+/** The latest check-in, read-only: the reply arrives as the letter. */
+@Composable
+fun LatestCheckInCard(checkin: LatestCheckIn) {
+    val figures = listOfNotNull(
+        checkin.energy?.let { "Energy $it" },
+        checkin.stress?.let { "Stress $it" },
+        checkin.sleep?.let { "Sleep $it" },
+    ).joinToString(" · ").ifEmpty { "Checked in" }
+    Column(Modifier.jkSurface().semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        Text(figures, style = JKType.callout.monospacedDigit(), color = JKColors.text)
+        checkin.pain?.takeIf { it.isNotEmpty() }?.let { CoachCheckLine("Pain", it.joinToString(", ")) }
+        checkin.win?.takeIf { it.isNotEmpty() }?.let { CoachCheckLine("Win", it) }
+        checkin.struggle?.takeIf { it.isNotEmpty() }?.let { CoachCheckLine("Struggle", it) }
+        checkin.note?.takeIf { it.isNotEmpty() }?.let { CoachCheckLine("Note", it) }
+        checkin.week?.feel.orEmpty().forEach { f ->
+            Text(listOfNotNull(f.title, f.word ?: Feel.word(f.feel)).joinToString(" · "), style = JKType.caption, color = JKColors.textSecondary)
         }
-        if (error != null) ErrorBanner(error)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            chips(detail).forEach { t ->
-                Text(
-                    t,
-                    style = JKType.caption,
-                    color = JKColors.textSecondary,
-                    maxLines = 1,
-                    modifier = Modifier.border(1.dp, JKColors.hairline, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
-                )
+        checkin.photoIds?.takeIf { it.isNotEmpty() }?.let {
+            Text(if (it.size == 1) "1 photo" else "${it.size} photos", style = JKType.caption, color = JKColors.textSecondary)
+        }
+    }
+}
+
+/** "Label: text", the label quieter. */
+@Composable
+internal fun CoachCheckLine(label: String, text: String) {
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = JKColors.textSecondary)) { append("$label: ") }
+            withStyle(SpanStyle(color = JKColors.text)) { append(text) }
+        },
+        style = JKType.caption,
+    )
+}
+
+// MARK: - Goal editor
+
+private val goalMetrics = listOf(
+    "weight" to "Weight", "waist" to "Waist", "measurement" to "Measurement", "record" to "Lift", "habit" to "Habit", "custom" to "Other",
+)
+
+/** Edit the goal in place, or set it from a draft. JK writes the chapter name. */
+@Composable
+fun GoalEditorSheet(clientId: String, goal: Goal?, onSaved: suspend () -> Unit) {
+    val dismiss = LocalDismiss.current
+    val scope = rememberCoroutineScope()
+    var title by remember { mutableStateOf(goal?.title ?: "") }
+    var metric by remember { mutableStateOf(goal?.metric ?: "weight") }
+    var unit by remember { mutableStateOf(goal?.unit ?: "kg") }
+    var baseline by remember { mutableStateOf(goal?.baseline?.let { Fmt.number(it, digits = 2).replace(",", "") } ?: "") }
+    var target by remember { mutableStateOf(goal?.target?.let { Fmt.number(it, digits = 2).replace(",", "") } ?: "") }
+    var hasDate by remember { mutableStateOf(goal == null || goal.targetDate != null) }
+    var targetDate by remember { mutableStateOf(goal?.targetDate?.let(Day::date) ?: LocalDate.now(Day.zone).plusDays(84)) }
+    var chapter by remember { mutableStateOf(goal?.chapterName ?: "") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var pickingDate by remember { mutableStateOf(false) }
+    val setting = goal == null || goal.isDraft
+
+    suspend fun save() {
+        saving = true
+        val input = GoalInput(
+            clientId = if (goal == null) clientId else null,
+            title = title.trim(),
+            metric = metric,
+            unit = unit.ifBlank { null },
+            baseline = parseNumber(baseline.replace(",", "")),
+            target = parseNumber(target.replace(",", "")),
+            startDate = goal?.startDate ?: Day.today,
+            targetDate = if (hasDate) Day.string(targetDate) else null,
+            chapterName = chapter.trim().ifEmpty { null },
+            status = if (setting) "active" else null,
+        )
+        try {
+            if (goal != null) APIClient.send<Goal, GoalInput>("PATCH", "/api/goals/${seg(goal.id)}", input)
+            else APIClient.send<Goal, GoalInput>("POST", "/api/goals", input)
+            onSaved()
+            dismiss()
+        } catch (e: Throwable) {
+            error = e.readable
+        } finally {
+            saving = false
+        }
+    }
+
+    Column(Modifier.jkScreen()) {
+        TopBar("Goal", leading = { BarButton("Cancel") { dismiss() } })
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(JKSpace.gutter),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.m),
+        ) {
+            val suggestion = goal?.suggestion
+            if (suggestion != null && goal.isDraft) {
+                Text("Suggested from onboarding: $suggestion.", style = JKType.caption, color = JKColors.textSecondary)
+            }
+            JKField("The goal, in their words", title, { title = it }, prompt = "Down to 75 kg by March")
+            Text("Measured by", style = JKType.caption, color = JKColors.textSecondary)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                goalMetrics.forEach { (id, label) -> Chip(label = label, selected = metric == id) { metric = id } }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                JKField("Start", baseline, { baseline = it }, Modifier.weight(1f), prompt = "84.6", keyboard = KeyboardType.Decimal)
+                JKField("Target", target, { target = it }, Modifier.weight(1f), prompt = "75", keyboard = KeyboardType.Decimal)
+                JKField("Unit", unit, { unit = it }, Modifier.weight(1f), prompt = "kg")
+            }
+            Row(Modifier.fillMaxWidth().heightIn(min = JKSize.touchTarget), verticalAlignment = Alignment.CenterVertically) {
+                Text("Target date", style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                JKSwitch(checked = hasDate, onCheckedChange = { hasDate = it })
+            }
+            if (hasDate) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = JKSize.touchTarget).clickable { pickingDate = true },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("By", style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                    Text(Fmt.longDay(targetDate), style = JKType.callout, color = JKColors.textSecondary)
+                }
+            }
+            JKField("Chapter name (optional, shown on Progress)", chapter, { chapter = it }, prompt = "Base building")
+            error?.let { ErrorBanner(it) }
+            PrimaryButton(onClick = { scope.launch { save() } }, enabled = !saving && title.isNotBlank()) {
+                if (saving) ProgressView() else Text(if (setting) "Set the goal" else "Save goal")
+            }
+            Text("Metrics tied to a lift or a habit are linked on the web desk.", style = JKType.caption, color = JKColors.textSecondary)
+        }
+    }
+    if (pickingDate) {
+        CoachDatePicker(initial = targetDate, onPick = { targetDate = it }, onDismiss = { pickingDate = false })
+    }
+}
+
+// MARK: - Rest day
+
+/** Give a rest day: neither done nor missed. */
+@Composable
+fun RestDaySheet(clientId: String, firstName: String, onSaved: suspend () -> Unit) {
+    val dismiss = LocalDismiss.current
+    val scope = rememberCoroutineScope()
+    var date by remember { mutableStateOf(LocalDate.now(Day.zone)) }
+    var reason by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var pickingDate by remember { mutableStateOf(false) }
+
+    suspend fun save() {
+        saving = true
+        try {
+            APIClient.send<RestDay, RestDayInput>(
+                "POST", "/api/clients/${seg(clientId)}/rest-days", RestDayInput(date = Day.string(date), reason = reason.trim().ifEmpty { null }),
+            )
+            onSaved()
+            dismiss()
+        } catch (e: Throwable) {
+            error = e.readable
+        } finally {
+            saving = false
+        }
+    }
+
+    Column(Modifier.jkScreen()) {
+        TopBar("Rest day", leading = { BarButton("Cancel") { dismiss() } })
+        Column(Modifier.fillMaxWidth().padding(JKSpace.gutter), verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = JKSize.touchTarget).clickable { pickingDate = true },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Day", style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                Text(Fmt.longDay(date), style = JKType.callout, color = JKColors.textSecondary)
+            }
+            JKField("Reason (optional)", reason, { reason = it }, prompt = "Travelling for work")
+            Text("The day counts as neither done nor missed for $firstName.", style = JKType.caption, color = JKColors.textSecondary)
+            error?.let { ErrorBanner(it) }
+            PrimaryButton(onClick = { scope.launch { save() } }, enabled = !saving) {
+                if (saving) ProgressView() else Text("Give the day off")
             }
         }
     }
+    if (pickingDate) {
+        CoachDatePicker(
+            initial = date,
+            earliest = LocalDate.now(Day.zone).minusDays(7),
+            onPick = { date = it },
+            onDismiss = { pickingDate = false },
+        )
+    }
+}
+
+/** A Material date picker in a dialog, from `earliest` onwards (today by default). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CoachDatePicker(
+    initial: LocalDate,
+    onPick: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    earliest: LocalDate = LocalDate.now(Day.zone),
+) {
+    val floor = earliest.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= floor
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButtonStrong("Done", onClick = {
+                state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
+                onDismiss()
+            })
+        },
+        dismissButton = { TextButton("Cancel", onClick = onDismiss) },
+    ) { DatePicker(state = state) }
 }
 
 /** The client's first-run answers: goals, experience, their week, and anything they flagged. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ClientAboutCard(profile: Profile?) {
+internal fun ClientAboutCard(profile: Profile?) {
     Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Label(text = "About", trailing = profile?.answeredAt?.let { "Answered ${Fmt.dayMonth(it)}" })
         when {
@@ -179,42 +559,6 @@ private fun AboutLine(label: String, value: String) {
         Text(label, style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.width(72.dp))
         Text(value, style = JKType.caption, color = JKColors.text, modifier = Modifier.weight(1f))
     }
-}
-
-/** "Monthly · since Mar 2025"; a blank line until the detail arrives, so the header doesn't jump. */
-private fun subtitle(detail: ClientDetail?): String {
-    val c = detail?.client ?: return " "
-    val parts = mutableListOf(Fmt.planName(c.plan))
-    c.since?.let(Day::date)?.let { parts += "since ${Fmt.monthYear(it)}" }
-    return parts.joinToString(" · ")
-}
-
-/** The at-a-glance chips: urgent reasons first, then adherence, flags, health and the next workout. */
-private fun chips(detail: ClientDetail?): List<String> {
-    val d = detail ?: return emptyList()
-    val out = mutableListOf<String>()
-    d.client.demand?.urgent.orEmpty().forEach { out += "⚠︎ $it" }
-    d.client.adherence?.let { out += "Adherence $it%" }
-    d.client.flags.orEmpty().forEach { f -> out += flagText(f).replaceFirstChar { it.uppercase() } }
-    if (d.client.checkinDue == true) out += "Check-in due"
-    if (d.healthShared == false) out += "Health not shared"
-    d.health?.let { h ->
-        h.steps?.let { out += "${Fmt.number(it, digits = 0)} steps" }
-        h.sleepMinutes?.let { out += "Slept ${Fmt.minutes(it)}" }
-        h.restingHr?.let { out += "RHR ${Fmt.number(it, digits = 0)}" }
-    }
-    d.nextWorkout?.let { out += "Next: ${it.title} ${Fmt.dayMonth(it.date)}" }
-    return out
-}
-
-/** Swift `ClientText.flag`: the server's flag slugs in words ("no-workout-7d" → "no workout in 7 days"). */
-private fun flagText(f: String): String {
-    if (f == "no-workout-yet") return "no workout yet"
-    if (f == "checkin-overdue") return "check-in overdue"
-    if (f.startsWith("no-workout-")) {
-        f.removePrefix("no-workout-").dropLast(1).toIntOrNull()?.let { return "no workout in $it days" }
-    }
-    return f.replace("-", " ")
 }
 
 // MARK: - Shared bits
@@ -418,9 +762,12 @@ private fun CoachPlanTab(clientId: String, clientName: String) {
                         scope.launch { open(w.id) }
                     }
                 }
-                Chip(label = "+ New workout", selected = draft != null && draft?.id == null) {
-                    draft = WorkoutDraft(date = Day.string(day))
-                    saved = null
+                // Writing a workout from scratch is a desk job; on the phone it waits behind studio tools.
+                if (AppSession.studioTools) {
+                    Chip(label = "+ New workout", selected = draft != null && draft?.id == null) {
+                        draft = WorkoutDraft(date = Day.string(day))
+                        saved = null
+                    }
                 }
             }
             val current = draft
@@ -440,7 +787,10 @@ private fun CoachPlanTab(clientId: String, clientName: String) {
                     onDelete = { confirmDelete = true },
                 )
             } else if (dayWorkouts().isEmpty()) {
-                EmptyCard(title = "Nothing planned for ${Fmt.shortDay(day)}", detail = "Tap “+ New workout” to write one for $clientName.")
+                EmptyCard(
+                    title = "Nothing planned for ${Fmt.shortDay(day)}",
+                    detail = if (AppSession.studioTools) "Tap “+ New workout” to write one for $clientName." else "Workouts are written on the web desk.",
+                )
             }
         }
     }
@@ -544,7 +894,7 @@ private fun statusLine(d: WorkoutDraft, clientName: String): String {
 // MARK: - Habits tab
 
 @Composable
-private fun CoachHabitsTab(clientId: String) {
+private fun CoachHabitsTab(clientId: String, dayMinimum: Int? = null) {
     val scope = rememberCoroutineScope()
     var data by remember { mutableStateOf<HabitsResponse?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -556,11 +906,14 @@ private fun CoachHabitsTab(clientId: String) {
     var fat by remember { mutableStateOf("") }
     var savingTargets by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var minimum by remember { mutableStateOf(dayMinimum ?: 3) }
+    var savingMinimum by remember { mutableStateOf(false) }
 
     suspend fun load() {
         try {
             val d = APIClient.get<HabitsResponse>("/api/habits", mapOf("clientId" to clientId, "date" to Day.today))
             data = d
+            minimum = d.dayMinimum ?: dayMinimum ?: minimum
             error = null
             d.nutrition.targets?.let { t ->
                 // Plain digits in the fields: no thousands separator to trip the number parse.
@@ -600,8 +953,23 @@ private fun CoachHabitsTab(clientId: String) {
         }
     }
 
+    suspend fun saveMinimum(count: Int) {
+        savingMinimum = true
+        try {
+            val fresh = APIClient.send<ClientSettings, ClientSettingsPatch>(
+                "PATCH", "/api/coach/clients/${seg(clientId)}/settings", ClientSettingsPatch(dayMinimum = minimum.coerceIn(1, maxOf(1, count))),
+            )
+            minimum = fresh.dayMinimum ?: minimum
+            notice = "Day minimum saved."
+        } catch (e: Throwable) {
+            actionError = e.readable
+        } finally {
+            savingMinimum = false
+        }
+    }
+
     Loadable(value = data, error = error, retry = { load() }) { d ->
-        Label(text = "Daily habits", trailing = "${d.streak}-day streak")
+        CoachSectionTitle("Daily habits", trailing = "${d.habits.size} of 5")
         if (d.habits.isEmpty()) {
             EmptyCard(title = "No habits set")
         } else {
@@ -612,13 +980,13 @@ private fun CoachHabitsTab(clientId: String) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RowGlyph(IconKey.fromSymbol(h.icon), slot = 32.dp)
+                        RowGlyph(h.key, slot = 32.dp)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(h.name, style = JKType.callout.semibold(), color = JKColors.text)
+                            Text(h.name, style = JKType.callout, color = JKColors.text)
                             Text(
                                 if (h.isCount) "${Fmt.number(h.value ?: 0.0)} / ${Fmt.number(h.target)} ${h.unit} today"
                                 else if (h.done) "Done today" else "Not done today",
-                                style = JKType.caption, color = JKColors.textTertiary,
+                                style = JKType.caption, color = JKColors.textSecondary,
                             )
                         }
                         TrashButton { scope.launch { remove(h) } }
@@ -626,7 +994,23 @@ private fun CoachHabitsTab(clientId: String) {
                 }
             }
         }
-        SecondaryButton(onClick = { adding = true }) { IconLabel("Add habit", icon = IconKey.add, style = JKType.callout.semibold()) }
+        SecondaryButton(onClick = { adding = true }, enabled = d.habits.size < 5) { IconLabel("Add habit", icon = IconKey.add, style = JKType.callout) }
+        if (d.habits.size >= 5) {
+            Text("Five habits is the most a client carries. Remove one to add another.", style = JKType.caption, color = JKColors.textSecondary)
+        }
+        if (d.habits.isNotEmpty()) {
+            val count = d.habits.size
+            Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+                CoachStepper(
+                    label = "A day is done at ${minOf(minimum, count)} of $count",
+                    value = minOf(minimum, count),
+                    range = 1..maxOf(1, count),
+                    onValueChange = { minimum = it },
+                )
+                Text("The day minimum. The default is three in five.", style = JKType.caption, color = JKColors.textSecondary)
+                SecondaryButton("Save minimum", onClick = { scope.launch { saveMinimum(count) } }, enabled = !savingMinimum)
+            }
+        }
 
         Label(text = "Nutrition targets", trailing = "Today ${Fmt.number(d.nutrition.totals.kcal, digits = 0)} kcal logged")
         Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -655,7 +1039,11 @@ private fun CoachHabitsTab(clientId: String) {
     ErrorAlert(actionError) { actionError = null }
 }
 
-private val habitIcons = listOf("checkmark.circle", "drop", "moon", "shoeprints.fill", "bolt", "leaf", "figure.walk", "pills", "book", "fork.knife")
+/** The closed catalogue the server accepts. */
+private val habitIcons = listOf(
+    IconKey.water, IconKey.sleep, IconKey.steps, IconKey.protein, IconKey.supplement, IconKey.energy,
+    IconKey.mobility, IconKey.mindfulness, IconKey.reading, IconKey.sunlight, IconKey.custom,
+)
 
 @Composable
 private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
@@ -665,7 +1053,8 @@ private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
     var kind by remember { mutableStateOf("check") }
     var target by remember { mutableStateOf("1") }
     var unit by remember { mutableStateOf("") }
-    var icon by remember { mutableStateOf("checkmark.circle") }
+    var icon by remember { mutableStateOf(IconKey.custom) }
+    var step by remember { mutableStateOf("") }
     var healthKind by remember { mutableStateOf("none") }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -676,11 +1065,11 @@ private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
         healthKind = hk
         when (hk) {
             "sleep" -> {
-                kind = "check"; target = "7"; unit = "h"; icon = "moon"
+                kind = "check"; target = "7"; unit = "h"; icon = IconKey.sleep
                 if (name.isEmpty()) name = "Sleep 7h+"
             }
             "steps" -> {
-                kind = "count"; target = "10000"; unit = "steps"; icon = "shoeprints.fill"
+                kind = "count"; target = "10000"; unit = "steps"; icon = IconKey.steps; step = "1000"
                 if (name.isEmpty()) name = "Steps"
             }
         }
@@ -691,14 +1080,15 @@ private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
         // A health habit keeps its target whatever the kind ("Sleep 7h+" is check, 7 h).
         val fromHealth = healthKind != "none"
         val counted = kind == "count" || fromHealth
-        val input = HabitInput(
+        val input = HabitEdit(
             clientId = clientId, name = name.trim(), kind = kind,
             target = if (counted) parseNumber(target) ?: 1.0 else 1.0,
-            unit = if (counted) unit else "", icon = icon,
+            unit = if (counted) unit else "", iconKey = icon.name, icon = icon.name,
+            step = if (kind == "count") parseNumber(step) else null,
             healthKind = if (fromHealth) healthKind else null,
         )
         try {
-            APIClient.send<Habit, HabitInput>("POST", "/api/habits", input)
+            APIClient.send<Habit, HabitEdit>("POST", "/api/habits", input)
             onSaved()
             dismiss()
         } catch (e: Throwable) {
@@ -720,6 +1110,7 @@ private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     JKField("Target", target, { target = it }, Modifier.weight(1f), prompt = "3", keyboard = KeyboardType.Decimal)
                     JKField("Unit", unit, { unit = it }, Modifier.weight(1f), prompt = "L")
+                    if (kind == "count") JKField("Step", step, { step = it }, Modifier.weight(1f), prompt = "0.5", keyboard = KeyboardType.Decimal)
                 }
             }
             Label(text = "Icon")
@@ -729,9 +1120,17 @@ private fun AddHabitSheet(clientId: String, onSaved: suspend () -> Unit) {
                     Row(Modifier.fillMaxWidth()) {
                         row.forEach { i ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                RowGlyph(IconKey.fromSymbol(i), modifier = Modifier
+                                Box(
+                                    Modifier
+                                        .size(JKSize.touchTarget)
+                                        .clip(JKShape.control)
                                         .clickable { icon = i }
-                                        .border(1.5.dp, if (icon == i) JKColors.text else Color.Transparent, JKShape.control), slot = 40.dp)
+                                        .border(JKSize.hairline, if (icon == i) JKColors.inputBorder else Color.Transparent, JKShape.control)
+                                        .semantics { contentDescription = i.name; selected = icon == i },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Glyph(i, size = JKSize.iconHabit, tint = if (icon == i) JKColors.text else JKColors.textSecondary, filled = icon == i)
+                                }
                             }
                         }
                     }
@@ -812,16 +1211,12 @@ private fun SessionBookingRow(b: Booking) {
     )
 }
 
-// MARK: - Notes tab
+// MARK: - Check-ins (read-only: the reply arrives as the letter)
 
 @Composable
 private fun CoachNotesTab(clientId: String) {
-    val scope = rememberCoroutineScope()
     var checkins by remember { mutableStateOf<List<CheckIn>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val replies = remember { mutableStateMapOf<String, String>() }
-    var sending by remember { mutableStateOf<String?>(null) }
-    var actionError by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
         try {
@@ -832,80 +1227,29 @@ private fun CoachNotesTab(clientId: String) {
         }
     }
 
-    suspend fun reply(c: CheckIn) {
-        val text = replies[c.id].orEmpty().trim()
-        if (text.isEmpty()) return
-        sending = c.id
-        try {
-            val fresh = APIClient.send<CheckIn, ReplyInput>("POST", "/api/checkins/${seg(c.id)}/review", ReplyInput(text))
-            checkins = checkins?.map { if (it.id == fresh.id) fresh else it }
-            replies.remove(c.id)
-        } catch (e: Throwable) {
-            actionError = e.readable
-        } finally {
-            sending = null
-        }
-    }
-
     Loadable(value = checkins, error = error, retry = { load() }) { list ->
-        if (list.isEmpty()) EmptyCard(title = "No check-ins yet")
+        if (list.isEmpty()) Text("No check-ins yet.", style = JKType.caption, color = JKColors.textSecondary)
         list.forEach { c ->
             key(c.id) {
-                Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Week of ${Fmt.dayMonth(c.week)}", style = JKType.callout.semibold(), color = JKColors.text)
-                        Spacer(Modifier.weight(1f))
-                        if (c.reviewedAt != null) IconLabel("Reviewed", icon = IconKey.done, style = JKType.caption, color = JKColors.textTertiary)
+                        Text("Week of ${Fmt.dayMonth(c.week)}", style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                        if (c.reviewedAt != null) Text("Answered", style = JKType.caption, color = JKColors.textSecondary)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatTile(label = "Energy", value = "${c.energy}/5", modifier = Modifier.weight(1f))
-                        StatTile(label = "Sleep", value = "${c.sleep}/5", modifier = Modifier.weight(1f))
-                        StatTile(label = "Pain", value = if (c.pain.isEmpty()) "None" else c.pain.joinToString(", "), modifier = Modifier.weight(1f))
-                    }
-                    c.note?.takeIf { it.isNotEmpty() }?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
-                    c.reply?.takeIf { it.isNotEmpty() }?.let { IconLabel(it, icon = IconKey.reply, style = JKType.caption, color = JKColors.text) }
-                    val draftReply = replies[c.id].orEmpty()
-                    val canSend = sending == null && draftReply.isNotBlank()
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ReplyField(
-                            text = draftReply,
-                            onTextChange = { replies[c.id] = it },
-                            prompt = if (c.reply == null) "Reply to this check-in" else "Update your reply",
-                            modifier = Modifier.weight(1f),
-                        )
-                        Box(
-                            Modifier.size(32.dp).clickable(enabled = canSend) { scope.launch { reply(c) } },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (sending == c.id) ProgressView(tint = JKColors.textSecondary, size = 16.dp)
-                            else Glyph(IconKey.send, JKType.body, if (canSend) JKColors.text else JKColors.textTertiary)
-                        }
-                    }
+                    val figures = buildList {
+                        add("Energy ${c.energy}")
+                        c.stress?.let { add("Stress $it") }
+                        add("Sleep ${c.sleep}")
+                        add(if (c.pain.isEmpty()) "No pain" else "Pain: ${c.pain.joinToString(", ")}")
+                    }.joinToString(" · ")
+                    Text(figures, style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary)
+                    listOfNotNull(c.win?.let { "Win: $it" }, c.struggle?.let { "Struggle: $it" }, c.note)
+                        .filter { it.isNotEmpty() }
+                        .forEach { Text(it, style = JKType.caption, color = JKColors.text) }
+                    c.reply?.takeIf { it.isNotEmpty() }?.let { Text("Your reply: $it", style = JKType.caption, color = JKColors.textSecondary) }
                 }
             }
         }
     }
     LaunchedEffect(clientId) { load() }
-    ErrorAlert(actionError) { actionError = null }
-}
-
-/** `TextField(prompt, text:, axis: .vertical).lineLimit(1...4)` on a raised ground: grows to four lines. */
-@Composable
-private fun ReplyField(text: String, onTextChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier) {
-    val style = JKType.caption.copy(color = JKColors.text)
-    BasicTextField(
-        value = text,
-        onValueChange = onTextChange,
-        textStyle = style,
-        minLines = 1,
-        maxLines = 4,
-        cursorBrush = SolidColor(JKColors.text),
-        modifier = modifier,
-        decorationBox = { field ->
-            Box(Modifier.fillMaxWidth().background(JKColors.raised, JKShape.chip).padding(10.dp)) {
-                if (text.isEmpty()) Text(prompt, style = style, color = JKColors.textTertiary)
-                field()
-            }
-        },
-    )
 }
