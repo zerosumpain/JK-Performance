@@ -1,0 +1,77 @@
+/* Schedule: week grid, day view, session rows, booking and availability sheets. */
+.icon-btn.square{border-radius:9px}
+.btn.pill{border-radius:99px;padding:6px 14px;font-size:13px}
+.icon-btn:disabled{opacity:.35;cursor:default}
+
+.sched-weeknav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 10px;color:var(--muted)}
+.sched-filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px}
+.sched-filters .chip{cursor:pointer;background:none;font-size:12.5px;padding:3px 11px}
+.sched-filters .chip.on{background:var(--silver);color:#000}
+.sched-legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 4px}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
+.swatch.big{width:6px;height:auto;align-self:stretch;border-radius:3px}
+
+/* Week grid (wide screens) */
+.week-grid{display:grid;grid-template-columns:46px repeat(7,minmax(0,1fr));gap:4px;background:var(--card);border:1px solid var(--stroke);border-radius:var(--corner);padding:10px 10px 12px 4px}
+.wg-head{height:30px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--faint);border-radius:7px}
+.wg-head strong{font-weight:600;color:var(--muted)}
+.wg-head.today{background:var(--chrome);color:#000}
+.wg-head.today strong{color:#000}
+.wg-hour{font-size:10.5px;color:var(--faint);text-align:right;padding-right:6px;transform:translateY(-6px);font-variant-numeric:tabular-nums}
+.wg-body{position:relative;overflow:hidden}
+.wg-line{position:absolute;left:0;right:0;height:1px;background:var(--stroke)}
+.wg-now{position:absolute;left:0;right:0;height:2px;background:var(--urgent);z-index:2;border-radius:1px}
+.wg-block{position:absolute;display:flex;flex-direction:column;gap:1px;padding:3px 6px 3px 8px;border:1px solid;border-radius:6px;overflow:hidden;text-decoration:none;color:var(--text);z-index:1}
+.wg-block:hover{filter:brightness(1.25);z-index:3}
+.wg-block.past{opacity:.55}
+.wg-who{font-size:11.5px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wg-sub{font-size:10.5px;color:var(--muted);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Day view (phone width) */
+.day-view{display:none}
+@media (min-width:721px){.narrow-only{display:none}}
+.day-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.day-pill{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 0;background:var(--card);border:1px solid var(--stroke);border-radius:10px;cursor:pointer;color:var(--text)}
+.day-pill.today:not(.on){border-color:var(--stroke-strong)}
+.day-pill.on{background:var(--chrome);color:#000;border-color:transparent}
+.day-pill:disabled{opacity:.35;cursor:default}
+.day-pill .mark{width:4px;height:4px;border-radius:50%}
+.day-pill .mark.on{background:var(--muted)}
+.day-pill.on .mark.on{background:#000}
+
+@media (max-width:720px){
+  .week-grid{display:none}
+  .day-view{display:block}
+  .wide-only{display:none}
+}
+
+/* Session row (the iPhone app's SessionRow) */
+.session-row{display:flex;align-items:center;gap:12px}
+.sr-times{width:40px;flex:none;font-variant-numeric:tabular-nums}
+.sr-end{font-size:10px;color:var(--faint)}
+.sr-card{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px;background:var(--card);border:1px solid var(--stroke);border-radius:12px;text-decoration:none;color:var(--text)}
+.sr-card:hover{background:#171717}
+.sr-card.next{border-color:var(--muted)}
+.sr-bar{width:3px;height:28px;border-radius:2px;flex:none}
+.session-row.done .sr-times,.session-row.done .sr-card{color:var(--faint)}
+.session-row.done .sr-bar{opacity:.4}
+.next-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--text);color:#000}
+
+/* Class detail */
+.back-link{display:inline-flex;align-items:center;gap:4px;color:var(--muted);text-decoration:none;font-size:13px;margin-bottom:10px}
+.back-link:hover{color:var(--text)}
+.class-head{display:flex;gap:12px;align-items:stretch;margin:4px 0 6px}
+.class-head h1{margin-bottom:4px}
+
+/* Booking sheet */
+.back-btn{display:inline-flex;align-items:center;gap:4px;text-decoration:none;color:var(--muted);margin-bottom:4px}
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.slot{padding:11px 0;background:var(--card);border:1px solid var(--stroke);border-radius:10px;font-weight:600;cursor:pointer;color:var(--text);font-variant-numeric:tabular-nums}
+.slot:hover:not(:disabled){border-color:var(--stroke-strong)}
+.slot.on{background:var(--chrome);color:#000;border-color:transparent}
+.slot.taken{color:var(--faint);text-decoration:line-through;border-style:dashed;cursor:default}
+.wide-btn{width:100%;margin-top:4px}
+
+/* Availability sheet */
+.avail-times{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,80px);gap:8px}
+.weekday-select{width:auto;min-width:90px}

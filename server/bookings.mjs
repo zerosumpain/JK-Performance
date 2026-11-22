@@ -6,7 +6,8 @@ import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, monthBounds, weekday } from './time.mjs';
 
 const CANCEL_HOURS = 24;
-const MAX_RANGE_DAYS = 62;
+// The apps' client Sessions tab asks for 30 days back and 60 ahead in one go.
+const MAX_RANGE_DAYS = 92;
 
 // MARK: - Credits
 

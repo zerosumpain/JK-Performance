@@ -1,36 +1,64 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { raw } from './http.mjs';
 
 /**
- * The coach desk: a small browser app at /desk for writing weekly feedback,
- * plans and check-in replies from a computer. It is the same JSON API the
- * iPhone app uses; sign-in is a one-time code made in the app (Guides › Coach
- * desk on the web). Static files are read once at start-up.
+ * The coach web app at /desk: everything the coach can do in the phone apps,
+ * from a browser. Plain ES modules in server/desk/ (no build step), talking to
+ * the same JSON API as the apps. Sign-in: Google, Sign in with Apple on the
+ * web, a one-time code made in the app, or the demo coach code.
+ *
+ * Every .js and .css file in server/desk/ is read once at start-up and served
+ * at /desk/<name>; nothing else in the folder is reachable.
  */
-const JS = readFileSync(new URL('./desk/app.js', import.meta.url), 'utf8');
-const CSS = readFileSync(new URL('./desk/app.css', import.meta.url), 'utf8');
+const DIR = new URL('./desk/', import.meta.url);
+const TYPES = { '.js': 'text/javascript', '.css': 'text/css' };
+const FILES = new Map(readdirSync(DIR)
+  .filter(name => /^[a-z0-9-]+\.(js|css)$/.test(name))
+  .map(name => [name, { type: TYPES[name.slice(name.lastIndexOf('.'))], body: readFileSync(new URL(name, DIR), 'utf8') }]));
 
+// app.css first (tokens), then each screen's own stylesheet.
+const STYLES = [...FILES.keys()].filter(n => n.endsWith('.css')).sort((a, b) => (a === 'app.css' ? -1 : b === 'app.css' ? 1 : a.localeCompare(b)));
 const HTML = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Coach desk · JK Performance</title>
-<link rel="stylesheet" href="/desk/app.css">
-<script src="/desk/app.js" defer></script>
+<meta name="theme-color" content="#000000">
+<title>JK Performance · Coach</title>
+${STYLES.map(n => `<link rel="stylesheet" href="/desk/${n}">`).join('\n')}
+<script type="module" src="/desk/main.js"></script>
 </head><body><div id="app"><p class="muted pad">Loading…</p></div>
-<noscript><p class="pad">The coach desk needs JavaScript.</p></noscript></body></html>`;
+<noscript><p class="pad">JK Performance needs JavaScript.</p></noscript></body></html>`;
 
-const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+// Google's sign-in button is the only third party: its script, its iframe and its styles.
+const GSI = 'https://accounts.google.com/gsi/';
+const CSP = [
+  "default-src 'none'",
+  `script-src 'self' ${GSI}client`,
+  `style-src 'self' ${GSI}style`,
+  `frame-src ${GSI}`,
+  `connect-src 'self' ${GSI}`,
+  "img-src 'self' data: blob:",
+  "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",
+].join('; ');
 
-const send = (type, body) => () => raw(200, {
+const headers = type => ({
   'content-type': `${type}; charset=utf-8`,
   'cache-control': 'no-cache',
   'content-security-policy': CSP,
   'x-content-type-options': 'nosniff',
-  'referrer-policy': 'no-referrer',
-}, body);
+  // Google's button needs the page's origin; nothing else is sent anywhere.
+  'referrer-policy': 'strict-origin-when-cross-origin',
+});
+
+const page = () => raw(200, headers('text/html'), HTML);
+
+function asset(_req, ctx) {
+  const file = FILES.get(ctx.params.file);
+  if (!file) return raw(404, headers('text/plain'), 'Not found');
+  return raw(200, headers(file.type), file.body);
+}
 
 export function deskRoutes(r) {
-  r.add('GET', '/desk', send('text/html', HTML), { public: true });
-  r.add('GET', '/desk/app.js', send('text/javascript', JS), { public: true });
-  r.add('GET', '/desk/app.css', send('text/css', CSS), { public: true });
+  r.add('GET', '/desk', page, { public: true });
+  r.add('GET', '/login', () => raw(302, { location: '/desk', 'cache-control': 'no-store' }, ''), { public: true });
+  r.add('GET', '/desk/:file', asset, { public: true });
 }

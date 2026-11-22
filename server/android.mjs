@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { meOut } from './account.mjs';
 import { exchangeAppleCode } from './apple.mjs';
-import { issueSession, upsertIdentityUser, verifyAppleToken, verifyGoogleToken } from './auth.mjs';
+import { codeMatches, issueSession, upsertIdentityUser, verifyAppleToken, verifyGoogleToken } from './auth.mjs';
 import { fail, raw } from './http.mjs';
 import { hash, nowIso } from './store.mjs';
 
@@ -53,38 +53,88 @@ function backToApp(params) {
   return raw(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" }, html);
 }
 
+/**
+ * The coach web app (/desk) uses the same Apple flow with a state starting
+ * "web-": Apple's answer goes back to /desk instead of the Android app, and
+ * only coaches get through (the web never creates a client account).
+ */
+export const WEB_STATE_PREFIX = 'web-';
+const COACH_ONLY = 'The JK Performance website is for coaches. Clients sign in in the iPhone or Android app.';
+function backToWeb(params) {
+  const location = `/desk#${new URLSearchParams(params)}`;
+  return raw(303, { location, 'cache-control': 'no-store' }, '');
+}
+
 /** Step 2: Apple form-posts the identity token here; the app gets a two-minute, single-use code. */
 async function appleWebCallback(_req, ctx) {
   const form = new URLSearchParams(ctx.rawBody?.toString('utf8') ?? '');
   const state = form.get('state') ?? '';
   if (!STATE.test(state)) fail(400, 'state is missing');
-  if (form.get('error')) return backToApp({ state, error: form.get('error') === 'user_cancelled_authorize' ? 'Sign-in cancelled' : 'Apple could not sign you in' });
+  const web = state.startsWith(WEB_STATE_PREFIX);
+  const back = web ? backToWeb : backToApp;
+  if (form.get('error')) return back({ state, error: form.get('error') === 'user_cancelled_authorize' ? 'Sign-in cancelled' : 'Apple could not sign you in' });
   let claims;
   try {
     claims = await verifyAppleToken(form.get('id_token'), [ctx.config.appleServicesId], { fetchImpl: ctx.config.fetchImpl });
   } catch (e) {
-    return backToApp({ state, error: e.message });
+    return back({ state, error: e.message });
   }
   // Apple sends the name only on the very first sign-in, as JSON in `user`.
   let name = null;
   try { const u = JSON.parse(form.get('user') ?? 'null'); name = u?.name ? { givenName: u.name.firstName, familyName: u.name.lastName } : null; } catch { /* no name */ }
-  const user = upsertIdentityUser(ctx.db, ctx.config, 'apple', claims, name);
+  const user = upsertIdentityUser(ctx.db, ctx.config, 'apple', claims, name, { createClients: !web });
+  if (web && user?.role !== 'coach') return back({ state, error: COACH_ONLY });
   const refresh = await exchangeAppleCode(ctx.config, form.get('code'), { clientId: ctx.config.appleServicesId, redirectUri: callbackUrl(ctx.config) });
   if (refresh) ctx.db.prepare('UPDATE users SET apple_refresh=?, apple_refresh_client=? WHERE id=?').run(refresh, ctx.config.appleServicesId, user.id);
   const code = randomBytes(24).toString('base64url');
   ctx.db.prepare('DELETE FROM auth_handoffs WHERE expires_at<?').run(Date.now());
   ctx.db.prepare('INSERT INTO auth_handoffs (hash, user_id, expires_at, created_at) VALUES (?,?,?,?)').run(hash(code), user.id, Date.now() + HANDOFF_SECONDS * 1000, nowIso());
-  return backToApp({ state, code });
+  return back({ state, code });
 }
 
-/** Step 3: the app swaps the one-time code for a session. */
+/** Step 3: the app (or /desk, with `web: true`) swaps the one-time code for a session. */
 function appleWebFinish(_req, ctx) {
   const row = ctx.db.prepare('SELECT * FROM auth_handoffs WHERE hash=?').get(hash(String(ctx.body.code ?? '')));
   if (!row || row.expires_at < Date.now()) fail(401, 'That sign-in has expired. Try again.');
   ctx.db.prepare('DELETE FROM auth_handoffs WHERE hash=?').run(row.hash);
   const user = ctx.db.prepare('SELECT * FROM users WHERE id=?').get(row.user_id);
-  return { token: issueSession(ctx.db, user.id), me: meOut(ctx.db, user) };
+  const web = ctx.body.web === true;
+  if (web && user.role !== 'coach') fail(403, COACH_ONLY);
+  return { token: issueSession(ctx.db, user.id, web ? 'web' : 'app'), me: meOut(ctx.db, user) };
 }
+
+/** The coach web app's Google button: an ID token from Google Identity Services. Coaches only. */
+async function signInGoogleWeb(_req, ctx) {
+  if (!ctx.config.googleClientIds.length) fail(503, 'Google sign-in is not set up on this server');
+  const claims = await verifyGoogleToken(ctx.body.idToken, ctx.config.googleClientIds, { fetchImpl: ctx.config.fetchImpl });
+  const fullName = { givenName: claims.given_name, familyName: claims.family_name };
+  const user = upsertIdentityUser(ctx.db, ctx.config, 'google', claims, fullName, { createClients: false });
+  if (user?.role !== 'coach') fail(403, COACH_ONLY);
+  return { token: issueSession(ctx.db, user.id, 'web'), me: meOut(ctx.db, user) };
+}
+
+/** The web app's demo code: DEMO_COACH_CODE gives a web session as the demo coach. */
+let webCodeFailures = [];
+function signInCodeWeb(_req, ctx) {
+  const now = Date.now();
+  webCodeFailures = webCodeFailures.filter(t => now - t < 10 * 60_000);
+  if (webCodeFailures.length >= 30) fail(429, 'Too many tries. Wait a few minutes.');
+  const code = String(ctx.body.code ?? '').trim();
+  if (codeMatches(code, ctx.config.demoCode)) fail(403, COACH_ONLY);
+  if (!codeMatches(code, ctx.config.demoCoachCode)) {
+    webCodeFailures.push(now);
+    fail(401, 'That code is not valid');
+  }
+  const user = ctx.db.prepare("SELECT * FROM users WHERE apple_sub='demo-coach'").get();
+  if (!user) fail(503, 'The demo account is not set up');
+  return { token: issueSession(ctx.db, user.id, 'web'), me: meOut(ctx.db, user) };
+}
+
+/** Which sign-in buttons the web app shows. */
+const webConfig = (_req, ctx) => ({
+  google: ctx.config.googleClientIds.length > 0, googleClientId: ctx.config.googleClientIds[0] ?? null,
+  apple: !!ctx.config.appleServicesId, demo: !!ctx.config.demoCoachCode,
+});
 
 /** Which sign-in buttons the Android app should show. */
 const androidConfig = (_req, ctx) => ({ google: ctx.config.googleClientIds.length > 0, googleClientId: ctx.config.googleClientIds[0] ?? null, apple: !!ctx.config.appleServicesId });
@@ -137,6 +187,9 @@ export function androidRoutes(r) {
   r.add('POST', '/api/auth/apple/callback', appleWebCallback, { public: true, rawBody: 16 * 1024 });
   r.add('POST', '/api/auth/apple/finish', appleWebFinish, { public: true });
   r.add('GET', '/api/android/config', androidConfig, { public: true });
+  r.add('GET', '/api/auth/web/config', webConfig, { public: true });
+  r.add('POST', '/api/auth/web/google', signInGoogleWeb, { public: true });
+  r.add('POST', '/api/auth/web/code', signInCodeWeb, { public: true });
   r.add('GET', '/android/:token', downloadPage, { public: true });
   r.add('GET', '/android/:token/jk-performance.apk', downloadApk, { public: true });
 }

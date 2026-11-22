@@ -20,9 +20,12 @@ The contract between `server/` and the iPhone app. Change both sides together.
 |---|---|---|---|
 | POST | `/api/auth/apple` | `{identityToken, authorizationCode?, fullName?: {givenName?, familyName?}}` | `Session`. The code is swapped for an Apple refresh token, kept only to revoke on deletion |
 | POST | `/api/auth/google` | `{idToken}` (Android: a Google ID token for one of `GOOGLE_CLIENT_IDS`) | `Session`. A verified email that matches an existing account joins it, so the coach and anyone moving from iPhone keep their account |
-| GET | `/api/auth/apple/web?state=` | – | 302 to Apple (Android's Sign in with Apple, Services ID `APPLE_SERVICES_ID`) |
+| GET | `/api/auth/apple/web?state=` | – | 302 to Apple (Sign in with Apple on Android and the coach web app, Services ID `APPLE_SERVICES_ID`). A state starting `web-` comes back to `/desk#state=…&code=…` (coaches only) |
 | POST | `/api/auth/apple/callback` | Apple's form post | an HTML page that opens `jkperformance://auth?code=…&state=…` (or `?error=…`) |
-| POST | `/api/auth/apple/finish` | `{code}` (single use, 2 minutes) | `Session` |
+| POST | `/api/auth/apple/finish` | `{code, web?}` (single use, 2 minutes) | `Session`; `web: true` (the coach web app) gives a 30-day web session, coaches only (403) |
+| GET | `/api/auth/web/config` | – | `{google, googleClientId, apple, demo}`: which ways in the coach web app shows |
+| POST | `/api/auth/web/google` | `{idToken}` (Google Identity Services, audience a `GOOGLE_CLIENT_IDS` web client) | `Session` (web). Coaches only: 403 for a client, and an unknown non-coach identity gets no account |
+| POST | `/api/auth/web/code` | `{code}` | `Session` (web) as the demo coach for `DEMO_COACH_CODE`; 403 for the client code, 401 otherwise, 429 after 30 failures in 10 min |
 | GET | `/api/android/config` | – | `{google, googleClientId, apple}`: which sign-in buttons the Android app shows |
 | POST | `/api/auth/code` | `{code}` (App Review demo / local testing; 404 when unset) | `Session` |
 | POST | `/api/auth/logout` | `{pushToken?}` (that phone's push token is removed too) | `{ok:true}` |
@@ -338,12 +341,13 @@ FCM's 404 / UNREGISTERED drops the token.
 
 ## Demo accounts
 
-`DEMO_CODE` signs in as the demo client "Sam Carter", and `DEMO_COACH_CODE` (local only) as the demo coach. Both live in a
+`DEMO_CODE` signs in as the demo client "Sam Carter", and `DEMO_COACH_CODE` as the demo coach (also on the coach web app). Both live in a
 separate demo world with five other clients and a few weeks of history. Demo accounts never appear in a real coach's lists.
 
 ## Pages (HTML)
 
 `/android/<ANDROID_DOWNLOAD_TOKEN>` (private download page for the Android APK while there's no Play Store listing; the
 file is `<DATA_DIR>/android/jk-performance.apk` + `version.json`, put there by `scripts/android-publish.sh`),
-`/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach desk: a
-browser app over this API; sign in with a link code from the app).
+`/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach web app:
+everything the coach can do in the apps, over this API; sign in with Google, Apple, a link code from the app or the demo
+coach code; `/login` redirects there). Its files are the ES modules and stylesheets in `server/desk/`.

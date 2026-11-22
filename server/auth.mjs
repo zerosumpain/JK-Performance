@@ -93,9 +93,10 @@ const isCoachEmail = (config, email) => !!email && config.coachEmails.includes(e
  * Find or create the account for an Apple or Google identity. Coaches come
  * from COACH_EMAILS. A Google sign-in whose verified email matches an existing
  * account joins that account, so a person (or the coach) who signed in with
- * Apple on an iPhone gets the same account on Android.
+ * Apple on an iPhone gets the same account on Android. With `createClients:
+ * false` (the web) an unknown non-coach identity gets null instead of an account.
  */
-export function upsertIdentityUser(db, config, provider, claims, fullName) {
+export function upsertIdentityUser(db, config, provider, claims, fullName, { createClients = true } = {}) {
   const column = provider === 'google' ? 'google_sub' : 'apple_sub';
   const email = typeof claims.email === 'string' ? claims.email.toLowerCase() : null;
   let existing = db.prepare(`SELECT * FROM users WHERE ${column} = ?`).get(claims.sub);
@@ -113,6 +114,8 @@ export function upsertIdentityUser(db, config, provider, claims, fullName) {
   const family = typeof fullName?.familyName === 'string' ? fullName.familyName.trim() : '';
   const name = (`${given} ${family}`.trim() || (email ? email.split('@')[0] : 'New client')).slice(0, 80);
   const role = isCoachEmail(config, email) ? 'coach' : 'client';
+  // The coach web app signs people in but never signs clients up: that happens in the app.
+  if (role === 'client' && !createClients) return null;
   const id = newId('u');
   const user = tx(db, () => {
     const coachId = role === 'client' ? primaryCoachId(db, config) : null;

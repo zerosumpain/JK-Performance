@@ -13,8 +13,9 @@ h1{font-size:32px;margin:20px 0 4px;letter-spacing:-.01em}h2{font-size:18px;marg
 p,li{color:#c8c8c8}a{color:#fff}
 .card{background:#121212;border:1px solid #222;border-radius:14px;padding:16px 18px;margin:12px 0}
 footer{margin-top:48px;font-size:13px;color:#777}
+.btn{display:inline-block;margin-top:8px;padding:10px 20px;border-radius:12px;background:linear-gradient(#f4f4f4,#bdbdbd);color:#000;text-decoration:none;font-weight:600}
 </style></head><body><main><div class="mark">JK</div>${body}
-<footer>JK Performance · <a href="/privacy">Privacy</a> · <a href="/support">Support</a></footer></main></body></html>`;
+<footer>JK Performance · <a href="/privacy">Privacy</a> · <a href="/support">Support</a> · <a href="/desk">Coach sign in</a></footer></main></body></html>`;
 
 const html = (title, body) => raw(200, {
   'content-type': 'text/html; charset=utf-8',
@@ -25,7 +26,8 @@ const html = (title, body) => raw(200, {
 
 const home = () => html('Coaching', `
 <p class="eyebrow">Performance</p><h1>JK Performance</h1>
-<p>Coaching, programming and accountability, in one iPhone app.</p>
+<p>Coaching, programming and accountability, in one app for iPhone and Android.</p>
+<p><a class="btn" href="/desk">Coach sign in</a></p>
 <div class="card"><b>For clients</b><p>Your plan for the week, logging every set, daily habits and nutrition, a weekly check-in, progress and records, booking sessions, and messaging your coach.</p></div>
 <div class="card"><b>For the coach</b><p>Programmes, each client's plan and adherence, the schedule, check-ins and the numbers of the business.</p></div>`);
 
