@@ -132,36 +132,22 @@ final class PortraitStore {
 }
 
 /// The JK tab's image: his portrait as an original-mode circle when there is
-/// one, else the monogram as a template glyph (tinted like any tab). Large
-/// Content Viewer falls back to bubble.left.
-struct JKTabIcon: View {
-    let coach: PersonRef?
-    @State private var portrait: UIImage?
+/// one, else the monogram as a template glyph (tinted like any tab). A tab
+/// item only takes an Image and a Text, so this hands over a UIImage.
+enum JKTabImage {
+    static let side: CGFloat = JK.Size.iconTab + 4
 
-    var body: some View {
-        Group {
-            if let portrait {
-                Image(uiImage: portrait).renderingMode(.original)
-            } else {
-                Image(uiImage: Self.monogramImage).renderingMode(.template)
-            }
-        }
-        .accessibilityLabel("JK, your coach")
-        .accessibilityShowsLargeContentViewer {
-            Image(systemName: IconKey.jk.symbol)
-            Text("JK")
-        }
-        .task(id: coach?.avatarMediaId) {
-            guard let id = coach?.avatarMediaId else { portrait = nil; return }
-            var image = PortraitStore.shared.cached(id)
-            if image == nil { image = await PortraitStore.shared.load(id) }
-            portrait = image.map { Self.circle($0, side: JK.Size.iconTab + 4) }
-        }
+    /// The portrait if it is cached or can be fetched, else the monogram.
+    @MainActor
+    static func load(for coach: PersonRef?) async -> UIImage {
+        guard let id = coach?.avatarMediaId else { return monogram }
+        var image = PortraitStore.shared.cached(id)
+        if image == nil { image = await PortraitStore.shared.load(id) }
+        return image.map { circle($0) } ?? monogram
     }
 
     /// The monogram at tab size, drawn once.
-    static let monogramImage: UIImage = {
-        let side = JK.Size.iconTab + 4
+    static let monogram: UIImage = {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
         let image = renderer.image { ctx in
             let path = MonogramShape().path(in: CGRect(x: 0, y: 0, width: side, height: side))
@@ -172,8 +158,8 @@ struct JKTabIcon: View {
         return image.withRenderingMode(.alwaysTemplate)
     }()
 
-    /// The photo cropped to a circle of `side` points, kept in its own colours.
-    static func circle(_ image: UIImage, side: CGFloat) -> UIImage {
+    /// The photo cropped to a circle, kept in its own colours.
+    static func circle(_ image: UIImage) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
         let out = renderer.image { _ in
             let rect = CGRect(x: 0, y: 0, width: side, height: side)

@@ -95,6 +95,8 @@ private struct RestoringView: View {
 
 struct ClientTabs: View {
     @Environment(AppSession.self) private var session
+    /// JK's portrait, or the monogram until it loads or if there is none.
+    @State private var jkTabImage = JKTabImage.monogram
 
     var body: some View {
         TabView(selection: Bindable(TabRouter.shared).client) {
@@ -112,11 +114,21 @@ struct ClientTabs: View {
                                    otherName: session.me?.coach?.name ?? "Your coach",
                                    subtitle: "Usually replies within an hour")
             }
-            .tabItem { Label("Messages", systemImage: "bubble.left") }
+            .tabItem {
+                Label {
+                    Text("Messages")
+                } icon: {
+                    Image(uiImage: jkTabImage)
+                }
+                .accessibilityLabel("Messages from JK, your coach")
+            }
             .tag(TabRouter.Client.messages)
             AccountView()
                 .tabItem { Label("Account", systemImage: "person") }
                 .tag(TabRouter.Client.account)
+        }
+        .task(id: session.me?.coach?.avatarMediaId) {
+            jkTabImage = await JKTabImage.load(for: session.me?.coach)
         }
     }
 }

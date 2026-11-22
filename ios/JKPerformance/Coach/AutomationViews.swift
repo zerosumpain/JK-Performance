@@ -206,7 +206,7 @@ struct AutoflowEditorSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     JKField(label: "Name", text: $draft.name, prompt: "New client onboarding")
                     Segmented(options: ["join", "manual"], selection: $draft.trigger) { $0 == "join" ? "When a client joins" : "When I start it" }
-                    Toggle("Running", isOn: $draft.active).font(.jkCallout).foregroundStyle(JK.text).tint(JK.textSecondary)
+                    Toggle("Running", isOn: $draft.active).font(.jkCallout).foregroundStyle(JK.text).tint(JK.accentControl)
 
                     Eyebrow(text: "Steps", trailing: "Day 0 = the day it starts")
                     ForEach($draft.steps) { $step in
@@ -712,7 +712,7 @@ private struct QuestionEditor: View {
             }
             .font(.jkCaption)
             .foregroundStyle(JK.text)
-            .tint(JK.textSecondary)
+            .tint(JK.accentControl)
         }
         .jkCard(padding: 12)
     }
