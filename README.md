@@ -74,3 +74,14 @@ App icon: `python3 scripts/app-icon.py` (placeholder silver JK mark).
 Server env for Android: `GOOGLE_CLIENT_IDS` (the Google OAuth *web* client id the app asks for ID tokens),
 `APPLE_SERVICES_ID` (Services ID with return URL `https://jk.strangeramblings.com/api/auth/apple/callback`),
 `FCM_SERVICE_ACCOUNT_FILE`, `ANDROID_DOWNLOAD_TOKEN`.
+
+## Server operations
+
+Operator commands run inside the server container (`node server/admin.mjs …`): `users`, `make-coach`, `assign`,
+`test-clients add|more|remove`, and `coach-portrait <email-or-user-id> <file>`, which stores a JPEG or PNG as the
+coach's portrait (uploaded media, `Me.coach.avatarMediaId`, shown to that coach's clients). The portrait file itself
+never goes in this repository. For the demo world, `DEMO_COACH_PORTRAIT_FILE=/path/to/portrait.jpg` makes the nightly
+build set it as the demo coach's portrait; without it the apps show the JK monogram.
+
+The first start after the Atelier server changes runs a one-time migration (meta key `atelier_v1`) and first writes a
+copy of the database to `<DATA_DIR>/jk.sqlite.pre-atelier_v1-<time>.bak`.
