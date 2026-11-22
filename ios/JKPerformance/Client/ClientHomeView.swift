@@ -13,6 +13,7 @@ struct ClientHomeView: View {
     @State private var error: String?
     @State private var loaded = false
     @State private var reloads = 0
+    @State private var touring = false
 
     private var api: APIClient { APIClient.shared }
     private let grid = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
@@ -35,6 +36,7 @@ struct ClientHomeView: View {
                         LoadingCard()
                     } else {
                         if let error { ErrorBanner(message: error) }
+                        tourCard
                         ClientFormsCard(refresh: reloads)
                         todayCard
                         nextBooking
@@ -56,6 +58,25 @@ struct ClientHomeView: View {
             .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
             .task { await load() }
+            .fullScreenCover(isPresented: $touring) { PlanTourView(mode: .client) }
+        }
+    }
+
+    /// No plan yet: an invitation to the walkthrough, top of Home.
+    @ViewBuilder
+    private var tourCard: some View {
+        if (session.me?.membership?.plan ?? "none") == "none" {
+            VStack(alignment: .leading, spacing: 8) {
+                Eyebrow(text: "Coaching")
+                Text("See what coaching includes").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text("A quick tour of each plan, from your programme to 1:1 sessions with \(coachName).")
+                    .font(.caption).foregroundStyle(JK.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Take the tour") { touring = true }
+                    .buttonStyle(ChromeButtonStyle())
+                    .padding(.top, 4)
+            }
+            .jkCard()
         }
     }
 
