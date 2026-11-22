@@ -145,7 +145,7 @@ import java.util.UUID
  * VStack's spacing, and pull to refresh when `onRefresh` is given.
  */
 @Composable
-private fun ScrollScreen(
+internal fun ScrollScreen(
     spacing: Dp,
     modifier: Modifier = Modifier,
     onRefresh: (suspend () -> Unit)? = null,
@@ -163,7 +163,7 @@ private fun ScrollScreen(
 
 /** A pushed screen: the inline bar (back chevron, optional title and actions) over a [ScrollScreen]. */
 @Composable
-private fun PushedScreen(
+internal fun PushedScreen(
     spacing: Dp,
     title: String = "",
     onRefresh: (suspend () -> Unit)? = null,
@@ -315,6 +315,18 @@ private fun IOSSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
         ),
     )
 }
+
+// The three controls above, for the coach's other screen files (other files keep same-named private copies).
+@Composable
+internal fun CoachConfirmDialog(title: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit, message: String? = null) =
+    ConfirmDialog(title, action, onConfirm, onDismiss, message)
+
+@Composable
+internal fun CoachStepper(label: String, value: Int, range: IntRange, onValueChange: (Int) -> Unit, modifier: Modifier = Modifier) =
+    Stepper(label, value, range, onValueChange, modifier, style = JKType.subheadline)
+
+@Composable
+internal fun CoachSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) = IOSSwitch(checked, onCheckedChange)
 
 // MARK: - Today (coach tab root)
 
@@ -547,6 +559,7 @@ fun BusinessView() {
                     plans.forEach { p -> StatTile(label = p.name, value = "${p.members}", modifier = Modifier.weight(1f)) }
                 }
             }
+            PlansPricesLink()
             Eyebrow(text = "Needs attention", trailing = "Auto-flagged")
             if (b.attention.isEmpty()) {
                 EmptyCard(systemName = "checkmark.seal", title = "Everyone's on track")
@@ -1409,6 +1422,7 @@ fun CoachAccountView() {
             SystemImage("arrow.up.right", JKType.caption, JK.tertiary)
         }
         CoachNotificationsRow()
+        PlansPricesLink()
         CalendarSubscribeCard()
         WebSessionsRow()
         ChromeButton("Sign out", onClick = { confirmSignOut = true }, modifier = Modifier.padding(top = 12.dp))

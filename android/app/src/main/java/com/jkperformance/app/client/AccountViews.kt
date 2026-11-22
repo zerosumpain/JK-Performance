@@ -65,7 +65,9 @@ import com.jkperformance.app.design.JKRefreshable
 import com.jkperformance.app.design.JKType
 import com.jkperformance.app.design.Label
 import com.jkperformance.app.design.Loadable
+import com.jkperformance.app.design.PopularBadge
 import com.jkperformance.app.design.ProgressView
+import com.jkperformance.app.design.Sheet
 import com.jkperformance.app.design.ScreenHeader
 import com.jkperformance.app.design.Segmented
 import com.jkperformance.app.design.SystemImage
@@ -814,12 +816,13 @@ private enum class Billing(val label: String) { monthly("Monthly"), annual("Annu
  * /api/me/membership and takes no payment (real billing will need Play Billing).
  */
 @Composable
-fun MembershipView() {
+fun MembershipView(preselect: String? = null) {
     val session = AppSession
     val scope = rememberCoroutineScope()
     var billing by remember { mutableStateOf(Billing.monthly) }
     var plans by remember { mutableStateOf<List<Plan>?>(null) }
-    var picked by remember { mutableStateOf<String?>(null) }
+    var picked by remember { mutableStateOf(preselect) }
+    var showTour by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -877,6 +880,19 @@ fun MembershipView() {
                 Text("Testing build: switching plans takes no payment.", style = JKType.caption, color = JK.tertiary)
             }
 
+            Row(
+                Modifier.clip(rounded(JK.corner)).clickable { showTour = true }.jkCard(padding = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconTile(systemName = "book.pages")
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Take the tour", style = JKType.subheadline.semibold(), color = JK.text)
+                    Text("What each plan includes, step by step", style = JKType.caption2, color = JK.tertiary)
+                }
+                SystemImage("chevron.right", JKType.caption, JK.tertiary)
+            }
+
             Segmented(Billing.entries, billing, { billing = it }) { it.label }
 
             Loadable(plans, error, retry = { load() }) { list ->
@@ -916,6 +932,16 @@ fun MembershipView() {
             )
         }
     }
+
+    if (showTour) {
+        // Choosing a plan at the end of the tour picks it here.
+        Sheet(onDismiss = { showTour = false }) {
+            PlanTourView(onChoose = { id ->
+                picked = id
+                showTour = false
+            })
+        }
+    }
 }
 
 @Composable
@@ -934,6 +960,7 @@ private fun PlanCard(p: Plan, billing: Billing, current: String, selected: Boole
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(p.name, style = JKType.subheadline.semibold(), color = JK.text)
+                if (p.isFeatured) PopularBadge()
                 if (p.id == current) {
                     Text(
                         "Current",
