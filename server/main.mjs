@@ -5,6 +5,7 @@ import { seedCatalogue } from './catalogue.mjs';
 import { loadConfig } from './config.mjs';
 import { seedDemo, startDemoClock } from './demo.mjs';
 import { openStore } from './store.mjs';
+import { startLetterClock } from './reports.mjs';
 
 process.umask(0o077);
 const config = loadConfig();
@@ -16,9 +17,11 @@ if (config.demoCode || config.demoCoachCode) {
 const app = createApp(db, config);
 app.listen(config.port, config.host, () => console.log(`JK Performance listening on ${config.host}:${config.port}`));
 const clock = startAutoflowClock(db, config);
+const letterClock = startLetterClock(db, config);
 const demoClock = config.demoCode || config.demoCoachCode ? startDemoClock(db) : null;
 process.on('SIGTERM', () => {
   clearInterval(clock);
+  clearInterval(letterClock);
   if (demoClock) clearInterval(demoClock);
   app.close(() => { db.close(); process.exit(0); });
 });

@@ -125,7 +125,8 @@ function attentionList(db, clients, today) {
 }
 
 /** The week a coach would be writing up: last week until Friday, then this one. */
-export const feedbackWeek = (today = londonDay()) => (today >= addDays(mondayOf(today), 4) ? mondayOf(today) : addDays(mondayOf(today), -7));
+export { feedbackWeek } from './reports.mjs';
+import { feedbackWeek } from './reports.mjs';
 
 function today(_req, ctx) {
   requireCoach(ctx);

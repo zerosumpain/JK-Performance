@@ -4,6 +4,7 @@ import { day, fail, num, oneOf, str } from './http.mjs';
 import { notify } from './push.mjs';
 import { defaultMinimum } from './settings.mjs';
 import { iconKeyFor, newId, nowIso, tx } from './store.mjs';
+import { FEEL_WORDS } from './training.mjs';
 import { addDays, daysBetween, londonDay, mondayOf } from './time.mjs';
 
 /** The closed habit glyph catalogue (IconKey names), and the SF Symbol old app builds draw for each. */
@@ -363,7 +364,6 @@ function deleteEntry(_req, ctx) {
 export const checkinOut = c => ({ id: c.id, clientId: c.client_id, week: c.week, energy: c.energy, sleep: c.sleep, pain: JSON.parse(c.pain), note: c.note, submittedAt: c.submitted_at, reviewedAt: c.reviewed_at, reply: c.reply,
   stress: c.stress ?? null, win: c.win ?? null, struggle: c.struggle ?? null, photoIds: c.photo_ids ? JSON.parse(c.photo_ids) : [] });
 
-export const FEEL_WORDS = { 1: 'Easy', 2: 'Steady', 3: 'Hard', 4: 'Very hard', 5: 'Max' };
 
 /** The figures a check-in card shows read-only: the week's steps and sleep, habit consistency, sessions and how they felt. */
 export function checkinDraft(db, viewer, client, week) {
