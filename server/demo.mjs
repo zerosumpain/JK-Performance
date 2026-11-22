@@ -3,7 +3,7 @@ import { setUpClient } from './auth.mjs';
 import { WELCOME_MESSAGE } from './catalogue.mjs';
 import { FORM_TEMPLATES } from './forms.mjs';
 import { newId, nowIso, tx } from './store.mjs';
-import { buildPerson, programWorkouts } from './testclients.mjs';
+import { buildPerson, programWorkouts, sampleProfile } from './testclients.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, mondayOf } from './time.mjs';
 
 /**
@@ -111,8 +111,9 @@ export function buildDemo(db, today = londonDay()) {
 
     clients.forEach(({ p, user }, idx) => {
       const joined = addDays(monday, -7 * p.weeks);
-      db.prepare('UPDATE users SET created_at=?, health_share=?, health_share_at=? WHERE id=?')
-        .run(at(joined), p.shares ? 1 : 0, p.shares ? at(addDays(joined, 1)) : null, user.id);
+      // Onboarded the day they joined, with answers that fit their training.
+      db.prepare('UPDATE users SET created_at=?, health_share=?, health_share_at=?, onboarded_at=?, profile=? WHERE id=?')
+        .run(at(joined), p.shares ? 1 : 0, p.shares ? at(addDays(joined, 1)) : null, at(joined), JSON.stringify(sampleProfile(p, at(joined))), user.id);
       setUpClient(db, user.id, coach.id);
       db.prepare("UPDATE messages SET at=?, read_at=? WHERE client_id=? AND from_role='coach' AND text=?").run(at(joined), at(joined), user.id, WELCOME_MESSAGE);
       recordPlan(db, user.id, p.plan, at(joined));

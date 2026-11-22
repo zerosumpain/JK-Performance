@@ -18,8 +18,8 @@ export function meOut(db, user) {
       : null,
     coach: coach ? { id: coach.id, name: coach.name } : null,
     healthSharing: user.role === 'client' ? !!user.health_share : null,
-    // Clients answer a few first-run questions in the app; coaches and demo accounts never see them.
-    onboarded: user.role !== 'client' || !!user.is_demo || !!user.onboarded_at,
+    // Clients answer a few first-run questions in the app (demo clients are built already answered).
+    onboarded: user.role !== 'client' || !!user.onboarded_at,
     profile: user.role === 'client' ? profileOf(user) : null,
   };
 }

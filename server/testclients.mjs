@@ -54,6 +54,15 @@ const ROUTINES = {
 };
 
 // days: training weekdays (0 = Monday); adherence: share of past sessions done.
+const GOALS_BY_ROUTINE = { strength: ['strength'], hybrid: ['performance', 'fitness'], hypertrophy: ['muscle', 'strength'],
+  mobility: ['mobility', 'health'], running: ['performance', 'fitness'], fatLoss: ['fatloss', 'health'] };
+/** First-run answers that fit a made-up person's training (demo and test clients). */
+export const sampleProfile = (p, answeredAt) => ({
+  goals: GOALS_BY_ROUTINE[p.routine] ?? ['fitness'], experience: p.weeks >= 12 ? 'experienced' : p.weeks >= 6 ? 'some' : 'new',
+  daysPerWeek: p.days.length, preferredTime: p.time < '10:00' ? 'morning' : p.time < '15:00' ? 'midday' : 'evening',
+  injuries: p.routine === 'mobility' ? 'Lower back gets tight after long days at a desk.' : null, answeredAt,
+});
+
 const PEOPLE = [
   { name: 'Ella Hughes', plan: 'elite', routine: 'strength', days: [0, 2, 4], time: '07:00', adherence: 0.95, weight: [64.2, 64.6], shares: true, oneToOne: [1, '07:30', 'inperson'],
     goal: 'First powerlifting meet in March', checkin: [5, 4, [], 'Felt strong all week. Bench is flying.'], unread: 'Can we talk peaking for the meet at our next session?' },
@@ -110,9 +119,9 @@ export function addTestClients(db, coachId, today = londonDay()) {
     PEOPLE.forEach((p, idx) => {
       const joined = addDays(today, p.isNew ? -16 : -60 - idx * 9);
       const id = newId('u');
-      db.prepare('INSERT INTO users (id, apple_sub, email, name, role, coach_id, is_demo, created_at, health_share, health_share_at) VALUES (?,?,?,?,?,?,0,?,?,?)')
+      db.prepare('INSERT INTO users (id, apple_sub, email, name, role, coach_id, is_demo, created_at, health_share, health_share_at, onboarded_at, profile) VALUES (?,?,?,?,?,?,0,?,?,?,?,?)')
         .run(id, `test-${p.name.toLowerCase().replace(/[^a-z]+/g, '-')}`, null, p.name, 'client', coachId, at(joined),
-          p.shares ? 1 : 0, p.shares ? at(addDays(joined, 2)) : null);
+          p.shares ? 1 : 0, p.shares ? at(addDays(joined, 2)) : null, at(joined), JSON.stringify(sampleProfile(p, at(joined))));
       setUpClient(db, id, coachId);
       recordPlan(db, id, p.plan, at(joined));
       out.push({ id, name: p.name });
