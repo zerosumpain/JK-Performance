@@ -539,6 +539,12 @@ struct MembershipView: View {
     @State private var error: String?
     @State private var saving = false
     @State private var saveError: String?
+    @State private var touring = false
+
+    /// `preselected`: a plan chosen in the walkthrough, picked ready to switch.
+    init(preselected: String? = nil) {
+        _picked = State(initialValue: preselected)
+    }
 
     private var current: String { session.me?.membership?.plan ?? "none" }
 
@@ -556,6 +562,8 @@ struct MembershipView: View {
                 .foregroundStyle(JK.text)
 
                 Segmented(options: Billing.allCases, selection: $billing) { $0.rawValue }
+
+                tourRow
 
                 Loadable(value: plans, error: error, retry: load) { list in
                     ForEach(list) { p in
@@ -600,6 +608,27 @@ struct MembershipView: View {
         .navigationTitle("Membership")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .fullScreenCover(isPresented: $touring) {
+            PlanTourView(mode: .client) { chosen in picked = chosen }
+        }
+    }
+
+    private var tourRow: some View {
+        Button {
+            touring = true
+        } label: {
+            HStack(spacing: 12) {
+                IconTile(systemName: "sparkles")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Take the tour").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("What each plan includes, step by step").font(.caption2).foregroundStyle(JK.tertiary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            }
+            .jkCard(padding: 12)
+        }
+        .buttonStyle(.plain)
     }
 
     private var buttonTitle: String {
@@ -618,6 +647,7 @@ struct MembershipView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(p.name).font(.subheadline.weight(.semibold))
+                        if p.isFeatured && p.id != current { PopularBadge() }
                         if p.id == current {
                             Text("Current")
                                 .font(.system(size: 9, weight: .semibold))
