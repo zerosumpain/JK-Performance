@@ -227,7 +227,7 @@ function trendGlyph(now, prev) {
   const diff = Math.round((now - prev) * 100);
   const key = diff > 0 ? 'trendUp' : diff < 0 ? 'trendDown' : 'trendFlat';
   const word = diff > 0 ? `up ${diff} points on last week` : diff < 0 ? `down ${-diff} points on last week` : 'same as last week';
-  return h('span', { class: 'row gap4 ov-trend muted', title: word }, icon(key, 16, { label: word }), h('span', { class: 'small t-num' }, diff === 0 ? '0' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)}`));
+  return h('span', { class: 'row gap4 ov-trend muted', title: word }, icon(key, 16, { label: word }), h('span', { class: 'small t-num' }, diff === 0 ? 'Same' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)} pts`));
 }
 
 async function habitSection(box, ctx, detail, features, reload) {
