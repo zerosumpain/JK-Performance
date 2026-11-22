@@ -130,6 +130,11 @@ const ICONS = {
   video: 'M3 7h12v10H3zM15 10l6-3v10l-6-3',
   people: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6',
   signout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10',
+  checklist: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2',
+  chart: 'M3 20h18M4 16l5-5 4 3 7-8',
+  fork: 'M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1-3 4-3 8h3',
+  star: 'M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1-4.5-4.2 6.1-.8z',
+  tag: 'M3 12V4h8l10 10-8 8zM7.5 8.5h.01',
 };
 const SVG = 'http://www.w3.org/2000/svg';
 /** icon('today', 18): an inline stroked icon. Unknown names draw a dot. */
@@ -408,11 +413,19 @@ function render() {
 // MARK: - Shared state
 
 /** Who's signed in, and the coach's client list (loaded once, refreshed on demand). */
-export const state = { me: null, clients: null };
+export const state = { me: null, clients: null, plans: null };
 export async function clients(force = false) {
   if (!state.clients || force) state.clients = (await api('GET', '/api/coach/clients')).clients;
   return state.clients;
 }
+/** The coach's plans (names, prices) and the feature catalogue, loaded once. */
+export async function plans(force = false) {
+  if (!state.plans || force) state.plans = await api('GET', '/api/plans');
+  return state.plans;
+}
+/** A plan's name as the coach has it, once plans() has loaded; else from the id. */
+export const planName = id => state.plans?.plans.find(p => p.id === (id || 'none'))?.name
+  ?? (!id || id === 'none' ? 'Free' : id[0].toUpperCase() + id.slice(1));
 export const clientById = id => state.clients?.find(c => c.id === id) || null;
 
 /** The sidebar's unread badge; screens call this after reading a thread. */

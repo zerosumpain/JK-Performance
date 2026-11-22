@@ -165,6 +165,19 @@ export function openStore(path) {
   db.exec(`CREATE TABLE IF NOT EXISTS auth_handoffs (
     hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at INTEGER NOT NULL, created_at TEXT NOT NULL)`);
+  // Plans a coach has repriced or changed, and every price change (business numbers use the price of the day).
+  db.exec(`CREATE TABLE IF NOT EXISTS plan_settings (
+      coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, plan TEXT NOT NULL,
+      name TEXT NOT NULL, detail TEXT NOT NULL, pitch TEXT NOT NULL, monthly_pence INTEGER NOT NULL,
+      annual_pence INTEGER NOT NULL, credits INTEGER NOT NULL, featured INTEGER NOT NULL DEFAULT 0,
+      features TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (coach_id, plan));
+    CREATE TABLE IF NOT EXISTS plan_price_events (
+      id INTEGER PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, plan TEXT NOT NULL,
+      monthly_pence INTEGER NOT NULL, annual_pence INTEGER NOT NULL, at TEXT NOT NULL)`);
+  // A new client's answers from the app's first-run questions. Everyone who
+  // was already here counts as onboarded, so only new sign-ups see the flow.
+  if (addColumn(db, 'users', 'onboarded_at', 'TEXT')) db.exec('UPDATE users SET onboarded_at = created_at');
+  addColumn(db, 'users', 'profile', 'TEXT');
   return db;
 }
 

@@ -10,6 +10,7 @@ import {
   COLOR, DAYS, MONTHS, addDays, api, apiBlob, avatar, busy, button, card, chip, clearDraft, clientById, clients, confirmBox, dot,
   emptyCard, errorLine, eyebrow, field, fill, firstName, fmtRelative, fmtShort, fmtTime, fmtWeekday, h, icon, link, loading, londonParts,
   mondayOf, parseDay, q, readDraft, route, screenHeader, segmented, sheet, toast, todayLondon, writeDraft,
+  planName, plans,
 } from './core.js';
 
 // MARK: - Formatting (the iPhone app's Fmt)
@@ -29,7 +30,20 @@ const weekdayOf = s => DAYS[parseDay(s).getUTCDay()];
 const longDayOf = iso => { const d = londonParts(iso).day; return `${fmtWeekday(d)} ${fmtShort(d)}`; };
 /** "Aug 2026" */
 const monthYear = s => { const d = parseDay(s); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
-const planName = id => (!id || id === 'none' ? 'No plan' : id[0].toUpperCase() + id.slice(1));
+const GOAL = { strength: 'Get stronger', muscle: 'Build muscle', fatloss: 'Lose fat', fitness: 'Get fitter', performance: 'Perform in my sport', mobility: 'Move better', health: 'Feel healthier' };
+const EXPERIENCE = { new: 'New to training', some: 'Some experience', experienced: 'Experienced' };
+const TIME = { morning: 'mornings', midday: 'middays', evening: 'evenings', varies: 'times vary' };
+
+/** The client's answers to the app's first-run questions. */
+function aboutCard(profile, first) {
+  if (!profile) return h('p', { class: 'tiny faint cl-about' }, `${first} hasn’t answered the first-run questions yet.`);
+  const week = [profile.daysPerWeek ? `${profile.daysPerWeek} day${profile.daysPerWeek === 1 ? '' : 's'} a week` : null, TIME[profile.preferredTime] ?? null].filter(Boolean).join(', ');
+  return card({ class: 'cl-about' },
+    h('div', { class: 'eyebrow m0' }, 'About'),
+    profile.goals?.length ? h('div', { class: 'chips' }, profile.goals.map(g => chip(GOAL[g] ?? g, { on: true }))) : null,
+    h('div', { class: 'small muted' }, [EXPERIENCE[profile.experience], week].filter(Boolean).join(' · ') || 'No answers about training yet'),
+    profile.injuries ? h('div', { class: 'small' }, h('span', { class: 'faint' }, 'To know: '), profile.injuries) : null);
+}
 const capitalise = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 // MARK: - Client text (the iPhone app's ClientText)
@@ -166,6 +180,7 @@ const checkCircle = on => h('span', { class: 'cl-check' + (on ? ' on' : '') }, o
 // MARK: - Clients list
 
 route('/clients', async (el, _params, view) => {
+  await plans().catch(() => null); // the coach's plan names
   const search = h('input', { type: 'search', placeholder: 'Search clients', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Search clients' });
   const listBox = h('div');
   el.append(
@@ -217,6 +232,7 @@ const FEEDBACK_SECTIONS = ['checkins', 'forms', 'autoflows'];
 const details = new Map(); // client id → last GET /api/coach/clients/:id, so switching tabs doesn't flash
 
 route('/clients/:id/:tab?', async (el, params, view) => {
+  plans().catch(() => null);
   const id = params.id;
   const anchor = FEEDBACK_SECTIONS.includes(params.tab) ? params.tab : null;
   const tab = anchor ? 'feedback' : TABS.some(([k]) => k === params.tab) ? params.tab : 'plan';
@@ -253,6 +269,7 @@ route('/clients/:id/:tab?', async (el, params, view) => {
         link(`/messages/${enc(id)}`, { class: 'btn', title: `Message ${ctx.first()}` }, icon('bubble', 16), 'Message')),
       error ? errorLine(error) : null,
       chips.length ? h('div', { class: 'cl-chips' }, chips) : null,
+      detail ? aboutCard(detail.profile, ctx.first()) : null,
       h('nav', { class: 'tabs', 'aria-label': 'Client' }, TABS.map(([k, label]) =>
         link(`/clients/${enc(id)}/${k}`, { class: 'tab' + (k === tab ? ' sel' : ''), 'aria-current': k === tab ? 'page' : null }, label))));
   };

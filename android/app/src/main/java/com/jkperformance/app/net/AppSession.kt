@@ -34,6 +34,12 @@ object AppSession {
     /** Set when restoring fails for a reason other than a 401 (offline). */
     var restoreError: String? by mutableStateOf(null)
 
+    /**
+     * The first-run answers couldn't be saved and the client chose "Continue
+     * anyway": the tabs for this launch only; onboarding shows again next time.
+     */
+    var onboardingDeferred: Boolean by mutableStateOf(false)
+
     val api = APIClient
 
     init {
@@ -151,6 +157,7 @@ object AppSession {
         Keychain.save(null, COACH_SLOT)
         me = null
         restoreError = null
+        onboardingDeferred = false
         phase = Phase.signedOut
     }
 }

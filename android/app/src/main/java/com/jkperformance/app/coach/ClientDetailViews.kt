@@ -7,6 +7,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -89,6 +92,7 @@ fun ClientDetailView(clientId: String, name: String, initialTab: ClientDetailTab
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ClientHeader(detail, name, error)
+            detail?.let { ClientAboutCard(it.profile) }
             Segmented(ClientDetailTab.entries, tab, { tab = it }) { it.label }
             when (tab) {
                 ClientDetailTab.plan -> CoachPlanTab(clientId, fullName)
@@ -128,6 +132,51 @@ private fun ClientHeader(detail: ClientDetail?, name: String, error: String?) {
                 )
             }
         }
+    }
+}
+
+/** The client's first-run answers: goals, experience, their week, and anything they flagged. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ClientAboutCard(profile: Profile?) {
+    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Eyebrow(text = "About", trailing = profile?.answeredAt?.let { "Answered ${Fmt.dayMonth(it)}" })
+        when {
+            profile == null -> Text("Hasn't answered the first-run questions yet.", style = JKType.footnote, color = JK.tertiary)
+            profile.isEmpty -> Text("Skipped the first-run questions.", style = JKType.footnote, color = JK.tertiary)
+            else -> {
+                val goals = profile.goals.orEmpty().mapNotNull { Answers.goal(it) }
+                if (goals.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        goals.forEach { g ->
+                            Row(
+                                Modifier.background(JK.cardRaised, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                androidx.compose.material3.Icon(g.icon, contentDescription = null, tint = JK.text, modifier = Modifier.size(14.dp))
+                                Text(g.title, style = JKType.caption.medium(), color = JK.text)
+                            }
+                        }
+                    }
+                }
+                Answers.experience(profile.experience)?.let { AboutLine("Experience", it.title) }
+                val week = listOfNotNull(
+                    profile.daysPerWeek?.let { if (it == 1) "1 day a week" else "$it days a week" },
+                    Answers.time(profile.preferredTime)?.let { if (it.id == "varies") "time varies" else it.title.lowercase() },
+                ).joinToString(", ").replaceFirstChar { it.uppercase() }
+                if (week.isNotEmpty()) AboutLine("Training", week)
+                profile.injuries?.takeIf { it.isNotBlank() }?.let { AboutLine("To know", it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutLine(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, style = JKType.caption, color = JK.tertiary, modifier = Modifier.width(72.dp))
+        Text(value, style = JKType.caption, color = JK.text, modifier = Modifier.weight(1f))
     }
 }
 

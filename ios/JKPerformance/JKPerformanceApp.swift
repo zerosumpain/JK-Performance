@@ -43,7 +43,13 @@ struct RootView: View {
                 case .restoring:
                     RestoringView()
                 case .signedIn:
-                    if session.isCoach { CoachTabs() } else { ClientTabs() }
+                    if session.isCoach {
+                        CoachTabs()
+                    } else if session.me?.needsOnboarding == true && !session.onboardingDeferred {
+                        OnboardingView()
+                    } else {
+                        ClientTabs()
+                    }
                 }
             }
             if intro && session.phase != .signedOut {

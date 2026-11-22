@@ -1,6 +1,8 @@
 import { clientFor, initials, requireCoach } from './access.mjs';
 import { bookingOut } from './bookings.mjs';
-import { GUIDES, PLANS, planById } from './catalogue.mjs';
+import { profileOf } from './account.mjs';
+import { GUIDES } from './catalogue.mjs';
+import { monthlyPricesAt, plansFor } from './plans.mjs';
 import { dueWeek } from './daily.mjs';
 import { flaggedAnswers } from './forms.mjs';
 import { healthDay, healthVisible } from './health.mjs';
@@ -95,7 +97,7 @@ function clientDetail(_req, ctx) {
   const next = ctx.db.prepare('SELECT * FROM workouts WHERE client_id=? AND date>=? ORDER BY date, starts_at LIMIT 1').get(c.id, today);
   const shared = healthVisible(ctx.user, c);
   return {
-    client: clientSummary(ctx.db, c, today), healthShared: shared, health: shared ? healthDay(ctx.db, c.id, today) : null,
+    client: clientSummary(ctx.db, c, today), profile: profileOf(c), healthShared: shared, health: shared ? healthDay(ctx.db, c.id, today) : null,
     nextWorkout: next ? workoutOut(ctx.db, next) : null,
   };
 }
@@ -177,7 +179,7 @@ function today(_req, ctx) {
 
 /**
  * Monthly recurring revenue on any day, rebuilt from the membership history:
- * each client's plan as of that day, priced monthly.
+ * each client's plan as of that day, at the monthly price that applied then.
  */
 function mrrOn(db, coachId, dayString) {
   const end = londonToUtc(addDays(dayString, 1)).toISOString();
@@ -186,7 +188,8 @@ function mrrOn(db, coachId, dayString) {
   const current = new Map();
   for (const r of rows) current.set(r.user_id, r.plan);
   let pence = 0;
-  for (const plan of current.values()) pence += planById(plan).monthlyPence;
+  const prices = monthlyPricesAt(db, coachId, end);
+  for (const plan of current.values()) pence += prices.get(plan) ?? 0;
   return { pence, members: [...current.values()].filter(p => p !== 'none').length, plans: current };
 }
 
@@ -213,7 +216,7 @@ function business(_req, ctx) {
     active: now.members, new: joined, churned,
     adherence: rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : null,
     attention: attention.slice(0, 10),
-    plans: PLANS.filter(p => p.id !== 'none').map(p => ({ id: p.id, name: p.name, members: [...now.plans.values()].filter(v => v === p.id).length })),
+    plans: plansFor(ctx.db, ctx.user.id).map(p => ({ id: p.id, name: p.name, monthlyPence: p.monthlyPence, members: [...now.plans.values()].filter(v => v === p.id).length })),
   };
 }
 
