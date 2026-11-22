@@ -1,12 +1,4 @@
-/** Fixed reference data: membership plans, the exercise library, coach guides. */
-
-export const PLANS = [
-  { id: 'none', name: 'Free', detail: 'Read the guides and see what coaching includes', monthlyPence: 0, annualPence: 0, credits: 0 },
-  { id: 'foundation', name: 'Foundation', detail: 'Programme + app messaging', monthlyPence: 5900, annualPence: 60200, credits: 0 },
-  { id: 'performance', name: 'Performance', detail: 'Programme, 2 sessions / month, weekly check-in', monthlyPence: 9900, annualPence: 101000, credits: 2 },
-  { id: 'elite', name: 'Elite', detail: 'Weekly 1:1 sessions, nutrition, priority messaging', monthlyPence: 14900, annualPence: 152000, credits: 4 },
-];
-export const planById = id => PLANS.find(p => p.id === id) ?? PLANS[0];
+/** Fixed reference data: the exercise library, coach guides. Plans are in plans.mjs. */
 
 export const CATEGORIES = ['Legs', 'Push', 'Pull', 'Core', 'Mobility', 'Conditioning'];
 

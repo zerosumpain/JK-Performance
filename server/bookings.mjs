@@ -1,6 +1,6 @@
 import { clientFor, coachIdOf, requireCoach, requireMember } from './access.mjs';
-import { planById } from './catalogue.mjs';
 import { clock, day, fail, instant, num, oneOf, str } from './http.mjs';
+import { planOf } from './plans.mjs';
 import { notify } from './push.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, monthBounds, weekday } from './time.mjs';
@@ -17,7 +17,7 @@ const MAX_RANGE_DAYS = 92;
  * cancelled early enough to be refunded (a refunded booking is deleted).
  */
 export function credits(db, user, date = londonDay()) {
-  const plan = planById(user.plan);
+  const plan = planOf(db, user);
   const { first, next } = monthBounds(date);
   const used = db.prepare('SELECT COUNT(*) n FROM bookings WHERE client_id=? AND uses_credit=1 AND start>=? AND start<?')
     .get(user.id, londonToUtc(first).toISOString(), londonToUtc(next).toISOString()).n;
@@ -142,7 +142,7 @@ function createBooking(_req, ctx) {
   if (!slot) fail(400, 'That time is not one of the coach\'s slots');
   if (!slot.open) fail(409, 'That slot has just been taken');
   // The coach booking on a client's behalf still uses the client's credit, so the allowance means one thing.
-  const usesCredit = planById(client.plan).credits > 0 || ctx.config.gateServices === false;
+  const usesCredit = planOf(ctx.db, client).credits > 0 || ctx.config.gateServices === false;
   const out = tx(ctx.db, () => {
     if (ctx.config.gateServices && credits(ctx.db, client, startDay).creditsLeft < 1) fail(409, 'No session credits left this month');
     const id = newId('b');

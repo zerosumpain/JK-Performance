@@ -2,15 +2,15 @@ import { randomBytes } from 'node:crypto';
 import { exchangeAppleCode, revokeApple } from './apple.mjs';
 import { codeMatches, endSession, issueSession, upsertAppleUser, verifyAppleToken } from './auth.mjs';
 import { credits } from './bookings.mjs';
-import { PLANS, planById } from './catalogue.mjs';
-import { fail, oneOf, raw, str } from './http.mjs';
+import { fail, num, oneOf, raw, str } from './http.mjs';
+import { PLAN_IDS, planOf } from './plans.mjs';
 import { erasePhotos } from './progress.mjs';
 import { hash, nowIso, tx } from './store.mjs';
 import { londonDay, monthBounds } from './time.mjs';
 
 export function meOut(db, user) {
   const coach = user.coach_id ? db.prepare('SELECT id, name FROM users WHERE id=?').get(user.coach_id) : null;
-  const plan = planById(user.plan);
+  const plan = user.role === 'client' ? planOf(db, user) : null;
   return {
     id: user.id, name: user.name, email: user.email, role: user.role, isDemo: !!user.is_demo, createdAt: user.created_at,
     membership: user.role === 'client'
@@ -18,7 +18,43 @@ export function meOut(db, user) {
       : null,
     coach: coach ? { id: coach.id, name: coach.name } : null,
     healthSharing: user.role === 'client' ? !!user.health_share : null,
+    // Clients answer a few first-run questions in the app; coaches and demo accounts never see them.
+    onboarded: user.role !== 'client' || !!user.is_demo || !!user.onboarded_at,
+    profile: user.role === 'client' ? profileOf(user) : null,
   };
+}
+
+// MARK: - First-run questions
+
+export const GOALS = ['strength', 'muscle', 'fatloss', 'fitness', 'performance', 'mobility', 'health'];
+export const EXPERIENCE = ['new', 'some', 'experienced'];
+export const TIMES = ['morning', 'midday', 'evening', 'varies'];
+
+/** A client's onboarding answers (null until they've answered). */
+export function profileOf(user) {
+  if (!user.profile) return null;
+  try { return JSON.parse(user.profile); } catch { return null; }
+}
+
+/**
+ * The app's first-run questions. Every answer is optional (a client can skip
+ * any step); `done: true` marks onboarding finished so it isn't shown again.
+ */
+function putOnboarding(_req, ctx) {
+  if (ctx.user.role !== 'client') fail(403, 'Clients only');
+  const b = ctx.body;
+  if (b.goals !== undefined && (!Array.isArray(b.goals) || b.goals.some(g => !GOALS.includes(g)))) fail(400, `goals must be a list from ${GOALS.join(', ')}`);
+  const profile = {
+    goals: GOALS.filter(g => (b.goals ?? []).includes(g)),
+    experience: b.experience == null ? null : oneOf(b.experience, 'experience', EXPERIENCE),
+    daysPerWeek: b.daysPerWeek == null ? null : num(b.daysPerWeek, 'daysPerWeek', { min: 1, max: 7, int: true }),
+    preferredTime: b.preferredTime == null ? null : oneOf(b.preferredTime, 'preferredTime', TIMES),
+    injuries: str(b.injuries || null, 'injuries', { max: 500, optional: true }),
+    answeredAt: nowIso(),
+  };
+  const done = b.done !== false;
+  ctx.db.prepare('UPDATE users SET profile=?, onboarded_at=COALESCE(onboarded_at, ?) WHERE id=?').run(JSON.stringify(profile), done ? nowIso() : null, ctx.user.id);
+  return meOut(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
 }
 
 async function signInApple(_req, ctx) {
@@ -173,7 +209,7 @@ function exportMe(_req, ctx) {
 function setMembership(_req, ctx) {
   if (ctx.config.payments) fail(403, 'Choose a plan through the App Store');
   if (ctx.user.role !== 'client') fail(403, 'Clients only');
-  const plan = oneOf(ctx.body.plan, 'plan', PLANS.map(p => p.id));
+  const plan = oneOf(ctx.body.plan, 'plan', PLAN_IDS);
   if (plan !== ctx.user.plan) recordPlan(ctx.db, ctx.user.id, plan);
   return meOut(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
 }
@@ -185,8 +221,6 @@ export function recordPlan(db, userId, plan, at = nowIso()) {
   });
 }
 
-const plans = () => ({ plans: PLANS });
-
 export function accountRoutes(r) {
   r.add('POST', '/api/auth/apple', signInApple, { public: true });
   r.add('POST', '/api/auth/code', signInCode, { public: true });
@@ -196,10 +230,10 @@ export function accountRoutes(r) {
   r.add('POST', '/api/auth/link', signInLink, { public: true });
   r.add('GET', '/api/auth/web-sessions', webSessions);
   r.add('DELETE', '/api/auth/web-sessions', endWebSessions);
-  r.add('GET', '/api/plans', plans, { public: true });
   r.add('GET', '/api/me', getMe);
   r.add('PATCH', '/api/me', patchMe);
   r.add('DELETE', '/api/me', deleteMe);
   r.add('GET', '/api/me/export', exportMe);
   r.add('POST', '/api/me/membership', setMembership);
+  r.add('PUT', '/api/me/onboarding', putOnboarding);
 }

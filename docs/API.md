@@ -38,7 +38,8 @@ The contract between `server/` and the iPhone app. Change both sides together.
 | DELETE | `/api/me` | – | `{ok:true, appleRevoked}` (erases the account and all its data, photos included, then revokes Sign in with Apple) |
 | GET | `/api/me/export` | – | JSON download of everything stored about the caller |
 | POST | `/api/me/membership` | `{plan}` (testing only, while `PAYMENTS=off`) | `Me` |
-| GET | `/api/plans` | – | `{plans:[Plan]}` |
+| PUT | `/api/me/onboarding` | `{goals?:[Goal], experience?, daysPerWeek?, preferredTime?, injuries?, done?}` (clients) | `Me` |
+| GET | `/api/plans` | – | `{plans:[Plan], features:[Feature]}` (public; signed in: your coach's prices, or a coach's own) |
 
 ```jsonc
 // Session
@@ -47,12 +48,26 @@ The contract between `server/` and the iPhone app. Change both sides together.
 {"id":"u_…","name":"Sam Carter","email":"…","role":"client","createdAt":"…",
  "membership":{"plan":"elite","planName":"Elite","since":"…","renewsOn":"2026-12-01","creditsLeft":3,"creditsTotal":4,"creditsResetOn":"2026-12-01"},  // null for a coach
  "coach":{"id":"u_…","name":"Coach JK"},       // null for a coach
- "isDemo":false, "healthSharing":true}          // healthSharing: clients only (null for a coach)
+ "isDemo":false, "healthSharing":true,          // healthSharing: clients only (null for a coach)
+ "onboarded":true,                               // false: a new client who hasn't answered the first-run questions (show onboarding)
+ "profile":Profile}                              // clients only; null until answered
+// Profile (every field may be null / empty: each question can be skipped)
+{"goals":["strength","muscle"],"experience":"new|some|experienced","daysPerWeek":4,
+ "preferredTime":"morning|midday|evening|varies","injuries":"Left knee","answeredAt":"…"}
+// Goal: strength | muscle | fatloss | fitness | performance | mobility | health
 // Plan
 {"id":"elite","name":"Elite","detail":"Weekly 1:1 sessions, nutrition, priority messaging",
- "monthlyPence":14900,"annualPence":152000,"credits":4}
+ "pitch":"The full service: …","monthlyPence":14900,"annualPence":152000,"credits":4,
+ "featured":false,                               // the one "most popular" plan
+ "features":["programme","messaging",…],          // Feature ids, catalogue order
+ "updatedAt":"…"}                                 // only once the coach has changed it
+// Feature (fixed catalogue; the apps draw each with its own icon and preview)
+{"id":"sessions","title":"1:1 sessions","detail":"Book sessions with your coach…","points":["Session credits every month",…]}
+// ids: programme, messaging, habits, progress, checkin, sessions, nutrition, priority, guides
 ```
-Plans: `none` (free, info only), `foundation`, `performance`, `elite`.
+Plans: `none` (free, info only), `foundation`, `performance`, `elite`. The ids are fixed; each coach sets the name,
+prices, credits, features and wording for their own clients (`PUT /api/coach/plans/:id`). PUT `/api/me/onboarding`
+with `done:false` saves answers without finishing.
 
 ## Exercises
 
@@ -224,9 +239,11 @@ Health-filled habit values, the Health line in a client's detail) only while `sh
 | GET | `/api/coach/today?date=` | – | `{date, sessions:[Booking], activeClients, totalClients, unread, tip:Guide, feedbackDue:{week, dueBy, clients:[PersonRef]}, checkinsToReview, checkinClients:[PersonRef+at], formsToReview, formClients:[PersonRef+at], unreadClients:[PersonRef+at], urgent:[AttentionItem], quiet:[PersonRef+days], upcoming:[{client, date, autoflow, action}], sessionsLeftThisWeek, attention:[AttentionItem ≤5]}` |
 |---|---|---|---|
 | GET | `/api/coach/clients` | – | `{clients:[ClientSummary]}`, most in need first (see `demand`) |
-| GET | `/api/coach/clients/:id` | – | `{client:ClientSummary, health, nextWorkout:Workout?}` |
+| GET | `/api/coach/clients/:id` | – | `{client:ClientSummary, profile:Profile?, health, nextWorkout:Workout?}` |
 | GET | `/api/coach/business?period=week|month` | – | `Business` |
 | GET | `/api/guides` | – | `{featured:Guide, tips:[Guide]}` — `Guide`: `{id, title, minutes, tags, body}` |
+| PUT | `/api/coach/plans/:id` | any of `{name, detail, pitch, monthlyPence, annualPence, credits, featured, features}` | `{plans, features}` |
+| POST | `/api/coach/plans/reset` | – | `{plans, features}` (every plan back to the defaults) |
 
 ```jsonc
 // ClientSummary (adherence null when nothing was due)
@@ -240,8 +257,12 @@ Health-filled habit values, the Health line in a client's detail) only while `sh
 // Business
 {"mrrPence":248600,"mrrDeltaPct":12,"series":[{"date","pence"}],"active":18,"new":2,"churned":1,"adherence":86,
  "attention":[{"client":{id,name,initials},"reason":"No workout logged in 9 days","kind":"inactive|checkin|payment"}],
- "plans":[{"id":"elite","name":"Elite","members":3}]}   // mrrDeltaPct and adherence may be null
+ "plans":[{"id":"elite","name":"Elite","monthlyPence":14900,"members":3}]}   // mrrDeltaPct and adherence may be null
 ```
+Plan edits: the free plan (`none`) has no price or credits; a plan with `sessions` needs credits ≥ 1; one plan is
+`featured` at a time (featuring one un-features the rest). A price change applies from now: MRR for earlier days uses
+the price of that day. While `PAYMENTS=off` nobody is charged; with App Store billing, the App Store Connect price is
+what is charged and must be changed there too.
 Adherence = completed ÷ published workouts dated in the last 28 days, as a percentage.
 
 ## Forms

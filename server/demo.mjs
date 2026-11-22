@@ -81,7 +81,7 @@ function ensureAccounts(db, today) {
 // Everything a demo account holds, by owner column. Photos stay (they're files too).
 const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_entries', 'checkins', 'messages', 'reports', 'form_requests', 'autoflow_runs'];
 const USER_TABLES = ['measurements', 'health_samples', 'health_activities', 'challenge_members', 'class_attendees', 'membership_events'];
-const COACH_TABLES = ['bookings', 'programs', 'challenges', 'forms', 'autoflows'];
+const COACH_TABLES = ['bookings', 'programs', 'challenges', 'forms', 'autoflows', 'plan_settings', 'plan_price_events'];
 
 function wipe(db, coach, clients) {
   for (const { user } of clients) {
