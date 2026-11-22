@@ -267,7 +267,8 @@ function businessBody(b) {
     h('div', { class: 'grid4 biz-stats' },
       stat(String(b.active), 'Active'), stat(String(b.new), 'New'), stat(String(b.churned), 'Churned'),
       stat(b.adherence === null || b.adherence === undefined ? '–' : `${b.adherence}%`, 'Adherence')),
-    b.plans && b.plans.length ? [eyebrow('Members by plan'), h('div', { class: 'stats' }, b.plans.map(p => stat(String(p.members), p.name)))] : null,
+    eyebrow('Members by plan', link('/business/plans', { class: 'row gap4' }, icon('tag', 13), 'Plans & prices')),
+    b.plans && b.plans.length ? h('div', { class: 'stats' }, b.plans.map(p => stat(String(p.members), p.name))) : null,
     eyebrow('Needs attention', 'Auto-flagged'),
     b.attention.length
       ? card({ class: 'flush' }, b.attention.map(a => personRow(a.client, a.reason, clientPath(a.client.id), {

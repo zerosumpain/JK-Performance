@@ -13,6 +13,7 @@ import './schedule.js';
 import './messages.js';
 import './programs.js';
 import './guides.js';
+import './plans.js';
 
 const app = () => document.getElementById('app');
 
@@ -32,6 +33,7 @@ async function signedIn(out) {
   setToken(out.token);
   state.me = out.me;
   state.clients = null;
+  state.plans = null;
   if (!location.hash || location.hash === '#' || location.hash === '#/') history.replaceState(null, '', '#/today');
   renderShell();
 }
@@ -81,6 +83,7 @@ function appleButton() {
 async function renderSignIn(message) {
   state.me = null;
   state.clients = null;
+  state.plans = null;
   const cfg = await loadConfig();
   const status = h('div');
   const input = h('input', { id: 'code', autocomplete: 'one-time-code', spellcheck: 'false', placeholder: 'Code', maxlength: '60', 'aria-label': 'Sign-in code' });
