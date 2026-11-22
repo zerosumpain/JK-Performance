@@ -11,7 +11,7 @@ struct JKPerformanceApp: App {
             RootView()
                 .environment(session)
                 .preferredColorScheme(.dark)
-                .tint(.white)
+                .tint(JK.accentControl)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await Outbox.shared.flush() } }
@@ -76,20 +76,16 @@ private struct RestoringView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text("JK")
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(JK.text)
-                .frame(width: 76, height: 76)
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(JK.secondary, lineWidth: 1))
+            Monogram(size: 76)
             if let error = session.restoreError {
-                Text(error).font(.caption).foregroundStyle(JK.secondary).multilineTextAlignment(.center)
+                Text(error).font(.jkCaption).foregroundStyle(JK.textSecondary).multilineTextAlignment(.center)
                 HStack(spacing: 10) {
-                    Button("Try again") { Task { await session.restore() } }.buttonStyle(ChromeButtonStyle())
-                    Button("Sign out") { session.clear() }.buttonStyle(GhostButtonStyle())
+                    Button("Try again") { Task { await session.restore() } }.buttonStyle(PrimaryButtonStyle())
+                    Button("Sign out") { session.clear() }.buttonStyle(SecondaryButtonStyle())
                 }
                 .padding(.horizontal, 24)
             } else {
-                ProgressView().tint(JK.secondary)
+                ProgressView().tint(JK.textSecondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -97,52 +93,59 @@ private struct RestoringView: View {
     }
 }
 
+/// The client's three tabs (atelier-spec.md, IA): Today, Progress (plans with
+/// 'progress') and JK. Account is the avatar sheet on Today.
 struct ClientTabs: View {
     @Environment(AppSession.self) private var session
+    /// JK's portrait, or the monogram until it loads or if there is none.
+    @State private var jkTabImage = JKTabImage.monogram
+
+    private var gate: Gate { session.me?.gate ?? Gate(features: nil) }
 
     var body: some View {
         TabView(selection: Bindable(TabRouter.shared).client) {
-            ClientHomeView()
-                .tabItem { Label("Home", systemImage: "house") }
-                .tag(TabRouter.Client.home)
-            WorkoutPlanView()
-                .tabItem { Label("Plan", systemImage: "dumbbell") }
-                .tag(TabRouter.Client.plan)
-            MyCalendarView()
-                .tabItem { Label("Calendar", systemImage: "calendar") }
-                .tag(TabRouter.Client.calendar)
-            NavigationStack {
-                MessagesThreadView(clientId: nil,
-                                   otherName: session.me?.coach?.name ?? "Your coach",
-                                   subtitle: "Usually replies within an hour")
+            TodayView()
+                .tabItem { Label("Today", systemImage: IconKey.today.symbol) }
+                .tag(TabRouter.Client.today)
+            if gate.progress {
+                ProgressTab()
+                    .tabItem { Label("Progress", systemImage: IconKey.progress.symbol) }
+                    .tag(TabRouter.Client.progress)
             }
-            .tabItem { Label("Messages", systemImage: "bubble.left") }
-            .tag(TabRouter.Client.messages)
-            AccountView()
-                .tabItem { Label("Account", systemImage: "person") }
-                .tag(TabRouter.Client.account)
+            JKView()
+                .tabItem {
+                    Label {
+                        Text("JK")
+                    } icon: {
+                        Image(uiImage: jkTabImage)
+                    }
+                    .accessibilityLabel("JK, your coach")
+                }
+                .tag(TabRouter.Client.jk)
+        }
+        .task(id: session.me?.coach?.avatarMediaId) {
+            jkTabImage = await JKTabImage.load(for: session.me?.coach)
+        }
+        .onChange(of: gate.progress, initial: true) { _, has in
+            if !has && TabRouter.shared.client == .progress { TabRouter.shared.client = .today }
         }
     }
 }
 
+/// The coach's three tabs: Today (needs you), Clients and Messages. Schedule
+/// became the day agenda behind Today's strip; Guides moved to Account.
 struct CoachTabs: View {
     var body: some View {
         TabView(selection: Bindable(TabRouter.shared).coach) {
             CoachTodayView()
-                .tabItem { Label("Today", systemImage: "clock") }
+                .tabItem { Label("Today", systemImage: IconKey.coachToday.symbol) }
                 .tag(TabRouter.Coach.today)
             ClientsView()
-                .tabItem { Label("Clients", systemImage: "person.2") }
+                .tabItem { Label("Clients", systemImage: IconKey.clients.symbol) }
                 .tag(TabRouter.Coach.clients)
-            ScheduleView()
-                .tabItem { Label("Schedule", systemImage: "calendar") }
-                .tag(TabRouter.Coach.schedule)
             CoachThreadsView()
-                .tabItem { Label("Messages", systemImage: "bubble.left") }
+                .tabItem { Label("Messages", systemImage: IconKey.messages.symbol) }
                 .tag(TabRouter.Coach.messages)
-            GuidesView()
-                .tabItem { Label("Guides", systemImage: "book") }
-                .tag(TabRouter.Coach.guides)
         }
     }
 }

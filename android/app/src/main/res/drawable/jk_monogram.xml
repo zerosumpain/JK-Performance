@@ -1,15 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The interim JK monogram (docs/design/brand/jk-monogram.svg): tint it, never recolour the paths. -->
+<!-- The JK monogram (docs/design/brand/jk-monogram.svg, made by scripts/monogram.py): tint it, never recolour the path. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
-    android:viewportWidth="48" android:viewportHeight="48">
-    <path android:pathData="M20,8 V31 Q20,39.5 12.5,39.5 Q8.5,39.5 7,36"
-        android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M20,26 L35,8"
-        android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M25.6,19.3 L37,40"
-        android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    android:viewportWidth="100" android:viewportHeight="100">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M 34 15.5 L 44 15.5 L 44 63.5 C 44 78.5 37 87.5 25 87.5 C 18 87.5 13 83.5 13 78.5 C 13 74.5 16 71.5 20 71.5 C 24 71.5 27 74.5 27 78.5 C 31 77.5 34 72.5 34 63.5 Z M 24 12.5 L 54 12.5 L 54 15.5 C 48 15.5 45 16.5 44 18.5 L 34 18.5 C 33 16.5 30 15.5 24 15.5 Z M 44 49.5 L 70.5 15.5 L 75 15.5 L 44 55.5 Z M 65 12.5 L 82 12.5 L 82 15.5 L 65 15.5 Z M 51 42 L 57 34.5 L 83 69.5 L 72 69.5 Z M 67 66.5 L 87 66.5 L 87 69.5 L 67 69.5 Z" />
 </vector>

@@ -10,6 +10,8 @@
  * when the screen goes (stop polling there).
  */
 
+import { SYMBOLS } from './symbols.js';
+
 // MARK: - Token and API
 
 const TOKEN_KEY = 'jk.desk.token';
@@ -60,6 +62,20 @@ export async function apiBlob(path) {
   return res.blob();
 }
 
+/** Upload a file's bytes as the raw body (POST /api/media). Returns the JSON answer. */
+export async function apiUpload(path, file, type) {
+  let res;
+  try {
+    res = await fetch(path, { method: 'POST', headers: { 'content-type': type, ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: file });
+  } catch {
+    throw new ApiError(0, 'Could not reach the server. Check your connection.');
+  }
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok) throw new ApiError(res.status, (data && data.error) || `Upload failed (${res.status})`);
+  return data;
+}
+
 /** Query string from an object; empty values are left out. */
 export const q = params => {
   const s = new URLSearchParams();
@@ -99,61 +115,97 @@ export function fill(el, ...children) {
 export const errorLine = e => h('p', { class: 'error', role: 'alert' }, e instanceof Error ? e.message : String(e));
 export const loading = () => h('p', { class: 'muted' }, 'Loading…');
 
-// MARK: - Icons (inline SVG paths, 24×24, stroked)
+// MARK: - Icons (Material Symbols Rounded, weight 300; symbols.js)
 
-const ICONS = {
-  today: 'M4 5h16v15H4zM4 9h16M9 3v4M15 3v4',
-  clients: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6',
-  schedule: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
-  messages: 'M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z',
-  programs: 'M4 6h16M4 12h16M4 18h10',
-  guides: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21a2 2 0 0 1 2-2h13',
-  account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
-  business: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
-  chevron: 'M9 6l6 6-6 6',
-  back: 'M15 6l-6 6 6 6',
-  plus: 'M12 5v14M5 12h14',
-  close: 'M6 6l12 12M18 6L6 18',
-  check: 'M5 12l5 5 9-10',
-  warning: 'M12 3l10 18H2zM12 10v5M12 18v.5',
-  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z',
-  form: 'M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3',
-  pencil: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
-  bubble: 'M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z',
-  moon: 'M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10z',
-  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
-  calendar: 'M4 5h16v15H4zM4 9h16M9 3v4M15 3v4',
-  heart: 'M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z',
-  dumbbell: 'M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12',
-  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
-  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5',
-  video: 'M3 7h12v10H3zM15 10l6-3v10l-6-3',
-  people: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6',
-  signout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10',
-  checklist: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2',
-  chart: 'M3 20h18M4 16l5-5 4 3 7-8',
-  fork: 'M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1-3 4-3 8h3',
-  star: 'M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1-4.5-4.2 6.1-.8z',
-  tag: 'M3 12V4h8l10 10-8 8zM7.5 8.5h.01',
+/**
+ * The IconKey catalogue (docs/design/atelier-spec.md, "Iconography"), plus the
+ * desk's own utility names. Every name maps to one Material Symbol.
+ */
+const ICON_NAMES = {
+  // Tabs
+  today: 'sunny', progress: 'trending_up', jk: 'chat_bubble', coachToday: 'inbox', clients: 'group', messages: 'chat_bubble',
+  // Goals and progress
+  goal: 'flag', milestone: 'sports_score', record: 'military_tech', photos: 'photo_library', measurement: 'straighten',
+  week: 'calendar_month', calendarFeed: 'event_repeat',
+  // Habits (the closed catalogue the coach picks from)
+  water: 'water_drop', sleep: 'bedtime', steps: 'directions_walk', protein: 'restaurant', supplement: 'pill', energy: 'bolt',
+  mobility: 'self_improvement', mindfulness: 'spa', reading: 'menu_book', sunlight: 'wb_twilight', custom: 'check_circle',
+  fromHealth: 'favorite', rest: 'bedtime_off',
+  // Sessions
+  workout: 'fitness_center', oneToOne: 'person', video: 'videocam', group: 'groups', book: 'event_available',
+  // Coach and feedback
+  letter: 'drafts', checkIn: 'monitor_heart', form: 'description', voiceNote: 'graphic_eq', play: 'play_circle',
+  formCheck: 'video_call', mealPhoto: 'photo_camera', guide: 'auto_stories', reply: 'reply',
+  // Coach reasons
+  pain: 'healing', unread: 'chat_bubble', priority: 'arrow_circle_up', quiet: 'bedtime_off', noTraining: 'fitness_center',
+  priorityUnread: 'arrow_circle_up', checkinLetterDue: 'drafts', formAnswers: 'description',
+  // Utility
+  done: 'check', chevron: 'chevron_right', add: 'add', trendUp: 'north_east', trendFlat: 'east', trendDown: 'south_east',
+  lock: 'lock', settings: 'settings',
+  // The desk's own
+  schedule: 'calendar_month', programs: 'format_list_bulleted', guides: 'auto_stories', account: 'account_circle',
+  business: 'bar_chart', back: 'chevron_left', plus: 'add', close: 'close', check: 'check', warning: 'warning',
+  bolt: 'bolt', pencil: 'edit', bubble: 'chat_bubble', moon: 'bedtime', clock: 'schedule', calendar: 'calendar_month',
+  heart: 'favorite', dumbbell: 'fitness_center', trash: 'delete', search: 'search', people: 'group', signout: 'logout',
+  checklist: 'checklist', chart: 'show_chart', fork: 'restaurant', star: 'star', tag: 'sell', upload: 'upload', mic: 'mic',
+  up: 'arrow_upward', down: 'arrow_downward', stop: 'stop_circle', send: 'send', expand: 'expand_more',
+  collapse: 'expand_less', link: 'link', image: 'image', scheduleSend: 'schedule_send', person: 'person',
 };
+/** The habit glyphs the coach may choose (Habit.iconKey). */
+export const HABIT_KEYS = ['water', 'sleep', 'steps', 'protein', 'supplement', 'energy', 'mobility', 'mindfulness', 'reading', 'sunlight', 'custom'];
+export const HABIT_KEY_LABEL = {
+  water: 'Water', sleep: 'Sleep', steps: 'Steps', protein: 'Fuel', supplement: 'Supplement', energy: 'Energy',
+  mobility: 'Mobility', mindfulness: 'Mindfulness', reading: 'Reading', sunlight: 'Sunlight', custom: 'Other',
+};
+
 const SVG = 'http://www.w3.org/2000/svg';
-/** icon('today', 18): an inline stroked icon. Unknown names draw a dot. */
-export function icon(name, size = 18) {
+/**
+ * icon('water', 20, { filled: true, label: 'Water' }): an inline glyph in the
+ * text colour. `filled` is for done or selected states only. With a label the
+ * glyph is announced; without one it is decoration. Unknown names draw a dot.
+ */
+export function icon(name, size = 20, { filled = false, label = null } = {}) {
+  const sym = SYMBOLS[ICON_NAMES[name] ?? name];
   const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('viewBox', '0 -960 960 960');
   svg.setAttribute('width', size); svg.setAttribute('height', size);
-  svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '1.8'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
-  svg.setAttribute('aria-hidden', 'true'); svg.classList.add('icon');
+  svg.setAttribute('fill', 'currentColor');
+  if (label) { svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', label); } else svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('icon');
   const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', ICONS[name] || 'M12 12h.01');
+  path.setAttribute('d', sym ? (filled && sym[1] ? sym[1] : sym[0]) : 'M480-400q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Z');
   svg.append(path);
   return svg;
 }
 
-// MARK: - Colours (the iPhone app's: JK.urgent, JK.waiting, JK.slot(kind))
+/** The JK monogram (docs/design/brand/jk-monogram.svg), in the accent. */
+const MONOGRAM = 'M 34 15.5 L 44 15.5 L 44 63.5 C 44 78.5 37 87.5 25 87.5 C 18 87.5 13 83.5 13 78.5 C 13 74.5 16 71.5 20 71.5 C 24 71.5 27 74.5 27 78.5 C 31 77.5 34 72.5 34 63.5 Z M 24 12.5 L 54 12.5 L 54 15.5 C 48 15.5 45 16.5 44 18.5 L 34 18.5 C 33 16.5 30 15.5 24 15.5 Z M 44 49.5 L 70.5 15.5 L 75 15.5 L 44 55.5 Z M 65 12.5 L 82 12.5 L 82 15.5 L 65 15.5 Z M 51 42 L 57 34.5 L 83 69.5 L 72 69.5 Z M 67 66.5 L 87 66.5 L 87 69.5 L 67 69.5 Z';
+export function monogram(size = 32, { label = 'JK' } = {}) {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('width', size); svg.setAttribute('height', size);
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', label);
+  svg.classList.add('monogram');
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('d', MONOGRAM);
+  svg.append(path);
+  return svg;
+}
 
-export const COLOR = { urgent: 'var(--urgent)', waiting: 'var(--waiting)', inPerson: 'var(--in-person)', video: 'var(--video)', group: 'var(--group)' };
+export const svgEl = (tag, attrs, ...kids) => {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, String(v));
+  el.append(...kids);
+  return el;
+};
+
+// MARK: - Colours (status tokens; always beside a word and a glyph)
+
+export const COLOR = {
+  urgent: 'var(--urgent)', waiting: 'var(--attention)', attention: 'var(--attention)', ok: 'var(--on-track)', data: 'var(--data)',
+  accent: 'var(--accent)', inPerson: 'var(--kind-inperson)', video: 'var(--kind-video)', group: 'var(--kind-group)',
+};
 export const slotColor = kind => (kind === 'video' ? COLOR.video : kind === 'group' ? COLOR.group : COLOR.inPerson);
 
 // MARK: - Dates (London days as YYYY-MM-DD strings; maths in UTC noon)
@@ -240,14 +292,15 @@ export const eyebrow = (text, trailing) => h('div', { class: 'eyebrow spread' },
 
 export const card = (attrs, ...children) => h('div', { ...(attrs || {}), class: 'card' + (attrs?.class ? ` ${attrs.class}` : '') }, ...children);
 
-/** A rounded label. `tint` is a COLOR value; `on` fills it silver. */
+/** A rounded label. `tint` is a COLOR value; `on` fills it with the control colour. */
 export const chip = (text, { on = false, tint = null } = {}) => h('span', { class: 'chip' + (on ? ' on' : ''), style: tint ? { color: tint, borderColor: tint } : null }, text);
 
 export const dot = (color, size = 8) => h('span', { class: 'dot', style: { background: color, width: `${size}px`, height: `${size}px` } });
 
-/** Initials in a circle. */
-export const avatar = (nameOrInitials, size = 32) => h('span', { class: 'avatar', style: { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.38)}px` } },
-  nameOrInitials && nameOrInitials.length <= 3 && nameOrInitials === nameOrInitials.toUpperCase() ? nameOrInitials : initials(nameOrInitials));
+/** Initials in a circle on raised (40% of the diameter); `photo` is an /api/media URL; `coach` adds the accent ring. */
+export const avatar = (nameOrInitials, size = 32, { photo = null, coach = false } = {}) => h('span', {
+  class: 'avatar' + (coach ? ' coach' : ''), style: { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.4)}px` },
+}, photo ? mediaImage(photo, '') : (nameOrInitials && nameOrInitials.length <= 3 && nameOrInitials === nameOrInitials.toUpperCase() ? nameOrInitials : initials(nameOrInitials)));
 
 /** An anchor to a route (keeps middle-click / new tab working). */
 export const link = (path, attrs, ...children) => h('a', { ...(attrs || {}), href: '#' + path }, ...children);
@@ -256,7 +309,7 @@ export const link = (path, attrs, ...children) => h('a', { ...(attrs || {}), hre
 export const personRow = (person, detail, to, { onclick, trailing } = {}) => {
   const inner = [avatar(person.initials || person.name, 32),
     h('div', { class: 'grow' }, h('div', { class: 'strong' }, person.name), detail ? h('div', { class: 'small faint clamp2' }, detail) : null),
-    trailing || null, icon('chevron', 14)];
+    trailing || null, icon('chevron', 18)];
   return to ? link(to, { class: 'person-row' }, inner) : h('button', { class: 'person-row', onclick }, inner);
 };
 
@@ -264,7 +317,7 @@ export const personRow = (person, detail, to, { onclick, trailing } = {}) => {
 export function summaryCard({ icon: name, title, count = null, value = null, detail = '', tint = null, countLabel = null, to = null, onclick = null, disabled = false }) {
   const muted = value === null && (count ?? 0) === 0;
   const body = [
-    h('div', { class: 'spread' }, h('span', { style: { color: tint || 'var(--faint)' } }, icon(name, 16)), tint ? dot(tint, 7) : null),
+    h('div', { class: 'spread' }, h('span', { style: { color: tint || 'var(--muted)' } }, icon(name, 18)), tint ? dot(tint, 7) : null),
     h('div', { class: 'row baseline gap4' }, h('span', { class: 'big-num' + (muted ? ' faint' : '') }, value ?? String(count ?? 0)), countLabel ? h('span', { class: 'small faint' }, countLabel) : null),
     h('div', { class: 'small strong' }, title),
     h('div', { class: 'tiny faint clamp2 reserve2' }, detail),
@@ -275,8 +328,80 @@ export function summaryCard({ icon: name, title, count = null, value = null, det
   return h('button', { ...attrs, onclick }, body);
 }
 
-/** An empty state: an icon, a title and a line under it. */
-export const emptyCard = (name, title, detail) => card({ class: 'empty' }, h('div', { class: 'faint' }, icon(name, 22)), h('div', { class: 'strong' }, title), detail ? h('div', { class: 'small muted' }, detail) : null);
+/**
+ * An empty state: the brand rule and one serif italic line, with an optional
+ * sans line under it. (The icon argument is kept for old callers; glyphs are
+ * not boxed or repeated on empty states.)
+ */
+export const emptyCard = (_name, title, detail) => card({ class: 'empty' },
+  h('span', { class: 'brand-rule', 'aria-hidden': 'true' }),
+  h('div', { class: 't-quote-s' }, title),
+  detail ? h('div', { class: 'small muted' }, detail) : null);
+
+/** The page-level empty state: rule, then quote italic 19 ("All caught up"). */
+export const emptyState = (line, detail) => h('div', { class: 'empty-state' },
+  h('span', { class: 'brand-rule', 'aria-hidden': 'true' }),
+  h('div', { class: 't-quote' }, line),
+  detail ? h('div', { class: 'small muted' }, detail) : null);
+
+/** StatusPill: a word plus a dot. tone: urgent | attention | ok | data. */
+export const pill = (word, tone = 'data') => h('span', { class: 'pill' }, h('span', { class: `dot bg-${tone}`, 'aria-hidden': 'true' }), word);
+
+/**
+ * WeekDots: seven days, each done (accent), notDone (ring), rest (a short
+ * dash, no dot) or future; today carries a text-colour ring. Accepts the
+ * server's habitWeek ({date, state}) or DayState ({date, done, rest, today, future}).
+ */
+export function weekDots(days, { big = false, label = true } = {}) {
+  const today = todayLondon();
+  const stateOf = d => d.state ?? (d.rest ? 'rest' : d.done ? 'done' : d.future ? 'future' : 'notDone');
+  const words = { done: 'done', notDone: 'not done', rest: 'rest day', future: 'to come' };
+  const summary = (days || []).map(d => `${DAYS[parseDay(d.date).getUTCDay()]} ${words[stateOf(d)]}`).join(', ');
+  return h('span', { class: 'week-dots' + (big ? ' big' : ''), role: label ? 'img' : null, 'aria-label': label ? summary : null, title: summary },
+    (days || []).map(d => {
+      const st = stateOf(d);
+      const isToday = d.today ?? d.date === today;
+      return h('span', { class: `wd ${st}${isToday && st !== 'rest' ? ' today' : ''}` });
+    }));
+}
+
+/** A small line chart in slate: no fill, no axes. values may contain nulls. */
+export function sparkline(values, { width = 120, height = 28, label = '' } = {}) {
+  const pts = values.map((v, i) => [i, v]).filter(([, v]) => v !== null && v !== undefined);
+  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, width, height, class: 'sparkline', role: 'img', 'aria-label': label });
+  if (pts.length < 2) return svg;
+  const vs = pts.map(p => p[1]);
+  const lo = Math.min(...vs), hi = Math.max(...vs), span = hi - lo || 1;
+  const x = i => (i / Math.max(values.length - 1, 1)) * (width - 4) + 2;
+  const y = v => height - 3 - ((v - lo) / span) * (height - 6);
+  svg.append(svgEl('polyline', { points: pts.map(([i, v]) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '), fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  const [li, lv] = pts.at(-1);
+  svg.append(svgEl('circle', { cx: x(li).toFixed(1), cy: y(lv).toFixed(1), r: 2, fill: 'currentColor' }));
+  return svg;
+}
+
+/** Ring: the shared progress arc (track plus an accent sweep), `pct` 0–100. */
+export function ring(pct, { size = 44, stroke = 3, label = '' } = {}) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(100, pct ?? 0)) / 100;
+  return svgEl('svg', { viewBox: `0 0 ${size} ${size}`, width: size, height: size, class: 'ring', role: 'img', 'aria-label': label },
+    svgEl('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: 'var(--track)', 'stroke-width': stroke }),
+    svgEl('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: 'var(--accent)', 'stroke-width': stroke, 'stroke-linecap': 'round',
+      'stroke-dasharray': `${(c * f).toFixed(2)} ${c.toFixed(2)}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }));
+}
+
+/** A labelled on/off switch row. Calls onchange(checked). */
+export function switchRow(text, checked, onchange, { detail = null } = {}) {
+  const input = h('input', { type: 'checkbox', role: 'switch', checked, onchange: e => onchange(e.target.checked, e.target) });
+  return h('label', { class: 'switch' }, h('span', { class: 'grow' }, h('span', null, text), detail ? h('div', { class: 'small muted' }, detail) : null), input);
+}
+
+/** An <img> for an /api/media URL (the bytes need the session header). */
+export function mediaImage(url, alt, attrs = {}) {
+  const img = h('img', { alt, ...attrs });
+  if (url) apiBlob(url).then(b => { img.src = URL.createObjectURL(b); }, () => { img.remove(); });
+  return img;
+}
 
 /** Segmented control: [[value, label], …]. Calls onchange(value). */
 export function segmented(options, value, onchange) {
@@ -289,7 +414,17 @@ export function segmented(options, value, onchange) {
 export const stat = (v, k, tint) => h('div', { class: 'stat' }, h('div', { class: 'v', style: tint ? { color: tint } : null }, v), h('div', { class: 'k' }, k));
 
 /** A labelled form field: label then the control. */
-export const field = (label, control, hint) => h('div', { class: 'field' }, h('label', null, label), control, hint ? h('div', { class: 'tiny faint' }, hint) : null);
+let fieldSeq = 0;
+export const field = (label, control, hint) => {
+  // Tie the label (and hint) to the control, so it is announced and clickable.
+  let forId = null, hintId = null;
+  if (control instanceof Element && ['INPUT', 'SELECT', 'TEXTAREA'].includes(control.tagName)) {
+    if (!control.id) control.id = `f${++fieldSeq}`;
+    forId = control.id;
+    if (hint) { hintId = `${forId}-hint`; control.setAttribute('aria-describedby', hintId); }
+  }
+  return h('div', { class: 'field' }, h('label', { for: forId }, label), control, hint ? h('div', { class: 'tiny faint', id: hintId }, hint) : null);
+};
 
 export const button = (text, onclick, { kind = '', small = false, disabled = false, title } = {}) =>
   h('button', { class: `btn${kind ? ` ${kind}` : ''}${small ? ' small' : ''}`, onclick, disabled, title, type: 'button' }, text);

@@ -29,6 +29,17 @@ final class AppSession {
     }
 
     var isCoach: Bool { me?.isCoach == true }
+    /// What this client's plan includes (everything, on an older server).
+    var gate: Gate { me?.gate ?? Gate(features: nil) }
+    /// The coach's "Show studio tools": Programs, Forms, Autoflows, Plans &
+    /// prices, Business and availability on the phone. Off by default.
+    var studioTools: Bool { me?.coachSettings?.studioTools == true }
+
+    /// PATCH /api/coach/settings, then keep the fresh settings on `me`.
+    func updateCoachSettings(_ patch: CoachSettingsPatch) async throws {
+        let fresh: CoachSettings = try await api.send("PATCH", "/api/coach/settings", body: patch)
+        me?.coachSettings = fresh
+    }
 
     /// On launch: confirm the saved token by reading /api/me.
     func restore() async {
@@ -136,6 +147,7 @@ final class AppSession {
 
     func clear() {
         Reminders.shared.clearPending()
+        PortraitStore.shared.clear()
         api.setToken(nil)
         Keychain.save(nil, account: Self.coachSlot)
         me = nil

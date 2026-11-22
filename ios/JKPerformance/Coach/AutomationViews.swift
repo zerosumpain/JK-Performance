@@ -13,7 +13,7 @@ struct AutoflowsTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button { editing = AutoflowDraft() } label: { Label("New autoflow", systemImage: "plus") }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
             Loadable(value: flows, error: error, retry: load) { list in
                 if list.isEmpty {
                     EmptyCard(systemName: "bolt", title: "No autoflows yet",
@@ -61,35 +61,35 @@ private struct AutoflowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                IconTile(systemName: flow.trigger == "join" ? "person.badge.plus" : "bolt", size: 34)
+                Glyph(systemName: flow.trigger == "join" ? "person.badge.plus" : "bolt", size: 34)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(flow.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(flow.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     Text(flow.trigger == "join" ? "Starts when a client joins" : "Starts when you enrol someone")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 Spacer()
                 if !flow.active {
-                    Text("Paused").font(.system(size: 10, weight: .semibold))
+                    Text("Paused").font(.jkMicro.weight(.semibold))
                         .padding(.horizontal, 7).padding(.vertical, 3)
-                        .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
-                        .foregroundStyle(JK.secondary)
+                        .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
+                        .foregroundStyle(JK.textSecondary)
                 }
                 Menu {
                     Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
                     Button { onEnrol() } label: { Label("Start for a client", systemImage: "person.badge.plus") }
                 } label: {
-                    Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.secondary)
+                    Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.textSecondary)
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(flow.steps) { step in
                     HStack(spacing: 8) {
                         Text("Day \(step.day)")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.jkMicro.weight(.semibold))
                             .frame(width: 46, alignment: .leading)
-                            .foregroundStyle(JK.secondary)
-                        Image(systemName: step.icon).font(.caption2).foregroundStyle(JK.tertiary).frame(width: 14)
-                        Text(step.label ?? step.action.capitalized).font(.caption).foregroundStyle(JK.text).lineLimit(1)
+                            .foregroundStyle(JK.textSecondary)
+                        Image(systemName: step.icon).font(.jkCaption).foregroundStyle(JK.textTertiary).frame(width: 14)
+                        Text(step.label ?? step.action.capitalized).font(.jkCaption).foregroundStyle(JK.text).lineLimit(1)
                     }
                 }
             }
@@ -100,8 +100,8 @@ private struct AutoflowCard: View {
                         Spacer()
                         Image(systemName: showRuns ? "chevron.up" : "chevron.down")
                     }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCaption.weight(.semibold))
+                    .foregroundStyle(JK.textSecondary)
                 }
                 .buttonStyle(.plain)
                 if showRuns {
@@ -127,14 +127,14 @@ struct AutoflowRunRow: View {
                 Avatar(initials: run.client?.displayInitials ?? "?", size: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(showFlowName ? (run.autoflowName ?? "Autoflow") : (run.client?.name ?? "Client"))
-                        .font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(detail).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2)
+                        .font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary).lineLimit(2)
                 }
                 Spacer()
-                Text("\(run.stepsDone)/\(run.steps)").font(.caption2.monospacedDigit()).foregroundStyle(JK.secondary)
+                Text("\(run.stepsDone)/\(run.steps)").font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
                 if run.stoppedAt == nil && run.next != nil {
                     Button { confirmStop = true } label: { Image(systemName: "stop.circle") }
-                        .buttonStyle(.plain).foregroundStyle(JK.secondary)
+                        .buttonStyle(.plain).foregroundStyle(JK.textSecondary)
                         .accessibilityLabel("Stop")
                 }
             }
@@ -142,7 +142,7 @@ struct AutoflowRunRow: View {
             if let error { ErrorBanner(message: error) }
         }
         .padding(8)
-        .background(JK.cardRaised.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(JK.raised.opacity(0.5), in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
         .confirmationDialog("Stop this autoflow for \(run.client?.name ?? "them")?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("Stop", role: .destructive) { Task { await stop() } }
         } message: {
@@ -206,7 +206,7 @@ struct AutoflowEditorSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     JKField(label: "Name", text: $draft.name, prompt: "New client onboarding")
                     Segmented(options: ["join", "manual"], selection: $draft.trigger) { $0 == "join" ? "When a client joins" : "When I start it" }
-                    Toggle("Running", isOn: $draft.active).font(.subheadline).foregroundStyle(JK.text).tint(JK.secondary)
+                    Toggle("Running", isOn: $draft.active).font(.jkCallout).foregroundStyle(JK.text).tint(JK.accentControl)
 
                     Eyebrow(text: "Steps", trailing: "Day 0 = the day it starts")
                     ForEach($draft.steps) { $step in
@@ -220,19 +220,19 @@ struct AutoflowEditorSheet: View {
                         addButton("Program", "dumbbell", action: "program")
                     }
                     Text("Messages can say {first} for the client's first name. A program goes live on their calendar from the following Monday.")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
 
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await save() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text(draft.flowId == nil ? "Create autoflow" : "Save autoflow") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text(draft.flowId == nil ? "Create autoflow" : "Save autoflow") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty || draft.steps.isEmpty)
                     if draft.flowId != nil {
                         Button("Delete autoflow", role: .destructive) { confirmDelete = true }
-                            .buttonStyle(GhostButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                 }
                 .padding(16)
@@ -310,22 +310,22 @@ private struct StepEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: step.icon).foregroundStyle(JK.secondary)
+                Image(systemName: step.icon).foregroundStyle(JK.textSecondary)
                 Stepper("Day \(step.day)", value: $step.day, in: 0...365)
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                 Button(role: .destructive) { onRemove() } label: { Image(systemName: "trash") }
-                    .buttonStyle(.plain).foregroundStyle(JK.secondary)
+                    .buttonStyle(.plain).foregroundStyle(JK.textSecondary)
             }
             switch step.action {
             case "message":
                 TextField("Message", text: Binding(get: { step.text ?? "" }, set: { step.text = $0 }), axis: .vertical)
                     .lineLimit(2...6)
-                    .font(.subheadline).foregroundStyle(JK.text)
+                    .font(.jkCallout).foregroundStyle(JK.text)
                     .padding(10)
-                    .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip, style: .continuous))
             case "form":
                 if forms.isEmpty {
-                    Text("Make a form first (Forms tab).").font(.caption).foregroundStyle(JK.tertiary)
+                    Text("Make a form first (Forms tab).").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 } else {
                     Picker("Form", selection: Binding(get: { step.formId ?? "" }, set: { step.formId = $0 })) {
                         ForEach(forms) { Text($0.name).tag($0.id) }
@@ -334,7 +334,7 @@ private struct StepEditor: View {
                 }
             default:
                 if programs.isEmpty {
-                    Text("Make a program first (Programs tab).").font(.caption).foregroundStyle(JK.tertiary)
+                    Text("Make a program first (Programs tab).").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 } else {
                     Picker("Program", selection: Binding(get: { step.programId ?? "" }, set: { step.programId = $0 })) {
                         ForEach(programs) { Text($0.name).tag($0.id) }
@@ -365,12 +365,12 @@ struct FormsTab: View {
                 }
             } label: {
                 Label("New form", systemImage: "plus")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.jkCallout.weight(.semibold))
                     .foregroundStyle(JK.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(JK.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(JK.stroke, lineWidth: 1))
+                    .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous).stroke(JK.hairline, lineWidth: 1))
             }
             if !inbox.isEmpty {
                 Eyebrow(text: "Answers to read", trailing: "\(inbox.count)")
@@ -389,17 +389,17 @@ struct FormsTab: View {
                 }
                 ForEach(reply.forms) { f in
                     HStack(spacing: 12) {
-                        IconTile(systemName: "doc.text", size: 34)
+                        Glyph(systemName: "doc.text", size: 34)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(f.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                            Text(formLine(f)).font(.caption2).foregroundStyle(JK.tertiary)
+                            Text(f.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                            Text(formLine(f)).font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         Spacer()
                         Menu {
                             Button { sending = f } label: { Label("Send to a client", systemImage: "paperplane") }
                             Button { editing = FormDraft(f) } label: { Label("Edit", systemImage: "pencil") }
                         } label: {
-                            Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.secondary)
+                            Image(systemName: "ellipsis").frame(width: 30, height: 30).foregroundStyle(JK.textSecondary)
                         }
                     }
                     .jkCard(padding: 12)
@@ -448,18 +448,18 @@ struct FormRequestRow: View {
             if showClient {
                 Avatar(initials: request.client?.displayInitials ?? "?", size: 30)
             } else {
-                IconTile(systemName: "doc.text", size: 30)
+                Glyph(systemName: "doc.text", size: 30)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(showClient ? "\(request.client?.name ?? "Client") · \(request.name)" : request.name)
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text).lineLimit(1)
-                Text(status).font(.caption2).foregroundStyle(request.isFlagged && request.reviewedAt == nil ? JK.urgent : JK.tertiary)
+                    .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text).lineLimit(1)
+                Text(status).font(.jkCaption).foregroundStyle(request.isFlagged && request.reviewedAt == nil ? JK.urgent : JK.textTertiary)
             }
             Spacer()
             if request.submittedAt != nil && request.reviewedAt == nil {
-                Dot(color: request.isFlagged ? JK.urgent : JK.waiting)
+                Dot(color: request.isFlagged ? JK.urgent : JK.attention)
             }
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         .padding(10)
     }
@@ -484,17 +484,17 @@ struct FormResponseView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(request.name).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(request.name).font(.jkDisplay).foregroundStyle(JK.text)
                     Text("\(request.client?.name ?? "Client") · sent \(Fmt.dayMonth(request.sentAt))\(request.fromAutoflow == true ? " by an autoflow" : "")")
-                        .font(.caption).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
                 if let error { ErrorBanner(message: error) }
                 if request.isFlagged {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Answered yes to", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption.weight(.semibold)).foregroundStyle(JK.urgent)
-                        ForEach(request.flagged ?? [], id: \.self) { Text("• \($0)").font(.caption).foregroundStyle(JK.text) }
-                        Text("Talk to them before the next hard session.").font(.caption2).foregroundStyle(JK.tertiary)
+                            .font(.jkCaption.weight(.semibold)).foregroundStyle(JK.urgent)
+                        ForEach(request.flagged ?? [], id: \.self) { Text("• \($0)").font(.jkCaption).foregroundStyle(JK.text) }
+                        Text("Talk to them before the next hard session.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     .jkCard()
                     .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.urgent.opacity(0.6), lineWidth: 1))
@@ -502,14 +502,14 @@ struct FormResponseView: View {
                 if request.submittedAt == nil {
                     EmptyCard(systemName: "hourglass", title: "Not answered yet", detail: "Sent \(Fmt.relative(request.sentAt)).")
                     Button("Withdraw form", role: .destructive) { confirmWithdraw = true }
-                        .buttonStyle(GhostButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                 } else {
                     ForEach(request.questions) { q in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(q.label).font(.caption).foregroundStyle(JK.tertiary)
+                            Text(q.label).font(.jkCaption).foregroundStyle(JK.textTertiary)
                             let answer = request.answers?[q.id]
                             Text(answer?.display ?? "–")
-                                .font(.subheadline.weight(.medium))
+                                .font(.jkCallout.weight(.medium))
                                 .foregroundStyle(q.flag == true && answer == .yes(true) ? JK.urgent : JK.text)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -519,7 +519,7 @@ struct FormResponseView: View {
                         NavigationLink {
                             MessagesThreadView(clientId: client.id, otherName: client.name, subtitle: "Client")
                         } label: { Label("Message \(client.name.split(separator: " ").first.map(String.init) ?? client.name)", systemImage: "bubble.left") }
-                            .buttonStyle(GhostButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                 }
             }
@@ -612,23 +612,23 @@ struct FormEditorSheet: View {
                             }
                         }
                     } label: {
-                        Label("Add question", systemImage: "plus").font(.caption.weight(.semibold))
+                        Label("Add question", systemImage: "plus").font(.jkCaption.weight(.semibold))
                             .padding(.horizontal, 12).padding(.vertical, 7)
-                            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                            .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
                             .foregroundStyle(JK.text)
                     }
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await save() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text(draft.formId == nil ? "Create form" : "Save form") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text(draft.formId == nil ? "Create form" : "Save form") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty || draft.questions.isEmpty)
                     if draft.formId != nil {
-                        Text("Forms already sent keep the questions they were sent with.").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Forms already sent keep the questions they were sent with.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                         Button("Delete form", role: .destructive) { confirmDelete = true }
-                            .buttonStyle(GhostButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                 }
                 .padding(16)
@@ -688,15 +688,15 @@ private struct QuestionEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("\(number). \(FormQuestion.kindName(question.kind))").font(.caption.weight(.semibold)).foregroundStyle(JK.secondary)
+                Text("\(number). \(FormQuestion.kindName(question.kind))").font(.jkCaption.weight(.semibold)).foregroundStyle(JK.textSecondary)
                 Spacer()
                 Button { onMove(-1) } label: { Image(systemName: "arrow.up") }
                 Button { onMove(1) } label: { Image(systemName: "arrow.down") }
                 Button(role: .destructive) { onRemove() } label: { Image(systemName: "trash") }
             }
-            .font(.caption)
+            .font(.jkCaption)
             .buttonStyle(.plain)
-            .foregroundStyle(JK.secondary)
+            .foregroundStyle(JK.textSecondary)
             JKField(label: "Question", text: $question.label, prompt: "What do you want to achieve?")
             if question.kind == "choice" {
                 JKField(label: "Choices, separated by commas",
@@ -710,9 +710,9 @@ private struct QuestionEditor: View {
                     Toggle("Flag a yes", isOn: Binding(get: { question.flag == true }, set: { question.flag = $0 ? true : nil }))
                 }
             }
-            .font(.caption)
+            .font(.jkCaption)
             .foregroundStyle(JK.text)
-            .tint(JK.secondary)
+            .tint(JK.accentControl)
         }
         .jkCard(padding: 12)
     }
@@ -735,14 +735,14 @@ struct ClientAutomationSection: View {
                 Eyebrow(text: "Forms")
                 Menu {
                     ForEach(forms) { f in Button(f.name) { Task { await send(f) } } }
-                } label: { Label("Send", systemImage: "paperplane").font(.caption.weight(.semibold)) }
+                } label: { Label("Send", systemImage: "paperplane").font(.jkCaption.weight(.semibold)) }
                     .foregroundStyle(JK.text)
                     .disabled(forms.isEmpty)
             }
             if let error { ErrorBanner(message: error) }
             if let requests {
                 if requests.isEmpty {
-                    Text("No forms sent yet.").font(.caption).foregroundStyle(JK.tertiary)
+                    Text("No forms sent yet.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 } else {
                     VStack(spacing: 0) {
                         ForEach(requests) { r in
@@ -760,12 +760,12 @@ struct ClientAutomationSection: View {
                     ForEach(flows.filter { f in !runs.contains { $0.autoflowId == f.id && $0.stoppedAt == nil } }) { f in
                         Button(f.name) { Task { await enrol(f) } }
                     }
-                } label: { Label("Start", systemImage: "bolt").font(.caption.weight(.semibold)) }
+                } label: { Label("Start", systemImage: "bolt").font(.jkCaption.weight(.semibold)) }
                     .foregroundStyle(JK.text)
                     .disabled(flows.isEmpty)
             }
             if runs.isEmpty {
-                Text("Not in any autoflow.").font(.caption).foregroundStyle(JK.tertiary)
+                Text("Not in any autoflow.").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             ForEach(runs) { run in
                 AutoflowRunRow(run: run, showFlowName: true, onChanged: load)
@@ -826,14 +826,14 @@ struct ClientPickerSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let note { Text(note).font(.caption).foregroundStyle(JK.tertiary) }
+                    if let note { Text(note).font(.jkCaption).foregroundStyle(JK.textTertiary) }
                     if let clients {
                         VStack(spacing: 0) {
                             ForEach(clients.sorted { $0.name < $1.name }) { c in
                                 Button { chosen = c.id } label: {
                                     HStack(spacing: 10) {
                                         Avatar(initials: c.displayInitials, size: 28)
-                                        Text(c.name).font(.subheadline).foregroundStyle(JK.text)
+                                        Text(c.name).font(.jkCallout).foregroundStyle(JK.text)
                                         Spacer()
                                         CheckCircle(on: chosen == c.id)
                                     }
@@ -851,9 +851,9 @@ struct ClientPickerSheet: View {
                     Button {
                         Task { await go() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text(action) }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text(action) }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || chosen == nil)
                 }
                 .padding(16)

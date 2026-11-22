@@ -90,15 +90,15 @@ struct OnboardingView: View {
         } actions: {
             errorFooter
             Button("Let's start") { go(.goals) }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(saving)
             Button {
                 Task { await finish(answers: false) }
             } label: {
-                if saving { ProgressView().tint(JK.secondary) } else { Text("Skip for now") }
+                if saving { ProgressView().tint(JK.textSecondary) } else { Text("Skip for now") }
             }
-            .font(.subheadline)
-            .foregroundStyle(JK.secondary)
+            .font(.jkCallout)
+            .foregroundStyle(JK.textSecondary)
             .frame(minHeight: 36)
             .disabled(saving)
         }
@@ -108,7 +108,8 @@ struct OnboardingView: View {
 
     private var goalsStep: some View {
         StepScaffold(step: Step.goals.rawValue, count: count,
-                     title: "What are you training for?", subtitle: "Pick as many as you like.",
+                     title: "What are you training for?",
+                     subtitle: "Pick as many as you like. JK will turn this into your goal at your first session.",
                      back: { go(.welcome) }, skip: { go(.experience) }) {
             LazyVGrid(columns: grid, spacing: 10) {
                 ForEach(OnboardingCatalog.goals) { g in
@@ -153,7 +154,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 18) {
                 daysPicker
                 Text("When do you usually train?")
-                    .font(.headline)
+                    .font(.jkHeadline)
                     .foregroundStyle(JK.text)
                     .padding(.top, 4)
                 LazyVGrid(columns: grid, spacing: 10) {
@@ -173,12 +174,12 @@ struct OnboardingView: View {
         VStack(spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(days.map { "\($0)" } ?? "–")
-                    .font(.system(size: 56, weight: .semibold))
+                    .font(.jkNumberHero)
                     .monospacedDigit()
                     .foregroundStyle(JK.text)
                 Text(days == 1 ? "day a week" : "days a week")
-                    .font(.subheadline)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCallout)
+                    .foregroundStyle(JK.textSecondary)
             }
             .accessibilityElement(children: .combine)
             HStack(spacing: 6) {
@@ -197,12 +198,12 @@ struct OnboardingView: View {
             days = n
         } label: {
             Text("\(n)")
-                .font(.subheadline.weight(.semibold))
+                .font(.jkCallout.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
-                .foregroundStyle(on ? Color.black : JK.text)
-                .background(on ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.cardRaised), in: Capsule())
-                .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                .foregroundStyle(on ? JK.onPrimary : JK.text)
+                .background(on ? AnyShapeStyle(JK.primaryFill) : AnyShapeStyle(JK.raised), in: Capsule())
+                .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -221,14 +222,14 @@ struct OnboardingView: View {
                 TextField("Optional. For example: sore left knee, or a shoulder operation last year.",
                           text: $injuries, axis: .vertical)
                     .lineLimit(5...10)
-                    .font(.subheadline)
+                    .font(.jkCallout)
                     .foregroundStyle(JK.text)
                     .jkCard()
                     .accessibilityLabel("Injuries, conditions or anything else")
                 Text("\(injuries.count) / \(Self.injuriesLimit)")
-                    .font(.caption2)
+                    .font(.jkCaption)
                     .monospacedDigit()
-                    .foregroundStyle(JK.tertiary)
+                    .foregroundStyle(JK.textTertiary)
                     .accessibilityLabel("\(injuries.count) of \(Self.injuriesLimit) characters")
             }
             .onChange(of: injuries) { _, value in
@@ -249,11 +250,19 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 10) {
                 reason("bubble.left", "Your coach's replies", "As soon as \(coachName) answers.")
                 reason("calendar", "Session reminders", "An hour before each session.")
-                reason("text.bubble", "Your weekly report", "When your feedback for the week is ready.")
+                reason("envelope.open", "JK's letter", "When your letter for the week arrives.")
+                if HealthSync.shared.available && !HealthSync.shared.optedIn && session.me?.demo != true {
+                    Button("Connect Apple Health") {
+                        Task { _ = await HealthSync.shared.connect(shareWithCoach: true) }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    Text("Steps and sleep fill your habits in by themselves. You can change this in Account.")
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
             }
         } actions: {
             if Reminders.shared.enabled {
-                Text("Notifications are on.").font(.caption).foregroundStyle(JK.tertiary)
+                Text("Notifications are on.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 continueButton(to: .plans)
             } else {
                 Button("Turn on notifications") {
@@ -262,10 +271,10 @@ struct OnboardingView: View {
                         go(.plans)
                     }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 Button("Not now") { go(.plans) }
-                    .font(.subheadline)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCallout)
+                    .foregroundStyle(JK.textSecondary)
                     .frame(minHeight: 36)
             }
         }
@@ -273,10 +282,10 @@ struct OnboardingView: View {
 
     private func reason(_ systemName: String, _ title: String, _ detail: String) -> some View {
         HStack(spacing: 12) {
-            IconTile(systemName: systemName)
+            Glyph(systemName: systemName)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                Text(detail).font(.caption).foregroundStyle(JK.tertiary)
+                Text(title).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             Spacer(minLength: 0)
         }
@@ -306,10 +315,13 @@ struct OnboardingView: View {
         } actions: {
             errorFooter
             if hasPlan {
+                Button("Take the tour") { touring = true }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(saving)
                 finishButton("Finish")
             } else {
                 Button("Take the tour") { touring = true }
-                    .buttonStyle(GhostButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                     .disabled(saving)
                 finishButton("Start with Free")
             }
@@ -341,7 +353,7 @@ struct OnboardingView: View {
         let features = (r.features ?? []).filter { ids.contains($0.id) }
         if features.isEmpty {
             Text("Your coach will be in touch to get you started.")
-                .font(.subheadline).foregroundStyle(JK.secondary)
+                .font(.jkCallout).foregroundStyle(JK.textSecondary)
         } else {
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(features) { f in
@@ -356,16 +368,16 @@ struct OnboardingView: View {
 
     private func continueButton(to next: Step) -> some View {
         Button("Continue") { go(next) }
-            .buttonStyle(ChromeButtonStyle())
+            .buttonStyle(PrimaryButtonStyle())
     }
 
     private func finishButton(_ title: String) -> some View {
         Button {
             Task { await finish(answers: true) }
         } label: {
-            if saving { ProgressView().tint(.black) } else { Text(title) }
+            if saving { ProgressView().tint(JK.onPrimary) } else { Text(title) }
         }
-        .buttonStyle(ChromeButtonStyle())
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(saving)
     }
 
@@ -376,9 +388,9 @@ struct OnboardingView: View {
             ErrorBanner(message: error)
             if failures >= 2 {
                 Button("Continue anyway") { session.onboardingDeferred = true }
-                    .buttonStyle(GhostButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                 Text("We'll ask again next time you open the app.")
-                    .font(.caption2).foregroundStyle(JK.tertiary)
+                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
     }

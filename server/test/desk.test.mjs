@@ -49,7 +49,7 @@ describe('Coach desk', () => {
     assert.doesNotMatch(csp, /unsafe/);
     assert.match(page.body, /<script type="module" src="\/desk\/main\.js">/);
     assert.match(page.body, /href="\/desk\/app\.css"/);
-    for (const name of ['main.js', 'core.js', 'today.js', 'clients.js', 'schedule.js', 'messages.js', 'programs.js', 'guides.js']) {
+    for (const name of ['main.js', 'core.js', 'today.js', 'clients.js', 'overview.js', 'letters.js', 'symbols.js', 'schedule.js', 'messages.js', 'programs.js', 'guides.js']) {
       const js = await call('GET', `/desk/${name}`);
       assert.equal(js.status, 200, name);
       assert.match(js.headers.get('content-type'), /javascript/);
@@ -57,6 +57,16 @@ describe('Coach desk', () => {
     assert.match((await call('GET', '/desk/core.js')).body, /jk\.desk\.token/);
     assert.equal((await call('GET', '/desk/app.css')).status, 200);
     assert.equal((await call('GET', '/desk/nope.js')).status, 404, 'only files in server/desk/');
+    // The self-hosted Newsreader serif, allowed by the CSP; nothing else in fonts/ is served.
+    assert.match(csp, /font-src 'self'/);
+    for (const name of ['newsreader-roman.woff2', 'newsreader-italic.woff2']) {
+      const font = await fetch(`${base}/desk/fonts/${name}`);
+      assert.equal(font.status, 200, name);
+      assert.equal(font.headers.get('content-type'), 'font/woff2');
+      assert.equal(Buffer.from(await font.arrayBuffer()).subarray(0, 4).toString('latin1'), 'wOF2');
+    }
+    assert.equal((await call('GET', '/desk/fonts/OFL-Newsreader.txt')).status, 404);
+    assert.match((await call('GET', '/desk/app.css')).body, /--accent:#C8A970/);
     assert.equal((await call('GET', '/desk/..%2Fapp.mjs')).status, 404);
     const login = await fetch(base + '/login', { redirect: 'manual' });
     assert.equal(login.status, 302);

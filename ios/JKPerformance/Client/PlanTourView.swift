@@ -93,11 +93,11 @@ struct PlanTourView: View {
     private var closeButton: some View {
         Button { dismiss() } label: {
             Image(systemName: "xmark")
-                .font(.subheadline.weight(.semibold))
+                .font(.jkCallout.weight(.semibold))
                 .foregroundStyle(JK.text)
                 .frame(width: 32, height: 32)
-                .background(JK.card, in: Circle())
-                .overlay(Circle().stroke(JK.stroke, lineWidth: 1))
+                .background(JK.surface, in: Circle())
+                .overlay(Circle().stroke(JK.hairline, lineWidth: 1))
         }
         .accessibilityLabel("Close")
     }
@@ -158,21 +158,21 @@ struct PlanTourView: View {
         return VStack(spacing: 8) {
             HStack(spacing: 10) {
                 Button("Back") { go(at - 1, in: c) }
-                    .buttonStyle(GhostButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                     .disabled(at == 0)
                     .opacity(at == 0 ? 0.4 : 1)
                 if last {
                     Button("Done") { dismiss() }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                 } else {
                     Button("Next") { go(at + 1, in: c) }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                 }
             }
             Text("\(at + 1) of \(c.pages.count)")
-                .font(.caption2)
+                .font(.jkCaption)
                 .monospacedDigit()
-                .foregroundStyle(JK.tertiary)
+                .foregroundStyle(JK.textTertiary)
                 .accessibilityLabel("Page \(at + 1) of \(c.pages.count)")
         }
         .padding(.horizontal, 16)
@@ -180,7 +180,7 @@ struct PlanTourView: View {
         .padding(.bottom, 8)
         .background(JK.bg)
         .overlay(alignment: .top) {
-            Rectangle().fill(JK.stroke).frame(height: 1)
+            Rectangle().fill(JK.hairline).frame(height: 1)
         }
     }
 
@@ -246,13 +246,13 @@ struct PlanTourView: View {
     private func overviewPage(_ c: TourContent) -> some View {
         Eyebrow(text: "Coaching")
         Text("What coaching includes")
-            .font(.largeTitle.weight(.semibold))
+            .font(.jkDisplay)
             .foregroundStyle(JK.text)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
         Text("Every plan comes with a coach who writes your training and keeps you to it. Here's what each one adds.")
-            .font(.subheadline)
-            .foregroundStyle(JK.secondary)
+            .font(.jkCallout)
+            .foregroundStyle(JK.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
         if let free = c.free {
             freeCard(free, c)
@@ -276,7 +276,7 @@ struct PlanTourView: View {
         return VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: currentPlan == "none" ? "What you have now on \(free.name)" : "\(free.name) includes")
             if features.isEmpty {
-                Text(free.detail).font(.subheadline).foregroundStyle(JK.secondary)
+                Text(free.detail).font(.jkCallout).foregroundStyle(JK.textSecondary)
             } else {
                 ForEach(features) { f in
                     FeatureRow(feature: f)
@@ -295,14 +295,14 @@ struct PlanTourView: View {
             if plan.isFeatured { PopularBadge() }
         }
         Text(plan.name)
-            .font(.largeTitle.weight(.semibold))
+            .font(.jkDisplay)
             .foregroundStyle(JK.text)
             .accessibilityAddTraits(.isHeader)
         VStack(alignment: .leading, spacing: 8) {
             PriceLabel(pence: plan.monthlyPence, font: .title.weight(.semibold))
             if plan.annualPence > 0 {
                 HStack(spacing: 8) {
-                    Text("or").font(.caption).foregroundStyle(JK.tertiary)
+                    Text("or").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     PriceLabel(pence: plan.annualPence, period: .year, font: .subheadline.weight(.semibold))
                     if let pct = PlanPrice.savePercent(monthly: plan.monthlyPence, annual: plan.annualPence) {
                         SaveBadge(percent: pct)
@@ -312,17 +312,17 @@ struct PlanTourView: View {
         }
         .jkCard()
         Text(plan.pitch ?? plan.detail)
-            .font(.body)
+            .font(.jkBody)
             .foregroundStyle(JK.text)
             .fixedSize(horizontal: false, vertical: true)
         if plan.credits > 0 {
             Label(plan.credits == 1 ? "1 session a month" : "\(plan.credits) sessions a month", systemImage: "calendar")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(JK.secondary)
+                .font(.jkCallout.weight(.medium))
+                .foregroundStyle(JK.textSecondary)
         }
         Text("Tap Next to see what's included.")
-            .font(.caption)
-            .foregroundStyle(JK.tertiary)
+            .font(.jkCaption)
+            .foregroundStyle(JK.textTertiary)
             .padding(.top, 6)
     }
 
@@ -332,7 +332,7 @@ struct PlanTourView: View {
     private func carriedPage(plan: Plan, previous: Plan, features: [Feature]) -> some View {
         Eyebrow(text: plan.name)
         Text("Everything in \(previous.name), plus…")
-            .font(.title.weight(.semibold))
+            .font(.jkDisplay)
             .foregroundStyle(JK.text)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
@@ -353,13 +353,13 @@ struct PlanTourView: View {
         VStack(alignment: .leading, spacing: 6) {
             Eyebrow(text: "New in \(plan.name)")
             Text(feature.title)
-                .font(.title.weight(.semibold))
+                .font(.jkDisplay)
                 .foregroundStyle(JK.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             Text(feature.detail)
-                .font(.subheadline)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCallout)
+                .foregroundStyle(JK.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         if let points = feature.points, !points.isEmpty {
@@ -379,11 +379,11 @@ struct PlanTourView: View {
     private func pointRow(_ point: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: "checkmark")
-                .font(.caption.weight(.bold))
+                .font(.jkCaption.weight(.bold))
                 .foregroundStyle(JK.text)
                 .frame(width: 16)
             Text(point)
-                .font(.subheadline)
+                .font(.jkCallout)
                 .foregroundStyle(JK.text)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -396,7 +396,7 @@ struct PlanTourView: View {
     private func comparePage(_ c: TourContent) -> some View {
         Eyebrow(text: "Compare")
         Text("Compare plans")
-            .font(.title.weight(.semibold))
+            .font(.jkDisplay)
             .foregroundStyle(JK.text)
             .accessibilityAddTraits(.isHeader)
         CompareTable(plans: c.paid, features: c.comparedFeatures)
@@ -407,10 +407,10 @@ struct PlanTourView: View {
         }
         if mode == .preview {
             Text("Your clients choose their plan here. In this preview the buttons do nothing.")
-                .font(.caption2).foregroundStyle(JK.tertiary)
+                .font(.jkCaption).foregroundStyle(JK.textTertiary)
         } else {
             Text("No charge is made while payments are off.")
-                .font(.caption2).foregroundStyle(JK.tertiary)
+                .font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
     }
 
@@ -420,11 +420,11 @@ struct PlanTourView: View {
         let title = current ? "You're on \(p.name)" : "Choose \(p.name)"
         if p.isFeatured {
             Button(title) { choose(p.id) }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(current || mode == .preview)
         } else {
             Button(title) { choose(p.id) }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
                 .disabled(current || mode == .preview)
         }
     }
@@ -528,14 +528,14 @@ struct CompareTable: View {
                 Color.clear.frame(width: 1, height: 1)
                 ForEach(plans) { p in
                     Text(p.name)
-                        .font(.caption.weight(.semibold))
+                        .font(.jkCaption.weight(.semibold))
                         .foregroundStyle(JK.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
                 }
             }
-            Divider().overlay(JK.stroke)
+            Divider().overlay(JK.hairline)
             ForEach(features) { f in
                 GridRow {
                     rowLabel(f.title)
@@ -544,12 +544,12 @@ struct CompareTable: View {
                     }
                 }
             }
-            Divider().overlay(JK.stroke)
+            Divider().overlay(JK.hairline)
             GridRow {
                 rowLabel("Sessions a month")
                 ForEach(plans) { p in
                     Text(p.credits > 0 ? "\(p.credits)" : "–")
-                        .font(.caption.weight(.semibold))
+                        .font(.jkCaption.weight(.semibold))
                         .foregroundStyle(JK.text)
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel(p.credits > 0 ? "\(p.name): \(p.credits) sessions a month" : "\(p.name): no sessions")
@@ -560,11 +560,11 @@ struct CompareTable: View {
                 ForEach(plans) { p in
                     VStack(spacing: 0) {
                         Text(Fmt.pounds(p.monthlyPence))
-                            .font(.caption.weight(.semibold))
+                            .font(.jkCaption.weight(.semibold))
                             .foregroundStyle(JK.text)
                         Text("/ month")
-                            .font(.system(size: 9))
-                            .foregroundStyle(JK.tertiary)
+                            .font(.jkMicro)
+                            .foregroundStyle(JK.textTertiary)
                     }
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .combine)
@@ -577,16 +577,16 @@ struct CompareTable: View {
     private func mark(_ p: Plan, has f: Feature) -> some View {
         let has = p.featureIds.contains(f.id)
         return Image(systemName: has ? "checkmark" : "minus")
-            .font(.caption.weight(has ? .bold : .regular))
-            .foregroundStyle(has ? JK.text : JK.tertiary)
+            .font(.jkCaption.weight(has ? .bold : .regular))
+            .foregroundStyle(has ? JK.text : JK.textTertiary)
             .frame(maxWidth: .infinity)
             .accessibilityLabel(has ? "\(p.name) includes \(f.title)" : "\(p.name) doesn't include \(f.title)")
     }
 
     private func rowLabel(_ text: String) -> some View {
         Text(text)
-            .font(.caption)
-            .foregroundStyle(JK.secondary)
+            .font(.jkCaption)
+            .foregroundStyle(JK.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: 112, alignment: .leading)
     }
@@ -658,19 +658,19 @@ struct FeaturePreview: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
                     Eyebrow(text: "Today")
-                    Text("Lower Body Strength").font(.headline).foregroundStyle(JK.text)
+                    Text("Lower Body Strength").font(.jkHeadline).foregroundStyle(JK.text)
                 }
                 Spacer()
-                Text("2 of 3 done").font(.caption2).foregroundStyle(JK.tertiary)
+                Text("2 of 3 done").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             .padding(12)
             ForEach(Self.exercises, id: \.self) { e in
-                Divider().overlay(JK.stroke)
+                Divider().overlay(JK.hairline)
                 HStack(spacing: 10) {
-                    IconTile(systemName: "dumbbell", size: 28)
+                    Glyph(systemName: "dumbbell", size: 28)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(e.title).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-                        Text(e.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                        Text(e.title).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
+                        Text(e.detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     Spacer()
                     CheckCircle(on: e.fraction >= 1)
@@ -688,11 +688,11 @@ struct FeaturePreview: View {
         HStack {
             if mine { Spacer(minLength: 48) }
             Text(text)
-                .font(.caption)
-                .foregroundStyle(mine ? Color.black : JK.text)
+                .font(.jkCaption)
+                .foregroundStyle(JK.text)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .background(mine ? JK.text : JK.cardRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(mine ? JK.raised : JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
                 .fixedSize(horizontal: false, vertical: true)
             if !mine { Spacer(minLength: 48) }
         }
@@ -719,19 +719,19 @@ struct FeaturePreview: View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Self.habitSamples, id: \.self) { h in
                 HStack(spacing: 10) {
-                    IconTile(systemName: h.symbol, size: 28)
+                    Glyph(systemName: h.symbol, size: 28)
                     VStack(alignment: .leading, spacing: 5) {
                         HStack {
-                            Text(h.title).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
+                            Text(h.title).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
                             Spacer()
-                            Text(h.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                            Text(h.detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                         }
                         ThinBar(fraction: h.fraction)
                     }
                     CheckCircle(on: h.fraction >= 1)
                 }
             }
-            Text("12-day streak").font(.caption2).foregroundStyle(JK.secondary)
+            Text("12-day streak").font(.jkCaption).foregroundStyle(JK.textSecondary)
         }
         .jkCard()
     }
@@ -751,7 +751,7 @@ struct FeaturePreview: View {
         VStack(alignment: .leading, spacing: 8) {
             Eyebrow(text: "Body weight")
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("78.4 kg").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                Text("78.4 kg").font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                 DeltaBadge(text: "−4.1 kg")
             }
             Chart(Self.weights) { p in
@@ -771,13 +771,13 @@ struct FeaturePreview: View {
 
     private func scaleRow(_ label: String, _ value: Int) -> some View {
         HStack(spacing: 10) {
-            Text(label).font(.caption).foregroundStyle(JK.secondary).frame(width: 52, alignment: .leading)
+            Text(label).font(.jkCaption).foregroundStyle(JK.textSecondary).frame(width: 52, alignment: .leading)
             HStack(spacing: 4) {
                 ForEach(1...5, id: \.self) { n in
                     Capsule().fill(n <= value ? JK.text : JK.track).frame(height: 6)
                 }
             }
-            Text("\(value) / 5").font(.caption2).monospacedDigit().foregroundStyle(JK.tertiary)
+            Text("\(value) / 5").font(.jkCaption).monospacedDigit().foregroundStyle(JK.textTertiary)
         }
     }
 
@@ -786,7 +786,7 @@ struct FeaturePreview: View {
             Eyebrow(text: "This week")
             scaleRow("Energy", 4)
             scaleRow("Sleep", 3)
-            Divider().overlay(JK.stroke)
+            Divider().overlay(JK.hairline)
             Eyebrow(text: "Coach replied")
             bubble("Good week. Keep Thursday light and we'll push again on Saturday.", mine: false)
         }
@@ -799,28 +799,28 @@ struct FeaturePreview: View {
         HStack(spacing: 10) {
             Dot(color: color)
             VStack(alignment: .leading, spacing: 1) {
-                Text(when).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-                Text(detail).font(.caption2).foregroundStyle(JK.tertiary)
+                Text(when).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
+                Text(detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             Spacer()
             Text("Book")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption.weight(.semibold))
+                .foregroundStyle(JK.textSecondary)
                 .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(JK.cardRaised, in: Capsule())
-                .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                .background(JK.raised, in: Capsule())
+                .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
         }
     }
 
     private var sessions: some View {
         VStack(alignment: .leading, spacing: 12) {
-            slot("Tue · 07:00", "1:1 in person · Studio 2", color: JK.inPerson)
-            Divider().overlay(JK.stroke)
-            slot("Thu · 18:30", "1:1 on video", color: JK.video)
-            Divider().overlay(JK.stroke)
+            slot("Tue · 07:00", "1:1 in person · Studio 2", color: JK.kindInPerson)
+            Divider().overlay(JK.hairline)
+            slot("Thu · 18:30", "1:1 on video", color: JK.kindVideo)
+            Divider().overlay(JK.hairline)
             Text("2 of \(max(credits, 2)) credits left this month")
-                .font(.caption2)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textSecondary)
         }
         .jkCard()
     }
@@ -839,9 +839,9 @@ struct FeaturePreview: View {
             ForEach(Self.macros, id: \.self) { m in
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Text(m.title).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
+                        Text(m.title).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.text)
                         Spacer()
-                        Text(m.detail).font(.caption2).foregroundStyle(JK.tertiary)
+                        Text(m.detail).font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     ThinBar(fraction: m.fraction, height: 5)
                 }
@@ -857,8 +857,8 @@ struct FeaturePreview: View {
             bubble("My knee is a bit sore after yesterday. Should I still squat tomorrow?", mine: true)
             bubble("Swap to box squats and keep it to RPE 7. Tell me how it feels.", mine: false)
             Label("Replied in 12 min", systemImage: "bolt.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption.weight(.semibold))
+                .foregroundStyle(JK.textSecondary)
         }
         .jkCard()
     }
@@ -867,12 +867,12 @@ struct FeaturePreview: View {
 
     private var guide: some View {
         HStack(alignment: .top, spacing: 12) {
-            IconTile(systemName: "book")
+            Glyph(systemName: "book")
             VStack(alignment: .leading, spacing: 3) {
                 Eyebrow(text: "Guide · 6 min")
-                Text("Warming up for a heavy lower day").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                Text("Warming up for a heavy lower day").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                 Text("Five minutes that make your first working set feel easy.")
-                    .font(.caption2).foregroundStyle(JK.tertiary)
+                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
         .jkCard()

@@ -1,10 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- Interim JK monogram (Atelier): one shared stem, the J's hook below and the K's arms to the right.
-       Single colour; drawn with strokes so it tints and scales. A commissioned mark replaces it later. -->
-  <title>JK</title>
-  <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M20 8 V31 Q20 39.5 12.5 39.5 Q8.5 39.5 7 36"/>
-    <path d="M20 26 L35 8"/>
-    <path d="M25.6 19.3 L37 40"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="JK">
+  <title>JK monogram (interim)</title>
+  <path fill="#C8A970" fill-rule="nonzero" d="M 34 15.5 L 44 15.5 L 44 63.5 C 44 78.5 37 87.5 25 87.5 C 18 87.5 13 83.5 13 78.5 C 13 74.5 16 71.5 20 71.5 C 24 71.5 27 74.5 27 78.5 C 31 77.5 34 72.5 34 63.5 Z M 24 12.5 L 54 12.5 L 54 15.5 C 48 15.5 45 16.5 44 18.5 L 34 18.5 C 33 16.5 30 15.5 24 15.5 Z M 44 49.5 L 70.5 15.5 L 75 15.5 L 44 55.5 Z M 65 12.5 L 82 12.5 L 82 15.5 L 65 15.5 Z M 51 42 L 57 34.5 L 83 69.5 L 72 69.5 Z M 67 66.5 L 87 66.5 L 87 69.5 L 67 69.5 Z"/>
 </svg>

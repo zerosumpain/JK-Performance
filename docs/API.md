@@ -371,4 +371,337 @@ separate demo world with five other clients and a few weeks of history. Demo acc
 file is `<DATA_DIR>/android/jk-performance.apk` + `version.json`, put there by `scripts/android-publish.sh`),
 `/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach web app:
 everything the coach can do in the apps, over this API; sign in with Google, Apple, a link code from the app or the demo
-coach code; `/login` redirects there). Its files are the ES modules and stylesheets in `server/desk/`.
+coach code; `/login` redirects there). Its files are the ES modules and stylesheets in `server/desk/`, plus the
+self-hosted Newsreader serif at `/desk/fonts/<name>.woff2` (SIL OFL 1.1, text in `server/desk/fonts/OFL-Newsreader.txt`).
+Icons are Material Symbols Rounded (Apache 2.0) drawn inline from `server/desk/symbols.js`.
+
+## Atelier redesign additions
+
+Everything below is additive (docs/design/atelier-spec.md, "Server and data changes"). Old fields and endpoints keep
+working for old app builds. New client routes are never gated in a way that 403s what Today or the JK tab call: those
+return a reduced payload instead. Other new client routes use one helper (`requireFeature`, settings.mjs): like
+`requireMember` it is off while `GATE_SERVICES=false`; when on, a client whose plan lacks the feature gets 403
+`{"error":"feature_not_in_plan"}`. It guards `/api/habits/week` and `/api/habits/history` ('habits'),
+`/api/checkins/draft` and `POST /api/reports/:id/answer` ('checkin').
+
+### Features, coach, preferences on `Me` (items 1, 15, 17; phase 5)
+
+`GET /api/me` gains:
+
+```jsonc
+"features": {            // every key always present; a coach gets true for every plan feature
+  "programme":true,"messaging":true,"habits":true,"progress":true,"checkin":true,"sessions":true,
+  "nutrition":true,"priority":true,"guides":true,
+  "formChecks":false,"mealPhotos":false,"challenges":false,   // coach toggles, not plan features
+  "hasMacroTargets":true                                      // the Fuel ring needs targets; logging food does not
+},
+"coach": {               // clients only (null for a coach), as before plus:
+  "id":"u_…","name":"Coach JK",
+  "avatarMediaId":"md_…"|null, "avatarUrl":"/api/media/md_…"|null,        // JK's portrait (fetch with the bearer token)
+  "signatureMediaId":null, "signatureUrl":null,
+  "replyExpectation":{"standard":"JK replies most evenings","priority":"Same-day replies"},
+  "replyLine":"Same-day replies"                                          // the one this client sees (priority plans get priority)
+},
+"preferences": {"notificationsOn":true,"eveningReminderTime":"20:30"|null},
+"coachSettings": CoachSettings | null   // a coach's own settings; null for clients
+```
+
+If `features` is missing (an older server) the apps show everything as before.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET / PUT | `/api/me/preferences` | `{notificationsOn?, eveningReminderTime?: "HH:MM"\|null}` | `{notificationsOn, eveningReminderTime}` |
+| GET | `/api/coach/settings` (coach) | – | `CoachSettings` |
+| PATCH | `/api/coach/settings` (coach) | any subset of `CoachSettings` | `CoachSettings` |
+| PATCH | `/api/coach/clients/:id/settings` (coach) | `{dayMinimum?: 1–5\|null, letterRhythm?: "weekly"\|"fortnightly"\|"none"\|null, coachLine?: text\|null}` | `ClientSettings` |
+
+```jsonc
+// CoachSettings (defaults shown)
+{"studioTools":false,          // show Programs, Forms, Autoflows, Plans & prices, Business, availability on the phone
+ "formChecks":false,"mealPhotos":false,"challenges":false,
+ "replyExpectation":{"standard":"JK replies most evenings","priority":"Same-day replies"},
+ "defaultMeetingUrl":null,     // video bookings without their own link use this (https only)
+ "avatarMediaId":null,"signatureMediaId":null,   // ids of images the coach uploaded with POST /api/media
+ "letterRhythm":{"elite":{"every":"weekly","media":true},"performance":{"every":"weekly","media":false},
+                 "foundation":{"every":"none","media":false},"none":{"every":"none","media":false}}}
+// ClientSettings
+{"dayMinimum":3,"dayMinimumIsDefault":true,
+ "letterRhythm":{"every":"weekly","days":7,"media":true,"overridden":false},"letterRhythmOverride":null,
+ "coachLine":{"text":"Easy week: walk, sleep, eat well.","setAt":"…"}|null}   // an occasional line for the client's Today
+```
+
+### Guides for clients (item 2)
+
+| GET | `/api/client/guides` | – | `{guides:[{id, title, summary, minutes, tags}]}` |
+|---|---|---|---|
+| GET | `/api/client/guides/:id` | – | `{id, title, summary, minutes, tags, body}` (body: paragraphs split by `\n\n`) |
+
+Any signed-in user whose plan includes `guides` (every default plan, Free included); never `requireMember`. A plan
+without guides gets `{guides:[]}`, never a 403. `GET /api/guides` stays the coach's tips.
+
+### Habits: IconKey, step, the day rule, rest days (items 3, 5, 6)
+
+`Habit` gains `iconKey` (closed catalogue: `water sleep steps protein supplement energy mobility mindfulness reading
+sunlight custom`), `step` (the +/- increment for count habits; the coach's, or a default from the target), `introducedAt`,
+`position`. `icon` (the SF name) stays for old builds and is derived from `iconKey` when only that is sent. Existing
+habits were mapped from their SF names (`drop`→water, `moon`→sleep, `shoeprints.fill`→steps, `bolt`→energy, …;
+anything unknown → custom).
+
+**The day rule.** A day is done when the client's minimum is met: the coach's `dayMinimum`, or ceil(60%) of the habits
+that existed that day (3 of 5). A rest day JK granted is neither done nor missed. Future days are never done.
+
+`GET /api/habits` gains (the old `streak`, every habit every day, stays for one release):
+
+```jsonc
+"dayDone":false, "doneCount":2, "dayMinimum":3,
+"rest":{"date":"2026-11-22","reason":"Travelling"}|null,   // today is a rest day JK granted
+"consistency":{"done":22,"days":27,"rest":1,"window":28},   // "22 of the last 27 days": the 28 days ending today,
+                                                            // today counted only once done, rest days in neither
+"missedYesterday":true                                      // "Yesterday slipped. Today keeps it going."
+```
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/habits/week?from=&to=&clientId=` | – | `{from, to, dayMinimum, days:[DayState]}`; default this Monday to Sunday |
+| GET | `/api/habits/history?from=&to=&clientId=` | – | `HabitHistory`; default the last 28 days (≤ 92) |
+| POST | `/api/habits` (coach) | `{clientId, name, kind, target, unit, iconKey?, icon?, step?, healthKind?}` | `Habit`; 409 when the client already has 5 |
+| PATCH | `/api/habits/:id` (coach) | any of `{name, kind, target, unit, iconKey, icon, step, healthKind, position}` | `Habit` |
+| GET | `/api/clients/:id/rest-days?from=&to=` (coach) | – | `{restDays:[{date, reason, grantedAt}]}` |
+| POST | `/api/clients/:id/rest-days` (coach) | `{date, reason?}` | `{date, reason}` (re-posting updates the reason) |
+| DELETE | `/api/clients/:id/rest-days/:date` (coach) | – | `{ok:true}` |
+
+```jsonc
+// DayState
+{"date":"2026-11-17","done":true,"rest":false,"restReason":null,"doneCount":4,"total":5,"minimum":3,"today":false,"future":false}
+// HabitHistory
+{"from","to",
+ "habits":[Habit + {"days":[{"date","value","done","source":"manual|health","rest":false}],
+                    "rate7":0.86,"rate7Prev":0.71,"rate28":0.79}],   // fractions of non-rest days done; null with none
+ "days":[{"date","dayDone","rest","restReason","doneCount","total","minimum"}],
+ "consistency":{"done","days","rest","window"}}
+```
+
+`GET /api/coach/clients`: each `ClientSummary` gains `habitWeek: [{date, state:"done"|"notDone"|"rest"} ×7]`, the
+seven days ending today, so the list needs no per-client calls.
+
+### Goals (item 4)
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/goal?clientId=` | – | `{goal: Goal\|null, pending}`: the client's active goal (plans with `progress`; otherwise `{goal:null, pending:false}`, never 403). `pending` true = "JK will set your goal with you this week." |
+| GET | `/api/goals?clientId=` (coach) | – | `{goals:[Goal]}`: active first, then drafts, then the rest |
+| POST | `/api/goals` (coach) | `{clientId, title, metric, exerciseId?, measureKey?, habitId?, unit?, baseline?, target?, currentValue?, startDate?, targetDate?, why?, status?, chapterName?}` | `Goal` (status default `active`; activating one pauses the client's other active goal) |
+| PATCH | `/api/goals/:id` (coach) | any of the above | `Goal` |
+| DELETE | `/api/goals/:id` (coach) | – | `{ok:true}` |
+
+```jsonc
+// Goal. metric: weight | waist | measurement (with measureKey: weight|bodyFat|waist|restingHr) | record (exerciseId) | habit (habitId) | custom (currentValue set by JK)
+{"id":"g_…","clientId":"u_…","title":"Down to 75 kg by March","metric":"weight","exerciseId":null,"exerciseName":null,
+ "measureKey":null,"habitId":null,"unit":"kg","baseline":84.6,"target":75,"startDate":"2026-07-27","targetDate":"2027-03-01",
+ "why":"To feel strong again after two years off.","status":"active",       // draft | active | reached | paused
+ "chapterName":null,                       // written by JK only; shown on Progress, never on Today
+ "suggestion":null,                        // drafts: "Fat loss" from onboarding ("Suggested from onboarding: Fat loss. Set the goal.")
+ "updatedAt":"…",
+ // derived by the server:
+ "current":79.8,"delta":-4.8,"progressPct":50,"remaining":4.8,"reached":false,"remainingLabel":"4.8 kg to go",
+ "weekOf":{"week":17,"weeks":31},          // null without both dates
+ "onTrack":true,                           // progress within 10 points of where the dates say it should be; null if unknown
+ "sourceLabel":"From your weigh-ins, 7-day average"}
+```
+Every client without a goal got a **draft** when the server first started with these changes (from `profile.goals` and
+the Intake form's goal answer), and answering onboarding creates one. JK sets goals in bulk on the desk.
+
+### GET /api/today (item 7)
+
+The one payload the client's Today renders. Never 403; a Free client gets the reduced shape (every key present, empty).
+Workouts, the client's own 1:1s and video calls, and the classes they joined are merged into one agenda. Calling it
+also delivers any letters whose time has come.
+
+```jsonc
+{"date":"2026-11-22","firstName":"Sam","plan":"elite",
+ "features":{…same as Me.features…},
+ "goal":Goal|null,                 // plans with 'progress'
+ "goalPending":false,              // 'progress' but no active goal: "JK will set your goal with you this week."
+ "coachLine":{                     // From JK; null on Free, with nothing yet, or when stale
+   "text":"This week: protein at breakfast, and lights out by 10:30.",
+   "source":"letter",              // letter | message | override
+   "letterId":"r_…","messageId":null,
+   "unread":true,                  // the 6pt champagne dot
+   "at":"2026-11-16T07:00:00.000Z",
+   "caption":"JK · Monday's letter",   // "JK · Tuesday" for a message, "JK · Today", "JK · A letter" (milestone), "JK" (override)
+   "staleAfterDays":10},           // the plan rhythm (7 or 14) plus three; the server already hides older lines
+ "habits":[Habit…],                // with today's value, done, source, iconKey, step (plans with 'habits')
+ "dayDone":true,"doneCount":4,"dayMinimum":3,
+ "rest":null,                      // {"date","reason"} when JK made today a rest day
+ "consistency":{"done":26,"days":27,"rest":1,"window":28},
+ "missedYesterday":false,
+ "week":[{"date":"2026-11-16","done":true,"rest":false,"restReason":null,"today":false,"future":false}, …7, Monday first],
+ "next":{
+   "kind":"form",                  // session | videoCall | checkin | form | workout | booking | rest | membership
+   "title":"Monthly review · 4 questions",
+   "detail":null,                  // a second line, used for "Your first workout" / "Your welcome session"
+   "buttonLabel":"Fill in",        // Start session | Join | Details | Begin check-in | Fill in | View session | See your week | Have a look
+   "action":"form",                // startSession | join | details | checkin | form | viewSession | yourWeek | membership
+   "item":{"formRequestId":"fr_…"},// workoutId/bookingId/date/start/meetingUrl, week (checkin), formRequestId (form)
+   "alsoDue":[{"kind":"checkin","label":"Check-in"}]},   // "Also due: Check-in" caption, never a second button
+ "unreadMessages":0}
+```
+
+Next, in order: (1) a session within 3 hours (workout with a time: Start session; video call: Join when a meeting link
+resolves, else Details; 1:1 or class: Details); (2) the check-in (plans with 'checkin', Friday to Monday while this
+`dueWeek`'s is missing) or a form JK sent; (3) today's workout later in the day; (4) the next booking, on a training day;
+(5) a rest day: "Rest day. Next: Lower Strength, Monday 07:00." Free: `membership` ("See what coaching includes").
+A client who has never trained or met JK sees "Your welcome session" (plans with 'sessions') or "Your first workout".
+The From JK line: plans with 'checkin' use the latest delivered letter (its headline on its delivery day while unread,
+otherwise JK's `focusOverride` or Adjust line), falling back to JK's latest message; plans with 'messaging' only use the
+first line of JK's latest message; a line JK sets per client (`coachLine` in the client settings) wins when newer.
+A coach may call `GET /api/today?clientId=` to preview a client's Today.
+
+### Letters (item 8; extends weekly feedback)
+
+`Report` gains the letter. The old `summary`/`wins`/`focus` stay as aliases (old builds keep working):
+
+```jsonc
+{…Report…,
+ "kind":"weekly",                  // weekly | milestone
+ "letterStatus":"published",       // draft | scheduled (published, deliverAt still ahead) | published (delivered)
+ "headline":"Strongest week yet.","keep":"Squat 102.5 kg for 5…","adjust":"This week: protein at breakfast…",
+ "question":"How did the knee feel on Wednesday?","answer":null,"answeredAt":null,
+ "mediaId":null,"mediaKind":null,"mediaUrl":null,"durationSec":null,   // voice or video note, ≤ 90 s
+ "goalId":null,"deliverAt":"2026-11-16T07:00:00.000Z","deliveredAt":"…",
+ "focusOverride":null,             // an occasional coach override of the Today line
+ "todayLine":"This week: protein at breakfast…",   // what Today shows from this letter
+ "milestoneKey":null,
+ // full reads (GET /api/reports/:id, /week/:monday, PUT) also carry:
+ "weekDots":[{"date","done","rest","future"}×7],
+ "scoreTrio":[{"key":"sessions","label":"Sessions","value":"3 of 3","source":"Workouts JK planned…"},
+              {"key":"days","label":"Days done","value":"6 of 7","source":"…"},
+              {"key":"steps","label":"Steps","value":"9,840","source":"…"}],   // "sets" when Health is not shared
+ "context":{"checkin":CheckIn|null,"week":CheckinDraft,"goal":Goal|null,"rhythm":{…},
+            "milestones":[{"key","reason","suggestedHeadline"}],"suggestedDeliverAt":"…"}}   // coach only: the composer's pinned context
+```
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| PUT | `/api/reports` (coach) | `{clientId, week?, id?, kind?, headline?, keep?, adjust?, question?, mediaId?, goalId?, focusOverride?, milestoneKey?, status, deliverAt?: "now"\|ISO}` (+ old `summary, wins, focus`) | full `Report` |
+| GET | `/api/reports?clientId=&kind=` | – | as before; clients see delivered letters only |
+| POST | `/api/reports/:id/read` (client) | – | `{ok:true, readAt}` |
+| POST | `/api/reports/:id/answer` (client) | `{answer}` | full `Report`; the answer also goes into the thread (`Message.kind "answer"`, `reportId`) |
+
+Publishing: with any letter field in the body, `status:"published"` schedules delivery for **Monday 07:00 Europe/London**
+(the next one), or `deliverAt:"now"` / an instant. A body with only the old fields (old builds) publishes at once, as
+before. A weekly letter is one per client and week; a milestone letter is new each time unless `id` names it (milestone
+`week` defaults to this Monday). Publishing marks that week's check-in replied. Delivery (on a one-minute clock and
+before any client read) drops a note in the thread (`Message.kind "letter"`, which the timeline hides because the
+letter is its own item) and pushes `kind:"report"`. A delivered letter cannot go back to draft (409). "Reply to JK" is
+`POST /api/messages {text, reportId}`.
+
+Rhythm: per plan in `CoachSettings.letterRhythm` (Elite weekly with a voice or video note, Performance weekly
+written), per client override `letterRhythm: "fortnightly"` in the client settings. Plans without 'checkin' have none.
+
+### Check-ins (item 9)
+
+`POST /api/checkins` also takes `stress` (1–5), `win`, `struggle` (≤ 500) and `photoIds` (≤ 6, the client's photo or
+image media ids); `CheckIn` returns them. A check-in is shown in the timeline as `kind:"checkin"`.
+
+| GET | `/api/checkins/draft?week=&clientId=` | – | `CheckinDraft` (default `dueWeek`) |
+|---|---|---|---|
+
+```jsonc
+// CheckinDraft: the read-only figures on the check-in's Body card and in the letter composer
+{"week":"2026-11-16","weekEnd":"2026-11-22","avgSteps":9120,"avgSleepMinutes":431,"healthShared":true,
+ "habits":{"done":5,"days":6,"rest":1,"window":7},"sessionsDone":3,"sessionsPlanned":3,
+ "feel":[{"workoutId":"w_…","title":"Lower Strength","date":"2026-11-16","feel":3,"word":"Hard"}]}
+```
+
+### Media (item 10)
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/api/media?purpose=&clientId=&durationSec=` | raw body; `Content-Type` `image/jpeg`, `image/png`, `image/heic`, `audio/mp4` (m4a), `video/mp4` | `Media` |
+| GET | `/api/media/:id` | – | the bytes; `Range: bytes=…` gives 206 with `Content-Range` (416 when unsatisfiable); `Accept-Ranges: bytes` |
+| DELETE | `/api/media/:id` | – | `{ok:true}` (only who uploaded it) |
+
+Limits: 10 MB for images and audio, 60 MB for video (a 90-second 720p clip); `durationSec` ≤ 90. `purpose`: `letter`,
+`formCheck`, `mealPhoto`, `checkin`, `avatar`, `signature`, `other`; a coach uploading `avatar`/`signature` also sets it
+in their settings. Who may fetch: the uploader; the client it belongs to (`clientId`, or the uploading client) and their
+coach; and a coach's own images with no client (portrait, signature) are visible to that coach's clients. Others get
+404. Stored beside the progress photos (`<DATA_DIR>/media`), listed in `/api/me/export` (`media`), erased with the account.
+
+```jsonc
+// Media
+{"id":"md_…","kind":"image|audio|video","mime":"image/jpeg","bytes":48211,"durationSec":null,"purpose":"avatar","clientId":null,"createdAt":"…","url":"/api/media/md_…"}
+```
+The coach's portrait: `Me.coach.avatarMediaId` / `avatarUrl` (fetch with the bearer token). Operators set it with
+`node server/admin.mjs coach-portrait <email-or-user-id> <file>`; the demo coach's comes from `DEMO_COACH_PORTRAIT_FILE`.
+No portrait: the apps fall back to the JK monogram.
+
+### Timeline (item 11)
+
+| GET | `/api/timeline?before=&limit=&clientId=` | – | `{items:[TimelineItem], nextBefore}` (newest first; `limit` ≤ 200, default 50; `before` = `nextBefore` for the next page) |
+|---|---|---|---|
+
+```jsonc
+// TimelineItem: {kind, id, at} plus one payload named after the kind
+{"kind":"message","id":"m_…","at":"…","message":Message}          // 'messaging'; includes answers, form checks, meal photos
+{"kind":"letter","id":"r_…","at":"…","letter":Report}             // 'checkin'; delivered letters only (list shape, no stats)
+{"kind":"checkin","id":"c_…","at":"…","checkin":CheckIn}          // 'checkin'; the stored check-in confirmation
+{"kind":"form","id":"fr_…","at":"…","form":{"id","name","questionCount","submittedAt"}}
+{"kind":"planUpdate","id":"pu_2026-11-15","at":"…","planUpdate":{"from":"2026-11-23","to":"2026-11-29","count":3,"text":"JK updated next week"}}   // 'programme'
+```
+Free (no 'messaging', no 'checkin') gets `{items:[], nextBefore:null}`, never 403. Opening the first page marks the
+other side's messages read.
+
+### Session feel, form checks, meal photos (item 12)
+
+`POST /api/workouts/:id/complete` takes `feel` (1–5); `Workout` returns `feel` and `feelWord` (Easy, Steady, Hard,
+Very hard, Max). `POST /api/messages` takes `reportId?`, `exerciseId?`, `mediaId?`, `kind?` (`formCheck` |
+`mealPhoto`; inferred from a media id: with an exercise a form check, else a meal photo). Clients need the coach toggle
+on (`features.formChecks` / `features.mealPhotos`), else 403 `not_enabled`. `Message` gains `kind` (`text`, `letter`,
+`answer`, `formCheck`, `mealPhoto`), `reportId`, `exerciseId`, `mediaId`, `mediaUrl`.
+
+### Bookings (item 13)
+
+`Booking` gains `meetingUrl`: the booking's own link, else (video calls) the coach's `defaultMeetingUrl`, else null
+(show "Details", not "Join"); only the people in the booking see it. `PATCH /api/bookings/:id` (coach)
+`{meetingUrl: "https://…"|null}` sets one.
+
+### Coach: needs you, client overview, records (items 16, 4, 6)
+
+| GET | `/api/coach/needs-you` (coach) | – | `NeedsYou` |
+|---|---|---|---|
+
+```jsonc
+// NeedsYou
+{"date":"2026-11-22",
+ "sessionsToday":{"total":5,"done":3,"next":Booking|null},        // "Next: Sam · 07:00 · Studio", "3 of 5 sessions today"
+ "lettersDue":{"week":"2026-11-16","count":4,"estMinutes":30,     // "Letters due: 4 · about 30 min" (6 min written, 8 with media)
+               "clients":[{"id","name","initials","media":true,"every":"weekly"}]},
+ "items":[{
+   "client":{"id":"u_…","name":"Sam Carter","firstName":"Sam","initials":"SC","plan":"elite","planName":"Elite"},
+   "rank":1,                       // the top reason's severity, 1 = most urgent
+   "priority":true,                // the plan includes 'priority'
+   "reasons":[                     // every reason that applies, most severe first (one row per client)
+     {"kind":"pain","text":"Checked in Friday · knee sore","at":"…","rank":1,"iconKey":"pain","source":"checkin"},
+     {"kind":"milestone","text":"Sam: twelve weeks on plan","at":null,"rank":8,"iconKey":"milestone",
+      "milestoneKey":"twelveWeeks","suggestedHeadline":"Twelve weeks. You train like an athlete now."}],
+   "reasonLine":"Checked in Friday · knee sore · Sam: twelve weeks on plan",
+   "primaryAction":{"kind":"writeLetter","label":"Write letter"}}],   // reply | writeLetter | nudge | readAnswers
+ "allCaughtUp":false}
+```
+Reason kinds by rank: 1 `pain` (an unread message mentioning pain or injury, a check-in listing pain, a "yes" to a
+flagged form question), 2 `priorityUnread` ("Elite · same-day reply"), 3 `unread`, 4 `checkinLetterDue`, 5
+`formAnswers`, 6 `quiet` (nothing from the client for 4+ days: message, set, workout or check-in), 7 `noTraining`
+(7+ days), 8 `milestone` (goal reached, a first personal best, four weeks at the minimum, twelve weeks on plan; only on
+plans with 'checkin', each key suggested until a letter with that `milestoneKey` exists). Within a rank, whoever has
+waited longest comes first. `GET /api/coach/today` is unchanged for old builds.
+
+`GET /api/coach/clients/:id` gains `goals` (active then drafts), `settings` (`ClientSettings`), `restDays` (from a week
+ago on), `latestCheckin` (`CheckIn` plus `week: CheckinDraft` with session ratings) and `nextBooking`.
+`Progress.records[]` gains `isNewThisWeek`. The challenge `streak` now counts days done under the minimum rule (rest
+days skipped).
+
+### Autoflows (item 16, phase 5)
+
+The engine keeps running existing runs. The phones hide the builders behind `CoachSettings.studioTools` (default off);
+the desk keeps them.

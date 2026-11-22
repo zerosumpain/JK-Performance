@@ -1,12 +1,16 @@
 import { clientFor, initials, requireCoach } from './access.mjs';
 import { bookingOut } from './bookings.mjs';
 import { profileOf } from './account.mjs';
-import { GUIDES } from './catalogue.mjs';
+import { CLIENT_GUIDES, GUIDES } from './catalogue.mjs';
+import { hasFeature } from './settings.mjs';
+import { checkinDraft, checkinOut, habitWeekOf } from './daily.mjs';
+import { goalOut } from './goals.mjs';
+import { clientSettingsOut } from './settings.mjs';
 import { monthlyPricesAt, plansFor } from './plans.mjs';
 import { dueWeek } from './daily.mjs';
 import { flaggedAnswers } from './forms.mjs';
 import { healthDay, healthVisible } from './health.mjs';
-import { day, oneOf } from './http.mjs';
+import { day, fail, oneOf } from './http.mjs';
 import { addDays, daysBetween, londonDay, londonToUtc, mondayOf } from './time.mjs';
 import { workoutOut } from './training.mjs';
 
@@ -80,6 +84,8 @@ function clientSummary(db, c, today = londonDay()) {
     adherence: adherence(db, c.id, today), lastWorkoutAt: lastDone, checkinDue, flags, unread: unreadRows.length,
     lastMessageAt: lastMessage?.at ?? null, lastMessageFrom: lastMessage?.from_role ?? null,
     demand: demandOf(db, c, { flags, unreadRows, today }),
+    // Seven day states (done, notDone, rest) for the week ending today, under the day rule.
+    habitWeek: habitWeekOf(db, c, today),
   };
 }
 
@@ -96,9 +102,18 @@ function clientDetail(_req, ctx) {
   const today = londonDay();
   const next = ctx.db.prepare('SELECT * FROM workouts WHERE client_id=? AND date>=? ORDER BY date, starts_at LIMIT 1').get(c.id, today);
   const shared = healthVisible(ctx.user, c);
+  const latest = ctx.db.prepare('SELECT * FROM checkins WHERE client_id=? ORDER BY week DESC LIMIT 1').get(c.id);
+  const nextBooking = ctx.db.prepare(`SELECT * FROM bookings WHERE cancelled_at IS NULL AND start>=? AND (client_id=? OR id IN (SELECT booking_id FROM class_attendees WHERE user_id=?)) ORDER BY start LIMIT 1`)
+    .get(new Date().toISOString(), c.id, c.id);
   return {
     client: clientSummary(ctx.db, c, today), profile: profileOf(c), healthShared: shared, health: shared ? healthDay(ctx.db, c.id, today) : null,
     nextWorkout: next ? workoutOut(ctx.db, next) : null,
+    // The Overview: goals (active first, then drafts), coaching settings, rest days, the latest check-in with session ratings, next session.
+    goals: ctx.db.prepare("SELECT * FROM goals WHERE client_id=? AND status IN ('active','draft') ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, updated_at DESC").all(c.id).map(g => goalOut(ctx.db, g)),
+    settings: clientSettingsOut(ctx.db, c),
+    restDays: ctx.db.prepare('SELECT date, reason FROM rest_days WHERE client_id=? AND date>=? ORDER BY date').all(c.id, addDays(today, -7)),
+    latestCheckin: latest ? { ...checkinOut(latest), week: checkinDraft(ctx.db, ctx.user, c, latest.week) } : null,
+    nextBooking: nextBooking ? bookingOut(ctx.db, nextBooking, ctx.user) : null,
   };
 }
 
@@ -121,7 +136,8 @@ function attentionList(db, clients, today) {
 }
 
 /** The week a coach would be writing up: last week until Friday, then this one. */
-export const feedbackWeek = (today = londonDay()) => (today >= addDays(mondayOf(today), 4) ? mondayOf(today) : addDays(mondayOf(today), -7));
+export { feedbackWeek } from './reports.mjs';
+import { feedbackWeek } from './reports.mjs';
 
 function today(_req, ctx) {
   requireCoach(ctx);
@@ -225,10 +241,30 @@ function guides(_req, ctx) {
   return GUIDES;
 }
 
+const guideSummary = g => ({ id: g.id, title: g.title, summary: g.summary, minutes: g.minutes, tags: g.tags });
+
+/**
+ * JK's guides for clients. Every plan includes 'guides' (Free too), and this is
+ * exempt from requireMember. A plan the coach has taken guides off gets an empty
+ * list rather than a 403, so the JK tab never fails. Coaches see them too.
+ */
+function clientGuides(_req, ctx) {
+  if (!hasFeature(ctx.db, ctx.user, 'guides')) return { guides: [] };
+  return { guides: CLIENT_GUIDES.map(guideSummary) };
+}
+
+function clientGuide(_req, ctx) {
+  const g = CLIENT_GUIDES.find(x => x.id === ctx.params.id);
+  if (!g || !hasFeature(ctx.db, ctx.user, 'guides')) fail(404, 'Not found');
+  return { ...guideSummary(g), body: g.body };
+}
+
 export function coachRoutes(r) {
   r.add('GET', '/api/coach/today', today);
   r.add('GET', '/api/coach/clients', clients);
   r.add('GET', '/api/coach/clients/:id', clientDetail);
   r.add('GET', '/api/coach/business', business);
   r.add('GET', '/api/guides', guides);
+  r.add('GET', '/api/client/guides', clientGuides);
+  r.add('GET', '/api/client/guides/:id', clientGuide);
 }

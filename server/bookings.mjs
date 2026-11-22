@@ -1,6 +1,7 @@
 import { clientFor, coachIdOf, requireCoach, requireMember } from './access.mjs';
 import { clock, day, fail, instant, num, oneOf, str } from './http.mjs';
 import { planOf } from './plans.mjs';
+import { coachSettings, meetingUrl } from './settings.mjs';
 import { notify } from './push.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, monthBounds, weekday } from './time.mjs';
@@ -110,7 +111,20 @@ function bookingOut(db, b, viewer) {
     joined: b.kind === 'group' ? attendees.some(a => a.id === viewer.id) : mine,
     cancellable: mine && Date.parse(b.start) > Date.now(),
     refundable: Date.parse(b.start) - Date.now() >= CANCEL_HOURS * 3_600_000,
+    // A video call's room: its own link, else the coach's default room; null until one exists ("Details", not "Join").
+    meetingUrl: mine ? resolvedMeetingUrl(db, b) : null,
   };
+}
+
+export const resolvedMeetingUrl = (db, b) => b.meeting_url ?? (b.kind === 'video' ? coachSettings(db, b.coach_id).defaultMeetingUrl : null);
+
+/** The coach sets (or clears) a booking's own meeting link. */
+function setMeeting(_req, ctx) {
+  requireCoach(ctx);
+  const b = ctx.db.prepare('SELECT * FROM bookings WHERE id=? AND coach_id=?').get(ctx.params.id, ctx.user.id);
+  if (!b) fail(404, 'Not found');
+  ctx.db.prepare('UPDATE bookings SET meeting_url=? WHERE id=?').run(meetingUrl(ctx.body.meetingUrl ?? null, 'meetingUrl'), b.id);
+  return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(b.id), ctx.user);
 }
 
 function listBookings(_req, ctx) {
@@ -227,6 +241,7 @@ export function bookingRoutes(r) {
   r.add('GET', '/api/bookings', listBookings);
   r.add('POST', '/api/bookings', createBooking);
   r.add('DELETE', '/api/bookings/:id', cancelBooking);
+  r.add('PATCH', '/api/bookings/:id', setMeeting);
   r.add('POST', '/api/classes', createClass);
   r.add('POST', '/api/classes/:id/join', joinClass);
   r.add('POST', '/api/classes/:id/leave', leaveClass);

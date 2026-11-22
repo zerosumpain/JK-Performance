@@ -30,7 +30,7 @@ struct MessagesThreadView: View {
                             }
                             ForEach(Array(messages.enumerated()), id: \.element.id) { index, m in
                                 if index == 0 || !Day.same(messages[index - 1].at, m.at) {
-                                    Text(dayLabel(m.at)).font(.caption2).foregroundStyle(JK.tertiary).padding(.top, 8)
+                                    Text(dayLabel(m.at)).font(.jkCaption).foregroundStyle(JK.textSecondary).padding(.top, 8)
                                 }
                                 Bubble(message: m, mine: m.fromId == session.me?.id)
                                     .id(m.id)
@@ -52,19 +52,20 @@ struct MessagesThreadView: View {
                 TextField("Message", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(JK.card, in: Capsule())
-                    .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                    .background(JK.surface, in: Capsule())
+                    .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
                 Button {
                     Task { await send() }
                 } label: {
                     Group {
-                        if sending { ProgressView().tint(.black) } else { Image(systemName: "paperplane.fill") }
+                        if sending { ProgressView().tint(JK.onPrimary) } else { Image(systemName: "paperplane.fill") }
                     }
-                    .foregroundStyle(.black)
+                    .foregroundStyle(JK.onPrimary)
                     .frame(width: 34, height: 34)
-                    .background(JK.chrome, in: Circle())
+                    .background(JK.primaryFill, in: Circle())
                 }
                 .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Send")
             }
             .padding(.horizontal, 16).padding(.vertical, 10)
             .background(JK.bg)
@@ -76,8 +77,8 @@ struct MessagesThreadView: View {
                 HStack(spacing: 8) {
                     Avatar(initials: Fmt.initials(otherName), size: 26)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(otherName).font(.subheadline.weight(.semibold))
-                        Text(subtitle).font(.system(size: 10)).foregroundStyle(JK.tertiary)
+                        Text(otherName).font(.jkCallout.weight(.semibold))
+                        Text(subtitle).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,32 +141,46 @@ private struct Bubble: View {
     let message: Message
     let mine: Bool
 
+    /// What a non-text message is, in a word or two.
+    private var tag: (key: IconKey, text: String)? {
+        switch message.kind {
+        case "formCheck"?: return (.formCheck, "Form check")
+        case "mealPhoto"?: return (.mealPhoto, "Meal photo")
+        case "answer"?: return (.reply, mine ? "Your answer to the letter" : "Answered your letter")
+        case "letter"?: return (.letter, "Letter delivered")
+        default:
+            if message.workoutId != nil { return (.workout, "Plan updated") }
+            return nil
+        }
+    }
+
     var body: some View {
         HStack {
             if mine { Spacer(minLength: 50) }
-            VStack(alignment: .trailing, spacing: 4) {
-                if message.workoutId != nil {
-                    HStack(spacing: 8) {
-                        IconTile(systemName: "dumbbell", size: 28)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Workout").font(.caption.weight(.semibold))
-                            Text("Plan updated · see your Plan tab").font(.system(size: 10)).foregroundStyle(JK.tertiary)
-                        }
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                if let tag {
+                    HStack(spacing: JK.Space.xs) {
+                        Icon(key: tag.key, size: 13).foregroundStyle(JK.textSecondary)
+                        Text(tag.text).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !message.text.isEmpty {
-                    Text(message.text).font(.footnote).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(message.text).font(.jkBody).foregroundStyle(JK.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Text(Fmt.time(message.at)).font(.system(size: 9)).foregroundStyle(mine ? Color.black.opacity(0.5) : JK.tertiary)
+                if let id = message.mediaId {
+                    MessageMedia(mediaId: id, isVideo: message.kind == "formCheck")
+                }
+                Text(Fmt.time(message.at)).font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .fixedSize(horizontal: false, vertical: true)
-            .padding(12)
-            .foregroundStyle(mine ? Color.black : JK.text)
-            .background(mine ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.card),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(mine ? Color.clear : JK.stroke, lineWidth: 1))
-            .frame(maxWidth: 280, alignment: mine ? .trailing : .leading)
+            .padding(JK.Space.m)
+            // Your own words sit raised; the other side's on surface.
+            .background(mine ? JK.raised : JK.surface,
+                        in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
+            .frame(maxWidth: 300, alignment: mine ? .trailing : .leading)
+            .accessibilityElement(children: .combine)
             if !mine { Spacer(minLength: 50) }
         }
     }
@@ -173,65 +188,91 @@ private struct Bubble: View {
 
 // MARK: - Coach: thread list
 
+/// The coach's conversations, newest first. Threads from clients on a plan
+/// with 'priority' carry the word "Priority".
 struct CoachThreadsView: View {
     @State private var threads: [MessageThread]?
+    @State private var priority: Set<String> = []
+    @State private var plans: [String: String] = [:]
     @State private var error: String?
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(eyebrow: "Coach", title: "Messages")
+                VStack(alignment: .leading, spacing: JK.Space.l) {
+                    Text("Messages").jkText(.display).foregroundStyle(JK.text).accessibilityAddTraits(.isHeader)
                     Loadable(value: threads, error: error, retry: load) { list in
                         if list.isEmpty {
-                            EmptyCard(systemName: "bubble.left", title: "No conversations yet")
+                            EmptyState(line: "No conversations yet.")
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(list) { t in
                                     NavigationLink {
-                                        MessagesThreadView(clientId: t.client.id, otherName: t.client.name, subtitle: "Client")
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Avatar(initials: t.client.displayInitials, size: 34)
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                HStack {
-                                                    Text(t.client.name).font(.subheadline.weight(.semibold))
-                                                    Spacer()
-                                                    if let at = t.last?.at {
-                                                        Text(Day.same(at, Date()) ? Fmt.time(at) : Fmt.dayMonth(at))
-                                                            .font(.caption2).foregroundStyle(JK.tertiary)
-                                                    }
-                                                }
-                                                Text(t.last?.text ?? "No messages").font(.caption2).foregroundStyle(JK.tertiary).lineLimit(1)
-                                            }
-                                            if t.unread > 0 {
-                                                Text("\(t.unread)")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .padding(.horizontal, 6).padding(.vertical, 2)
-                                                    .background(JK.text, in: Capsule())
-                                                    .foregroundStyle(.black)
-                                            }
-                                        }
-                                        .foregroundStyle(JK.text)
-                                        .padding(12)
-                                    }
+                                        MessagesThreadView(clientId: t.client.id, otherName: t.client.name,
+                                                           subtitle: priority.contains(t.client.id) ? "Priority · same-day reply" : Fmt.planName(plans[t.client.id]))
+                                    } label: { row(t) }
+                                    .buttonStyle(.plain)
+                                    if t.id != list.last?.id { GroupDivider(inset: JK.Space.l + JK.Size.avatar + JK.Space.m) }
                                 }
                             }
-                            .jkCard(padding: 2)
+                            .surface(.group)
                         }
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, JK.Space.gutter)
+                .padding(.vertical, JK.Space.l)
             }
             .jkScreen()
             .jkRefreshable { await load() }
             .toolbar(.hidden, for: .navigationBar)
+            .task { await loadPlans() }
             .task {
                 while !Task.isCancelled {
                     await load()
                     try? await Task.sleep(for: .seconds(15))
                 }
             }
+        }
+    }
+
+    private func row(_ t: MessageThread) -> some View {
+        HStack(spacing: JK.Space.m) {
+            Avatar(initials: t.client.displayInitials)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: JK.Space.s) {
+                    Text(t.client.name).font(.jkCallout).foregroundStyle(JK.text)
+                    if priority.contains(t.client.id) {
+                        Text("Priority").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    if let at = t.last?.at {
+                        Text(Day.same(at, Date()) ? Fmt.time(at) : Fmt.dayMonth(at))
+                            .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    }
+                }
+                Text(preview(t)).font(.jkCaption).foregroundStyle(JK.textSecondary).lineLimit(1)
+            }
+            if t.unread > 0 {
+                Text("\(t.unread)")
+                    .font(.jkCaption.monospacedDigit())
+                    .padding(.horizontal, JK.Space.s).padding(.vertical, 2)
+                    .background(JK.primaryFill, in: Capsule())
+                    .foregroundStyle(JK.onPrimary)
+                    .accessibilityLabel("\(t.unread) unread")
+            }
+        }
+        .padding(.horizontal, JK.Space.l)
+        .padding(.vertical, JK.Space.m)
+        .contentShape(Rectangle())
+    }
+
+    private func preview(_ t: MessageThread) -> String {
+        guard let last = t.last else { return "No messages" }
+        switch last.kind {
+        case "formCheck"?: return "Form check" + (last.text.isEmpty ? "" : " · \(last.text)")
+        case "mealPhoto"?: return "Meal photo" + (last.text.isEmpty ? "" : " · \(last.text)")
+        case "answer"?: return "Answered your letter · \(last.text)"
+        default: return last.text
         }
     }
 
@@ -243,5 +284,14 @@ struct CoachThreadsView: View {
         } catch {
             if !error.isCancellation { self.error = error.readable }
         }
+    }
+
+    /// Which clients are on a plan that includes 'priority'.
+    private func loadPlans() async {
+        guard let catalogue: PlansResponse = try? await APIClient.shared.get("/api/plans"),
+              let clients: ClientsResponse = try? await APIClient.shared.get("/api/coach/clients") else { return }
+        let priorityPlans = Set(catalogue.plans.filter { $0.featureIds.contains("priority") }.map(\.id))
+        priority = Set(clients.clients.filter { priorityPlans.contains($0.plan ?? "") }.map(\.id))
+        plans = Dictionary(clients.clients.map { ($0.id, $0.plan ?? "none") }, uniquingKeysWith: { first, _ in first })
     }
 }
