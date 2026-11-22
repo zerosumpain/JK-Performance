@@ -5,9 +5,9 @@ name: Check app
 on:
   push:
     branches: [main]
-    paths: ['ios/**', '.github/workflows/check.yml']
+    paths: ['ios/**', '.github/workflows/check.yml', 'scripts/lint-design.sh', 'scripts/lint-design-allow.txt', 'scripts/contrast-check.mjs']
   pull_request:
-    paths: ['ios/**', '.github/workflows/check.yml']
+    paths: ['ios/**', '.github/workflows/check.yml', 'scripts/lint-design.sh', 'scripts/lint-design-allow.txt', 'scripts/contrast-check.mjs']
   workflow_dispatch:
 concurrency:
   group: check-${{ github.ref }}
@@ -15,7 +15,19 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  # Cheap Linux gate first: design tokens (docs/design/atelier-spec.md, GOVERNANCE).
+  design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: scripts/lint-design.sh ios
+      - run: node scripts/contrast-check.mjs
   ios:
+    needs: design
     runs-on: macos-26
     timeout-minutes: 40
     steps:
