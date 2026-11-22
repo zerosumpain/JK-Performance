@@ -1,0 +1,44 @@
+/* Today, its lists, and Business (today.js). */
+.back-link{display:inline-flex;align-items:center;gap:4px;color:var(--muted);text-decoration:none;font-size:13px;margin-bottom:6px}
+.back-link:hover{color:var(--text)}
+.jk-mark{display:inline-grid;place-items:center;width:34px;height:34px;border:1px solid var(--muted);border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;color:var(--text)}
+.jk-mark:hover{border-color:var(--text)}
+.screen-head .icon-btn{text-decoration:none}
+
+/* The card grid: two across on a phone (as the iPhone), four on a desk. */
+.today-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:1000px){.today-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.urgent-card{border-color:color-mix(in srgb,var(--urgent) 55%,transparent)}
+.urgent-head{display:flex;align-items:center;gap:6px;color:var(--urgent);font-size:12.5px;font-weight:600;padding:8px 12px 0}
+
+/* Below the grid: "No training lately" beside today's sessions on a wide screen. */
+.today-lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:0 24px;align-items:start}
+.today-lower.single{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1000px){.today-lower{grid-template-columns:minmax(0,1fr)}}
+
+.session-list{display:flex;flex-direction:column;gap:8px}
+.session-row{display:flex;align-items:center;gap:12px}
+.session-times{width:42px;flex:none;font-size:12px;line-height:1.25}
+.session-times .faint{font-size:10.5px}
+.session-row.done .session-times{color:var(--faint)}
+.session-card{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px;background:var(--card);border:1px solid var(--stroke);border-radius:12px;text-decoration:none;color:var(--text)}
+.session-card:hover{background:#171717}
+.session-card.next{border-color:var(--muted)}
+.session-row.done .session-card{color:var(--faint)}
+.session-card>.icon:last-child{color:var(--faint)}
+.session-row.done .session-card>.icon:last-child{color:var(--faint)}
+.slot-bar{width:3px;height:28px;border-radius:2px;flex:none}
+.next-pill{font-size:10px;font-weight:650;padding:2px 8px;border-radius:99px;background:var(--text);color:#000;flex:none}
+
+/* The lists behind the cards. */
+.people-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:0 10px}
+.people-grid .card{margin:5px 0}
+
+/* Business */
+.mrr-card .eyebrow{margin:0}
+.mrr-value{font-size:34px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.15;margin:4px 0 8px}
+.mrr-chart{display:block;width:100%;height:90px}
+.delta-badge{font-size:11.5px;font-weight:600;color:var(--muted);padding:2px 9px;border:1px solid var(--stroke-strong);border-radius:99px}
+.biz-stats{margin-top:10px}
+@media (max-width:420px){.biz-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
