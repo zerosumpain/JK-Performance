@@ -1,237 +1,116 @@
 /*
- * Today (the coach's home), the lists behind its cards, and Business.
- * Ported from the iPhone app: CoachTodayView + TodayCards, PeopleListView,
- * FeedbackDueView, SessionRow and BusinessView (Coach/TodayCards.swift and
- * Coach/CoachViews.swift).
+ * Today (the coach's home) and Business. Atelier: the next-session strip, the
+ * letters-due line and one Needs-you list ranked by severity, from
+ * GET /api/coach/needs-you; it ends "All caught up". (The old summary cards,
+ * the "No training lately" list and the Autoflows card are gone.)
  */
 import {
-  COLOR, MONTHS_LONG, api, avatar, card, emptyCard, errorLine, eyebrow, fill, firstName, fmtCountdown, fmtDay,
-  fmtMoney, fmtRelative, fmtShort, fmtTime, h, icon, link, loading, parseDay, personRow, q, route, screenHeader,
-  segmented, slotColor, stat, summaryCard, todayLondon,
+  MONTHS_LONG, api, avatar, card, emptyCard, emptyState, errorLine, eyebrow, fill, firstName, fmtCountdown, fmtDay, fmtMoney,
+  fmtTime, h, icon, link, loading, parseDay, personRow, q, route, screenHeader, segmented, stat, svgEl, todayLondon,
 } from './core.js';
 
-// MARK: - Helpers (the Swift TodayCards' private ones)
-
-const kindLabel = kind => (kind === 'video' ? 'Video' : kind === 'group' ? 'Group' : '1:1');
-const isGroup = s => s.kind === 'group';
-/** Where a session opens: a 1:1 → the client; a class → its page in Schedule. */
-const sessionPath = s => (s.client && !isGroup(s) ? `/clients/${encodeURIComponent(s.client.id)}` : `/schedule/class/${encodeURIComponent(s.id)}`);
-const clientPath = (id, tab) => `/clients/${encodeURIComponent(id)}${tab ? `/${tab}` : ''}`;
-/** "Sam, Priya +2" */
-function names(list) {
-  if (!list || !list.length) return null;
-  return list.slice(0, 2).map(firstName).join(', ') + (list.length > 2 ? ` +${list.length - 2}` : '');
-}
-function oldest(people) {
-  const ats = (people || []).map(p => p.at).filter(Boolean).sort();
-  return ats[0] || null;
-}
-const weekdayShort = day => fmtDay(day).split(' ')[0];
-const isOverdue = due => !!(due && due.dueBy && todayLondon() > due.dueBy);
-function dueText(due) {
-  if (!due || !due.dueBy) return '';
-  if (isOverdue(due)) return `Week of ${fmtShort(due.week)} · was due ${weekdayShort(due.dueBy)}`;
-  return due.dueBy === todayLondon() ? 'Due today' : `Due ${weekdayShort(due.dueBy)} ${fmtShort(due.dueBy)}`;
-}
-
+const enc = encodeURIComponent;
+const kindLabel = kind => (kind === 'video' ? 'Video call' : kind === 'group' ? 'Class' : '1:1');
+const clientPath = (id, tab) => `/clients/${enc(id)}${tab ? `/${tab}` : ''}`;
 /** A back link over a pushed screen (the iPhone's navigation back button). */
-const backLink = (to, label) => link(to, { class: 'back-link' }, icon('back', 14), label);
-
-/** Load JSON for a screen; draws loading/error with a retry, and ignores a stale answer. */
-async function loadInto(el, view, path, draw) {
-  const body = h('div');
-  el.append(body);
-  const run = async () => {
-    fill(body, loading());
-    try {
-      const data = await api('GET', path);
-      if (view.fresh()) fill(body, draw(data));
-    } catch (err) {
-      if (view.fresh()) fill(body, errorLine(err), h('button', { class: 'btn small', type: 'button', onclick: run }, 'Try again'));
-    }
-  };
-  await run();
-}
+const backLink = (to, label) => link(to, { class: 'back-link' }, icon('back', 16), label);
 
 // MARK: - Today
 
 route('/today', async (el, _params, view) => {
   const date = todayLondon();
-  el.append(screenHeader(`Coach · ${fmtDay(date)}`, 'Today',
-    link('/account', { class: 'icon-btn', 'aria-label': 'Account', title: 'Account' }, icon('account', 18)),
-    link('/business', { class: 'jk-mark', 'aria-label': 'Business', title: 'Business' }, 'JK')));
+  el.append(screenHeader(fmtDay(date), 'Today',
+    link('/business', { class: 'icon-btn', 'aria-label': 'Business', title: 'Business' }, icon('business', 20)),
+    link('/account', { class: 'icon-btn', 'aria-label': 'Account and settings', title: 'Account and settings' }, icon('settings', 20))));
   const body = h('div', { class: 'today' }, loading());
   el.append(body);
-  let timer = null;
+  let lettersOnly = false, last = null;
+  const draw = () => { if (last && view.fresh()) fill(body, todayBody(last, lettersOnly, v => { lettersOnly = v; draw(); })); };
   const load = async (quiet = false) => {
     if (!quiet) fill(body, loading());
     try {
-      const t = await api('GET', `/api/coach/today?${q({ date })}`);
-      if (view.fresh()) fill(body, todayCards(t));
+      last = await api('GET', '/api/coach/needs-you');
+      draw();
     } catch (err) {
       if (view.fresh() && !quiet) fill(body, errorLine(err), h('button', { class: 'btn small', type: 'button', onclick: () => load() }, 'Try again'));
     }
   };
   await load();
-  // Countdowns and "to go" move with the clock; the iPhone redraws on pull-to-refresh.
-  timer = setInterval(() => { if (!document.hidden) load(true); }, 60_000);
+  const timer = setInterval(() => { if (!document.hidden) load(true); }, 60_000);
   view.onLeave(() => clearInterval(timer));
 });
 
-function todayCards(t) {
-  const sessions = [...(t.sessions || [])].sort((a, b) => a.start.localeCompare(b.start));
-  const now = Date.now();
-  const upcoming = sessions.filter(s => Date.parse(s.end) > now);
-  const out = [];
-
-  if (t.urgent && t.urgent.length) out.push(urgentCard(t.urgent));
-
-  const checkins = t.checkinsToReview ?? 0;
-  const forms = t.formsToReview ?? 0;
-  const quiet = t.quiet || [];
-  const due = t.feedbackDue;
-  const dueCount = due?.clients?.length ?? 0;
-  const firstQuiet = quiet[0];
-  out.push(h('div', { class: 'today-grid' },
-    nextSessionCard(sessions, upcoming),
-    summaryCard({
-      icon: 'bubble', title: 'Messages', count: t.unread ?? 0, countLabel: 'unread',
-      detail: t.unreadClients?.[0]?.at ? `Newest ${fmtRelative(t.unreadClients[0].at)} · ${names(t.unreadClients.map(c => c.name)) ?? ''}` : 'No unread',
-      tint: (t.unread ?? 0) > 0 ? COLOR.waiting : null, to: '/messages',
-    }),
-    summaryCard({
-      icon: 'pencil', title: 'Check-ins', count: checkins,
-      detail: oldest(t.checkinClients) ? `Oldest ${fmtRelative(oldest(t.checkinClients))}` : 'All replied',
-      tint: checkins > 0 ? COLOR.waiting : null, to: '/today/checkins', disabled: checkins === 0,
-    }),
-    summaryCard({
-      icon: 'form', title: 'Forms to read', count: forms,
-      detail: names(t.formClients?.map(c => c.name)) ?? 'Nothing new',
-      tint: forms > 0 ? COLOR.waiting : null, to: '/programs/forms',
-    }),
-    summaryCard({
-      icon: 'bubble', title: 'Feedback to write', count: dueCount,
-      detail: dueCount === 0 ? 'All published' : dueText(due),
-      tint: dueCount > 0 && isOverdue(due) ? COLOR.urgent : dueCount > 0 ? COLOR.waiting : null,
-      to: '/today/feedback-due', disabled: dueCount === 0,
-    }),
-    summaryCard({
-      icon: 'moon', title: 'Gone quiet', count: quiet.length,
-      detail: firstQuiet ? `${firstName(firstQuiet.name)} · ${firstQuiet.days} days` : 'Everyone’s in touch',
-      to: '/today/quiet', disabled: quiet.length === 0,
-    }),
-    summaryCard({ icon: 'bolt', title: 'Autoflows', count: t.upcoming?.length ?? 0, countLabel: 'this week', detail: autoflowDetail(t.upcoming), to: '/programs/autoflows' }),
-    summaryCard({ icon: 'calendar', title: 'This week', count: t.sessionsLeftThisWeek ?? 0, detail: 'sessions still to come', to: '/schedule' }),
-  ));
-
-  const inactive = (t.attention || []).filter(a => a.kind === 'inactive');
-  const lower = h('div', { class: 'today-lower' + (inactive.length ? '' : ' single') });
-  if (inactive.length) {
-    lower.append(h('section', null,
-      eyebrow('No training lately'),
-      card({ class: 'flush' }, inactive.map(a => personRow(a.client, a.reason, clientPath(a.client.id))))));
+function todayBody(n, lettersOnly, setLettersOnly) {
+  const out = [nextStrip(n.sessionsToday)];
+  const due = n.lettersDue;
+  if (due && due.count > 0) {
+    out.push(h('button', {
+      class: 'letters-due' + (lettersOnly ? ' on' : ''), type: 'button', 'aria-pressed': String(lettersOnly),
+      title: lettersOnly ? 'Show everyone who needs you' : 'Show only the letters due',
+      onclick: () => setLettersOnly(!lettersOnly),
+    }, icon('letter', 20), h('span', { class: 'grow' }, `Letters due: ${due.count} · about ${due.estMinutes} min`),
+    h('span', { class: 'small muted' }, lettersOnly ? 'Show all' : `Week of ${fmtDay(due.week).slice(4)}`)));
   }
-  const nextId = upcoming[0]?.id;
-  lower.append(h('section', null,
-    eyebrow('Sessions today', sessions.length ? `${upcoming.length} to go` : null),
-    sessions.length
-      ? h('div', { class: 'session-list' }, sessions.map(s => sessionRow(s, s.id === nextId)))
-      : h('p', { class: 'small faint m0' }, 'Nothing booked today.')));
-  out.push(lower);
+  let items = n.items || [];
+  if (lettersOnly && due) {
+    const byId = new Map(items.map(i => [i.client.id, i]));
+    items = due.clients.map(c => byId.get(c.id) ?? {
+      client: { ...c, firstName: firstName(c.name) }, rank: 4, priority: false,
+      reasons: [{ kind: 'checkinLetterDue', iconKey: 'letter', text: c.media ? 'Letter due · with a voice or video note' : 'Letter due' }],
+      reasonLine: c.media ? 'Letter due · with a voice or video note' : 'Letter due',
+      primaryAction: { kind: 'writeLetter', label: 'Write letter' },
+    });
+  }
+  if (items.length) out.push(h('div', { class: 'card flush needs-you', role: 'list', 'aria-label': 'Needs you' }, items.map(needsYouRow)));
+  out.push(emptyState('All caught up.', items.length ? null : 'Nothing is waiting on you.'));
   return out;
 }
 
-function urgentCard(items) {
-  return card({ class: 'flush urgent-card' },
-    h('div', { class: 'urgent-head' }, icon('warning', 14), items.length === 1 ? 'Needs you first' : `${items.length} need you first`),
-    items.map(a => personRow(a.client, a.reason, clientPath(a.client.id, 'feedback'))));
+/** "Next: Sam · 07:00 · Studio", "3 of 5 sessions today": opens the schedule. */
+function nextStrip(st) {
+  const next = st?.next;
+  const who = next ? (next.kind === 'group' ? (next.title || 'Class') : firstName(next.client?.name ?? next.title ?? 'Session')) : null;
+  const where = next ? (next.location || kindLabel(next.kind)) : null;
+  const total = st?.total ?? 0;
+  return link('/schedule', { class: 'next-strip' },
+    icon(next?.kind === 'video' ? 'video' : next?.kind === 'group' ? 'group' : 'workout', 20),
+    h('span', { class: 'grow' },
+      next ? h('span', { class: 'strong' }, `Next: ${who} · ${fmtTime(next.start)} · ${where}`) : h('span', { class: 'strong' }, total ? 'No more sessions today' : 'No sessions today'),
+      next && fmtCountdown(next.start) ? h('span', { class: 'muted' }, ` · ${fmtCountdown(next.start)}`) : null),
+    total ? h('span', { class: 'small muted t-num' }, `${st.done} of ${total} sessions today`) : null,
+    icon('chevron', 18));
 }
 
-function nextSessionCard(sessions, upcoming) {
-  const next = upcoming[0];
-  if (next) {
-    return summaryCard({
-      icon: 'clock', title: 'Next session', value: fmtTime(next.start),
-      detail: `${next.client?.name ?? next.title ?? kindLabel(next.kind)} · ${fmtCountdown(next.start) ?? 'now'}`,
-      tint: slotColor(next.kind), to: sessionPath(next),
-    });
-  }
-  return summaryCard({
-    icon: 'clock', title: 'Sessions today', value: sessions.length ? 'Done' : 'None',
-    detail: sessions.length ? `All ${sessions.length} finished` : 'Nothing booked', to: '/schedule',
-  });
-}
-
-function autoflowDetail(upcoming) {
-  const first = upcoming?.[0];
-  if (!first) return 'Nothing due';
-  const when = first.date === todayLondon() ? 'today' : weekdayShort(first.date);
-  return `${firstName(first.client.name)} · ${first.action} ${when}`;
-}
-
-/** One of today's sessions: times, a colour bar for the kind, who, and Next / done. */
-function sessionRow(s, isNext) {
-  const done = Date.parse(s.end) < Date.now();
-  const who = s.client ? s.client.name : (s.title || 'Group');
-  const count = s.attendeeCount ?? s.attendees?.length ?? 0;
-  const bar = h('span', { class: 'slot-bar', style: { background: slotColor(s.kind), opacity: done ? '0.4' : '1' } });
-  const trailing = isNext ? h('span', { class: 'next-pill' }, 'Next') : done ? icon('check', 14) : icon('chevron', 14);
-  return h('div', { class: 'session-row' + (done ? ' done' : '') },
-    h('div', { class: 'session-times' }, h('div', { class: 'strong' }, fmtTime(s.start)), h('div', { class: 'faint' }, fmtTime(s.end))),
-    link(sessionPath(s), { class: 'session-card' + (isNext ? ' next' : '') },
-      bar,
-      avatar(s.client ? s.client.name : 'G', 28),
-      h('div', { class: 'grow' },
-        h('div', { class: 'strong clamp1' }, isGroup(s) ? `${who} · ${count} clients` : who),
-        h('div', { class: 'tiny faint clamp1' }, [s.title, kindLabel(s.kind)].filter(Boolean).join(' · '))),
-      trailing));
-}
-
-// MARK: - The lists behind the cards
-
-const LISTS = {
-  checkins: {
-    title: 'Check-ins to reply to',
-    rows: t => (t.checkinClients || []).map(p => ({ person: p, detail: p.at ? `Sent ${fmtRelative(p.at)}` : '', tab: 'feedback' })),
-  },
-  quiet: {
-    title: 'Not spoken to lately',
-    rows: t => (t.quiet || []).map(p => ({ person: p, detail: `No contact in ${p.days} days`, tab: 'plan' })),
-  },
-  'feedback-due': {
-    title: 'Feedback to write',
-    eyebrow: t => (t.feedbackDue?.week ? `Week of ${fmtShort(t.feedbackDue.week)}` : 'Today'),
-    rows: t => (t.feedbackDue?.clients || []).map(p => ({ person: p, detail: null, tab: 'feedback' })),
-  },
+const ACTION_PATH = {
+  writeLetter: c => clientPath(c.id, 'letter'),
+  reply: c => `/messages/${enc(c.id)}`,
+  nudge: c => `/messages/${enc(c.id)}`,
+  readAnswers: c => clientPath(c.id, 'forms'),
 };
+const REASON_TONE = { pain: 'tone-urgent', priorityUnread: 'tone-attention' };
 
-route('/today/:list', async (el, { list }, view) => {
-  const spec = LISTS[list];
-  el.append(backLink('/today', 'Today'));
-  if (!spec) {
-    el.append(screenHeader(null, 'Not found'), h('p', { class: 'muted' }, 'That list doesn’t exist.'));
-    return;
-  }
-  const head = h('div', null, screenHeader('Today', spec.title));
-  el.append(head);
-  await loadInto(el, view, `/api/coach/today?${q({ date: todayLondon() })}`, t => {
-    if (spec.eyebrow) fill(head, screenHeader(spec.eyebrow(t), spec.title));
-    const rows = spec.rows(t);
-    if (!rows.length) return emptyCard('check', 'Nothing waiting');
-    return h('div', { class: 'people-grid' }, rows.map(r => card({ class: 'flush' }, personRow(r.person, r.detail, clientPath(r.person.id, r.tab)))));
-  });
-}, { nav: 'today' });
+/** One client: avatar, name, reason glyphs, a one-line reason and one action. */
+function needsYouRow(item) {
+  const c = item.client;
+  const seen = new Set();
+  const glyphs = (item.reasons || []).filter(r => !seen.has(r.iconKey) && seen.add(r.iconKey)).slice(0, 3)
+    .map(r => h('span', { class: REASON_TONE[r.kind] || 'muted' }, icon(r.iconKey || r.kind, 18, { label: r.text })));
+  const action = item.primaryAction;
+  return h('div', { class: 'ny-row', role: 'listitem' },
+    link(clientPath(c.id), { class: 'ny-main' },
+      avatar(c.initials || c.name, 36),
+      h('div', { class: 'grow' },
+        h('div', { class: 'row gap4 ny-name' }, h('span', { class: 'strong' }, c.name)),
+        h('div', { class: 'small muted clamp2' }, item.reasonLine)),
+      h('span', { class: 'ny-glyphs' }, glyphs)),
+    action && ACTION_PATH[action.kind]
+      ? link(ACTION_PATH[action.kind](c), { class: 'btn small ny-action' }, action.label)
+      : null);
+}
 
 // MARK: - Business
 
-const SVG = 'http://www.w3.org/2000/svg';
-const svgEl = (tag, attrs) => {
-  const el = document.createElementNS(SVG, tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
-  return el;
-};
-
-/** The MRR area chart: a line with a fading fill, no axes (as the iPhone draws it). */
+/** The MRR line: slate, no fill, no axes. */
 function mrrChart(series) {
   const points = series.map(s => s.pence / 100);
   if (points.length < 2) return null;
@@ -242,20 +121,12 @@ function mrrChart(series) {
   const x = i => (i / (points.length - 1)) * W;
   const y = v => H - ((v - lo) / (hi - lo)) * H;
   const line = points.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
-  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'mrr-chart', role: 'img', 'aria-label': 'Monthly recurring revenue over the period' });
-  const id = `mrr-fill-${Math.random().toString(36).slice(2, 8)}`;
-  const grad = svgEl('linearGradient', { id, x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad.append(svgEl('stop', { offset: '0', 'stop-color': '#fff', 'stop-opacity': '0.3' }), svgEl('stop', { offset: '1', 'stop-color': '#fff', 'stop-opacity': '0' }));
-  const defs = svgEl('defs', {});
-  defs.append(grad);
-  svg.append(defs,
-    svgEl('path', { d: `${line}L${W},${H}L0,${H}Z`, fill: `url(#${id})` }),
-    svgEl('path', { d: line, fill: 'none', stroke: '#fff', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
-  return svg;
+  return svgEl('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'mrr-chart', role: 'img', 'aria-label': 'Monthly recurring revenue over the period' },
+    svgEl('path', { d: line, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
 }
 
 const delta = v => (v < 0 ? `−${Math.abs(v)}` : v > 0 ? `+${v}` : `${v}`);
-const attentionIcon = kind => (kind === 'checkin' ? 'form' : 'warning');
+const attentionIcon = kind => (kind === 'checkin' ? 'checkIn' : kind === 'payment' ? 'tag' : 'noTraining');
 
 function businessBody(b) {
   return [
@@ -267,12 +138,12 @@ function businessBody(b) {
     h('div', { class: 'grid4 biz-stats' },
       stat(String(b.active), 'Active'), stat(String(b.new), 'New'), stat(String(b.churned), 'Churned'),
       stat(b.adherence === null || b.adherence === undefined ? '–' : `${b.adherence}%`, 'Adherence')),
-    eyebrow('Members by plan', link('/business/plans', { class: 'row gap4' }, icon('tag', 13), 'Plans & prices')),
+    eyebrow('Members by plan', link('/business/plans', { class: 'row gap4' }, icon('tag', 16), 'Plans & prices')),
     b.plans && b.plans.length ? h('div', { class: 'stats' }, b.plans.map(p => stat(String(p.members), p.name))) : null,
     eyebrow('Needs attention', 'Auto-flagged'),
     b.attention.length
       ? card({ class: 'flush' }, b.attention.map(a => personRow(a.client, a.reason, clientPath(a.client.id), {
-        trailing: h('span', { class: 'muted' }, icon(attentionIcon(a.kind), 15)),
+        trailing: h('span', { class: 'muted' }, icon(attentionIcon(a.kind), 18)),
       })))
       : emptyCard('check', 'Everyone’s on track'),
   ];
@@ -285,7 +156,7 @@ route('/business', async (el, _params, view) => {
   const body = h('div');
   el.append(backLink('/today', 'Today'), head, body);
   const draw = async () => {
-    fill(head, screenHeader(`Coach · ${month}`, 'Business', segmented([['week', 'Week'], ['month', 'Month']], period, v => { period = v; draw(); })));
+    fill(head, screenHeader(month, 'Business', segmented([['week', 'Week'], ['month', 'Month']], period, v => { period = v; draw(); })));
     fill(body, loading());
     const asked = period;
     try {
