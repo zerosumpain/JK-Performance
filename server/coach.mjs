@@ -216,7 +216,7 @@ function business(_req, ctx) {
     active: now.members, new: joined, churned,
     adherence: rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : null,
     attention: attention.slice(0, 10),
-    plans: plansFor(ctx.db, ctx.user.id).filter(p => p.id !== 'none').map(p => ({ id: p.id, name: p.name, monthlyPence: p.monthlyPence, members: [...now.plans.values()].filter(v => v === p.id).length })),
+    plans: plansFor(ctx.db, ctx.user.id).map(p => ({ id: p.id, name: p.name, monthlyPence: p.monthlyPence, members: [...now.plans.values()].filter(v => v === p.id).length })),
   };
 }
 

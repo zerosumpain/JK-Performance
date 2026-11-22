@@ -53,7 +53,9 @@ function putOnboarding(_req, ctx) {
     answeredAt: nowIso(),
   };
   const done = b.done !== false;
-  ctx.db.prepare('UPDATE users SET profile=?, onboarded_at=COALESCE(onboarded_at, ?) WHERE id=?').run(JSON.stringify(profile), done ? nowIso() : null, ctx.user.id);
+  // Skipping every question leaves no profile, so the coach sees "hasn't answered" rather than an empty card.
+  const answered = profile.goals.length || profile.experience || profile.daysPerWeek || profile.preferredTime || profile.injuries;
+  ctx.db.prepare('UPDATE users SET profile=?, onboarded_at=COALESCE(onboarded_at, ?) WHERE id=?').run(answered ? JSON.stringify(profile) : null, done ? nowIso() : null, ctx.user.id);
   return meOut(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
 }
 

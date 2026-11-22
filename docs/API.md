@@ -50,7 +50,7 @@ The contract between `server/` and the iPhone app. Change both sides together.
  "coach":{"id":"u_…","name":"Coach JK"},       // null for a coach
  "isDemo":false, "healthSharing":true,          // healthSharing: clients only (null for a coach)
  "onboarded":true,                               // false: a new client who hasn't answered the first-run questions (show onboarding)
- "profile":Profile}                              // clients only; null until answered
+ "profile":Profile}                              // clients only; null until answered (and when every question was skipped)
 // Profile (every field may be null / empty: each question can be skipped)
 {"goals":["strength","muscle"],"experience":"new|some|experienced","daysPerWeek":4,
  "preferredTime":"morning|midday|evening|varies","injuries":"Left knee","answeredAt":"…"}
@@ -257,7 +257,7 @@ Health-filled habit values, the Health line in a client's detail) only while `sh
 // Business
 {"mrrPence":248600,"mrrDeltaPct":12,"series":[{"date","pence"}],"active":18,"new":2,"churned":1,"adherence":86,
  "attention":[{"client":{id,name,initials},"reason":"No workout logged in 9 days","kind":"inactive|checkin|payment"}],
- "plans":[{"id":"elite","name":"Elite","monthlyPence":14900,"members":3}]}   // mrrDeltaPct and adherence may be null
+ "plans":[{"id":"elite","name":"Elite","monthlyPence":14900,"members":3}]}   // every plan, Free ("none") included; mrrDeltaPct and adherence may be null
 ```
 Plan edits: the free plan (`none`) has no price or credits; a plan with `sessions` needs credits ≥ 1; one plan is
 `featured` at a time (featuring one un-features the rest). A price change applies from now: MRR for earlier days uses

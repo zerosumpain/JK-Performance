@@ -102,6 +102,10 @@ test('a new client answers the first-run questions once', async () => {
 
   assert.equal((await call('PUT', '/api/me/onboarding', { token: newClient.token, body: { goals: ['flying'] } })).status, 400);
   assert.equal((await call('PUT', '/api/me/onboarding', { token: coach, body: {} })).status, 403);
+  // Skipping everything finishes onboarding but leaves no answers.
+  me = (await call('PUT', '/api/me/onboarding', { token: newClient.token, body: { done: true } })).body;
+  assert.equal(me.onboarded, true);
+  assert.equal(me.profile, null);
   me = (await call('PUT', '/api/me/onboarding', { token: newClient.token, body: { goals: ['muscle', 'strength'], experience: 'some', daysPerWeek: 4, preferredTime: 'evening', injuries: ' Left knee ' } })).body;
   assert.equal(me.onboarded, true);
   assert.deepEqual(me.profile.goals, ['strength', 'muscle']);
