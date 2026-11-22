@@ -53,8 +53,13 @@ data class Me(
     var coach: PersonRef? = null,
     /** Clients: whether they've said yes to their coach seeing their health data. */
     var healthSharing: Boolean? = null,
+    /** False for a new client who hasn't been through the first-run questions; null (older servers) counts as done. */
+    var onboarded: Boolean? = null,
+    /** Clients: their first-run answers, null until answered. */
+    var profile: Profile? = null,
 ) {
     val isCoach: Boolean get() = role == "coach"
+    val needsOnboarding: Boolean get() = !isCoach && onboarded == false
     val demo: Boolean get() = isDemo == true
     val firstName: String get() = name.split(" ").firstOrNull { it.isNotEmpty() } ?: name
 }
@@ -82,6 +87,36 @@ data class PersonRef(
     val displayInitials: String get() = initials ?: Fmt.initials(name)
 }
 
+/**
+ * A client's first-run answers. Every field may be missing: each question can be skipped.
+ * goals: strength | muscle | fatloss | fitness | performance | mobility | health;
+ * experience: new | some | experienced; preferredTime: morning | midday | evening | varies.
+ */
+@Serializable
+data class Profile(
+    var goals: List<String>? = null,
+    var experience: String? = null,
+    var daysPerWeek: Int? = null,
+    var preferredTime: String? = null,
+    var injuries: String? = null,
+    var answeredAt: Instant? = null,
+) {
+    /** True when every question was skipped. */
+    val isEmpty: Boolean
+        get() = goals.isNullOrEmpty() && experience == null && daysPerWeek == null && preferredTime == null && injuries.isNullOrBlank()
+}
+
+/** PUT /api/me/onboarding. `done: false` saves answers without finishing. */
+@Serializable
+data class OnboardingInput(
+    var goals: List<String>? = null,
+    var experience: String? = null,
+    var daysPerWeek: Int? = null,
+    var preferredTime: String? = null,
+    var injuries: String? = null,
+    var done: Boolean = true,
+)
+
 @Serializable
 data class Plan(
     val id: String,
@@ -90,10 +125,46 @@ data class Plan(
     val monthlyPence: Int,
     val annualPence: Int,
     val credits: Int,
+    /** The longer sales line for the walkthrough. */
+    var pitch: String? = null,
+    /** The one "most popular" plan. */
+    var featured: Boolean? = null,
+    /** Feature ids, in catalogue order. */
+    var features: List<String>? = null,
+    var updatedAt: Instant? = null,
+) {
+    val isFree: Boolean get() = id == "none"
+    val isFeatured: Boolean get() = featured == true
+    val featureIds: List<String> get() = features.orEmpty()
+}
+
+/** One entry of the fixed feature catalogue; the apps draw each with its own icon and preview. */
+@Serializable
+data class Feature(
+    val id: String,
+    val title: String,
+    val detail: String,
+    var points: List<String> = emptyList(),
 )
 
 @Serializable
-data class PlansResponse(val plans: List<Plan>)
+data class PlansResponse(
+    val plans: List<Plan>,
+    var features: List<Feature> = emptyList(),
+)
+
+/** PUT /api/coach/plans/:id: the full set of a plan's editable fields. */
+@Serializable
+data class PlanInput(
+    var name: String,
+    var detail: String,
+    var pitch: String,
+    var monthlyPence: Int,
+    var annualPence: Int,
+    var credits: Int,
+    var featured: Boolean,
+    var features: List<String>,
+)
 
 @Serializable
 data class OK(
@@ -827,6 +898,8 @@ data class ClientsResponse(val clients: List<ClientSummary>)
 @Serializable
 data class ClientDetail(
     val client: ClientSummary,
+    /** Their first-run answers; null until answered. */
+    var profile: Profile? = null,
     var healthShared: Boolean? = null,
     var health: HealthSummary? = null,
     var nextWorkout: Workout? = null,
@@ -850,6 +923,7 @@ data class PlanCount(
     val id: String,
     val name: String,
     val members: Int,
+    var monthlyPence: Int? = null,
 )
 
 @Serializable

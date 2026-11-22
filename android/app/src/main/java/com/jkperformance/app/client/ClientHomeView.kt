@@ -172,6 +172,8 @@ fun ClientHomeView() {
     LaunchedEffect(Unit) { load() }
 
     val coachName = session.me?.coach?.name ?: "your coach"
+    var showTour by remember { mutableStateOf(false) }
+    if (showTour) Sheet(onDismiss = { showTour = false }) { PlanTourView() }
 
     JKRefreshable(onRefresh = { load() }, modifier = Modifier.jkScreen()) {
         Column(
@@ -189,6 +191,8 @@ fun ClientHomeView() {
                     Text("JK", style = JKType.caption.bold(), color = JK.text)
                 }
             }
+
+            if (session.me?.membership?.isActive == false) TourCard { showTour = true }
 
             val failure = error
             if (failure != null && !loaded) {
@@ -227,6 +231,20 @@ fun ClientHomeView() {
                 }
             }
         }
+    }
+}
+
+// MARK: Coaching tour
+
+/** For a client on the free plan: a way into the plan walkthrough. */
+@Composable
+private fun TourCard(open: () -> Unit) {
+    Column(Modifier.jkCard(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Eyebrow(text = "Coaching")
+        Text("See what coaching includes", style = JKType.title3.semibold(), color = JK.text)
+        Text("A programme written for you, a coach a message away, and more. Step through each plan.",
+            style = JKType.caption, color = JK.secondary)
+        ChromeButton("Take the tour", onClick = open, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

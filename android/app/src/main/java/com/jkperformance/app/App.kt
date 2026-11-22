@@ -125,7 +125,12 @@ fun RootView() {
         when (session.phase) {
             AppSession.Phase.signedOut -> WelcomeView()
             AppSession.Phase.restoring -> RestoringView()
-            AppSession.Phase.signedIn -> if (session.isCoach) CoachTabs() else ClientTabs()
+            AppSession.Phase.signedIn -> when {
+                session.isCoach -> CoachTabs()
+                // A new client answers the first-run questions before the tabs.
+                session.me?.needsOnboarding == true && !session.onboardingDeferred -> OnboardingFlow()
+                else -> ClientTabs()
+            }
         }
         AnimatedVisibility(
             visible = intro && session.phase != AppSession.Phase.signedOut,

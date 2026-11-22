@@ -1,6 +1,11 @@
 package com.jkperformance.app.design
 
+import android.os.Build
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
@@ -173,6 +178,23 @@ fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        // The dialog window is sized to the whole display but Android 15 fits its frame
+        // between the system bars, so the bottom of every sheet fell off screen. Let the
+        // window run under the bars (as the activity does) and pad for them here instead.
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            window?.let { w ->
+                w.attributes = w.attributes.apply {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        fitInsetsTypes = 0
+                        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    } else {
+                        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
+                }
+                w.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+            }
+        }
         Box(Modifier.fillMaxSize().background(JK.bg).systemBarsPadding().imePadding()) {
             val stack = rememberNavStack()
             CompositionLocalProvider(LocalDismiss provides onDismiss) {
