@@ -372,3 +372,111 @@ file is `<DATA_DIR>/android/jk-performance.apk` + `version.json`, put there by `
 `/` (what the app is), `/privacy`, `/support`, `/health` (liveness, JSON `{ok:true}`), `/desk` (the coach web app:
 everything the coach can do in the apps, over this API; sign in with Google, Apple, a link code from the app or the demo
 coach code; `/login` redirects there). Its files are the ES modules and stylesheets in `server/desk/`.
+
+## Atelier redesign additions
+
+Everything below is additive (docs/design/atelier-spec.md, "Server and data changes"). Old fields and endpoints keep
+working for old app builds. New client routes are never gated in a way that 403s what Today or the JK tab call: those
+return a reduced payload instead. Other new client routes use one helper (`requireFeature`, settings.mjs): like
+`requireMember` it is off while `GATE_SERVICES=false`; when on, a client whose plan lacks the feature gets 403
+`{"error":"feature_not_in_plan"}`.
+
+### Features, coach, preferences on `Me` (items 1, 15, 17; phase 5)
+
+`GET /api/me` gains:
+
+```jsonc
+"features": {            // every key always present; a coach gets true for every plan feature
+  "programme":true,"messaging":true,"habits":true,"progress":true,"checkin":true,"sessions":true,
+  "nutrition":true,"priority":true,"guides":true,
+  "formChecks":false,"mealPhotos":false,"challenges":false,   // coach toggles, not plan features
+  "hasMacroTargets":true                                      // the Fuel ring needs targets; logging food does not
+},
+"coach": {               // clients only (null for a coach), as before plus:
+  "id":"u_…","name":"Coach JK",
+  "avatarMediaId":"md_…"|null, "avatarUrl":"/api/media/md_…"|null,        // JK's portrait (fetch with the bearer token)
+  "signatureMediaId":null, "signatureUrl":null,
+  "replyExpectation":{"standard":"JK replies most evenings","priority":"Same-day replies"},
+  "replyLine":"Same-day replies"                                          // the one this client sees (priority plans get priority)
+},
+"preferences": {"notificationsOn":true,"eveningReminderTime":"20:30"|null},
+"coachSettings": CoachSettings | null   // a coach's own settings; null for clients
+```
+
+If `features` is missing (an older server) the apps show everything as before.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET / PUT | `/api/me/preferences` | `{notificationsOn?, eveningReminderTime?: "HH:MM"\|null}` | `{notificationsOn, eveningReminderTime}` |
+| GET | `/api/coach/settings` (coach) | – | `CoachSettings` |
+| PATCH | `/api/coach/settings` (coach) | any subset of `CoachSettings` | `CoachSettings` |
+| PATCH | `/api/coach/clients/:id/settings` (coach) | `{dayMinimum?: 1–5\|null, letterRhythm?: "weekly"\|"fortnightly"\|"none"\|null, coachLine?: text\|null}` | `ClientSettings` |
+
+```jsonc
+// CoachSettings (defaults shown)
+{"studioTools":false,          // show Programs, Forms, Autoflows, Plans & prices, Business, availability on the phone
+ "formChecks":false,"mealPhotos":false,"challenges":false,
+ "replyExpectation":{"standard":"JK replies most evenings","priority":"Same-day replies"},
+ "defaultMeetingUrl":null,     // video bookings without their own link use this (https only)
+ "avatarMediaId":null,"signatureMediaId":null,   // ids of images the coach uploaded with POST /api/media
+ "letterRhythm":{"elite":{"every":"weekly","media":true},"performance":{"every":"weekly","media":false},
+                 "foundation":{"every":"none","media":false},"none":{"every":"none","media":false}}}
+// ClientSettings
+{"dayMinimum":3,"dayMinimumIsDefault":true,
+ "letterRhythm":{"every":"weekly","days":7,"media":true,"overridden":false},"letterRhythmOverride":null,
+ "coachLine":{"text":"Easy week: walk, sleep, eat well.","setAt":"…"}|null}   // an occasional line for the client's Today
+```
+
+### Guides for clients (item 2)
+
+| GET | `/api/client/guides` | – | `{guides:[{id, title, summary, minutes, tags}]}` |
+|---|---|---|---|
+| GET | `/api/client/guides/:id` | – | `{id, title, summary, minutes, tags, body}` (body: paragraphs split by `\n\n`) |
+
+Any signed-in user whose plan includes `guides` (every default plan, Free included); never `requireMember`. A plan
+without guides gets `{guides:[]}`, never a 403. `GET /api/guides` stays the coach's tips.
+
+### Habits: IconKey, step, the day rule, rest days (items 3, 5, 6)
+
+`Habit` gains `iconKey` (closed catalogue: `water sleep steps protein supplement energy mobility mindfulness reading
+sunlight custom`), `step` (the +/- increment for count habits; the coach's, or a default from the target), `introducedAt`,
+`position`. `icon` (the SF name) stays for old builds and is derived from `iconKey` when only that is sent. Existing
+habits were mapped from their SF names (`drop`→water, `moon`→sleep, `shoeprints.fill`→steps, `bolt`→energy, …;
+anything unknown → custom).
+
+**The day rule.** A day is done when the client's minimum is met: the coach's `dayMinimum`, or ceil(60%) of the habits
+that existed that day (3 of 5). A rest day JK granted is neither done nor missed. Future days are never done.
+
+`GET /api/habits` gains (the old `streak`, every habit every day, stays for one release):
+
+```jsonc
+"dayDone":false, "doneCount":2, "dayMinimum":3,
+"rest":{"date":"2026-11-22","reason":"Travelling"}|null,   // today is a rest day JK granted
+"consistency":{"done":22,"days":27,"rest":1,"window":28},   // "22 of the last 27 days": the 28 days ending today,
+                                                            // today counted only once done, rest days in neither
+"missedYesterday":true                                      // "Yesterday slipped. Today keeps it going."
+```
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/habits/week?from=&to=&clientId=` | – | `{from, to, dayMinimum, days:[DayState]}`; default this Monday to Sunday |
+| GET | `/api/habits/history?from=&to=&clientId=` | – | `HabitHistory`; default the last 28 days (≤ 92) |
+| POST | `/api/habits` (coach) | `{clientId, name, kind, target, unit, iconKey?, icon?, step?, healthKind?}` | `Habit`; 409 when the client already has 5 |
+| PATCH | `/api/habits/:id` (coach) | any of `{name, kind, target, unit, iconKey, icon, step, healthKind, position}` | `Habit` |
+| GET | `/api/clients/:id/rest-days?from=&to=` (coach) | – | `{restDays:[{date, reason, grantedAt}]}` |
+| POST | `/api/clients/:id/rest-days` (coach) | `{date, reason?}` | `{date, reason}` (re-posting updates the reason) |
+| DELETE | `/api/clients/:id/rest-days/:date` (coach) | – | `{ok:true}` |
+
+```jsonc
+// DayState
+{"date":"2026-11-17","done":true,"rest":false,"restReason":null,"doneCount":4,"total":5,"minimum":3,"today":false,"future":false}
+// HabitHistory
+{"from","to",
+ "habits":[Habit + {"days":[{"date","value","done","source":"manual|health","rest":false}],
+                    "rate7":0.86,"rate7Prev":0.71,"rate28":0.79}],   // fractions of non-rest days done; null with none
+ "days":[{"date","dayDone","rest","restReason","doneCount","total","minimum"}],
+ "consistency":{"done","days","rest","window"}}
+```
+
+`GET /api/coach/clients`: each `ClientSummary` gains `habitWeek: [{date, state:"done"|"notDone"|"rest"} ×7]`, the
+seven days ending today, so the list needs no per-client calls.

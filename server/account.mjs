@@ -5,8 +5,21 @@ import { credits } from './bookings.mjs';
 import { fail, num, oneOf, raw, str } from './http.mjs';
 import { PLAN_IDS, planOf } from './plans.mjs';
 import { erasePhotos } from './progress.mjs';
-import { hash, nowIso, tx } from './store.mjs';
+import { coachSettings, featuresOf, preferencesOf, replyLineFor } from './settings.mjs';
+import { createDraftGoal, hash, nowIso, tx } from './store.mjs';
 import { londonDay, monthBounds } from './time.mjs';
+
+/** The client's coach as the apps show them: portrait and signature (media ids, with fetch paths) and the reply lines. */
+function coachOut(db, client, coach) {
+  const s = coachSettings(db, coach.id);
+  const url = id => (id ? `/api/media/${id}` : null);
+  return {
+    id: coach.id, name: coach.name,
+    avatarMediaId: s.avatarMediaId, avatarUrl: url(s.avatarMediaId),
+    signatureMediaId: s.signatureMediaId, signatureUrl: url(s.signatureMediaId),
+    replyExpectation: s.replyExpectation, replyLine: replyLineFor(db, client),
+  };
+}
 
 export function meOut(db, user) {
   const coach = user.coach_id ? db.prepare('SELECT id, name FROM users WHERE id=?').get(user.coach_id) : null;
@@ -16,7 +29,12 @@ export function meOut(db, user) {
     membership: user.role === 'client'
       ? { plan: plan.id, planName: plan.name, since: user.plan_since, renewsOn: plan.id === 'none' ? null : monthBounds(londonDay()).next, ...credits(db, user) }
       : null,
-    coach: coach ? { id: coach.id, name: coach.name } : null,
+    coach: coach ? coachOut(db, user, coach) : null,
+    // What the app may show: plan features, the coach's toggles, and whether macro targets are set (see settings.mjs).
+    features: featuresOf(db, user),
+    preferences: preferencesOf(user),
+    // A coach's own settings (studioTools hides the desk editors on the phone; default off).
+    coachSettings: user.role === 'coach' ? coachSettings(db, user.id) : null,
     healthSharing: user.role === 'client' ? !!user.health_share : null,
     // Clients answer a few first-run questions in the app (demo clients are built already answered).
     onboarded: user.role !== 'client' || !!user.onboarded_at,
@@ -56,6 +74,10 @@ function putOnboarding(_req, ctx) {
   // Skipping every question leaves no profile, so the coach sees "hasn't answered" rather than an empty card.
   const answered = profile.goals.length || profile.experience || profile.daysPerWeek || profile.preferredTime || profile.injuries;
   ctx.db.prepare('UPDATE users SET profile=?, onboarded_at=COALESCE(onboarded_at, ?) WHERE id=?').run(answered ? JSON.stringify(profile) : null, done ? nowIso() : null, ctx.user.id);
+  // The goals step is a draft for JK: "JK will turn this into your goal at your first session."
+  if (answered && !ctx.db.prepare('SELECT 1 FROM goals WHERE client_id=?').get(ctx.user.id)) {
+    createDraftGoal(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
+  }
   return meOut(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
 }
 

@@ -1,12 +1,14 @@
 import { clientFor, initials, requireCoach } from './access.mjs';
 import { bookingOut } from './bookings.mjs';
 import { profileOf } from './account.mjs';
-import { GUIDES } from './catalogue.mjs';
+import { CLIENT_GUIDES, GUIDES } from './catalogue.mjs';
+import { hasFeature } from './settings.mjs';
+import { habitWeekOf } from './daily.mjs';
 import { monthlyPricesAt, plansFor } from './plans.mjs';
 import { dueWeek } from './daily.mjs';
 import { flaggedAnswers } from './forms.mjs';
 import { healthDay, healthVisible } from './health.mjs';
-import { day, oneOf } from './http.mjs';
+import { day, fail, oneOf } from './http.mjs';
 import { addDays, daysBetween, londonDay, londonToUtc, mondayOf } from './time.mjs';
 import { workoutOut } from './training.mjs';
 
@@ -80,6 +82,8 @@ function clientSummary(db, c, today = londonDay()) {
     adherence: adherence(db, c.id, today), lastWorkoutAt: lastDone, checkinDue, flags, unread: unreadRows.length,
     lastMessageAt: lastMessage?.at ?? null, lastMessageFrom: lastMessage?.from_role ?? null,
     demand: demandOf(db, c, { flags, unreadRows, today }),
+    // Seven day states (done, notDone, rest) for the week ending today, under the day rule.
+    habitWeek: habitWeekOf(db, c, today),
   };
 }
 
@@ -225,10 +229,30 @@ function guides(_req, ctx) {
   return GUIDES;
 }
 
+const guideSummary = g => ({ id: g.id, title: g.title, summary: g.summary, minutes: g.minutes, tags: g.tags });
+
+/**
+ * JK's guides for clients. Every plan includes 'guides' (Free too), and this is
+ * exempt from requireMember. A plan the coach has taken guides off gets an empty
+ * list rather than a 403, so the JK tab never fails. Coaches see them too.
+ */
+function clientGuides(_req, ctx) {
+  if (!hasFeature(ctx.db, ctx.user, 'guides')) return { guides: [] };
+  return { guides: CLIENT_GUIDES.map(guideSummary) };
+}
+
+function clientGuide(_req, ctx) {
+  const g = CLIENT_GUIDES.find(x => x.id === ctx.params.id);
+  if (!g || !hasFeature(ctx.db, ctx.user, 'guides')) fail(404, 'Not found');
+  return { ...guideSummary(g), body: g.body };
+}
+
 export function coachRoutes(r) {
   r.add('GET', '/api/coach/today', today);
   r.add('GET', '/api/coach/clients', clients);
   r.add('GET', '/api/coach/clients/:id', clientDetail);
   r.add('GET', '/api/coach/business', business);
   r.add('GET', '/api/guides', guides);
+  r.add('GET', '/api/client/guides', clientGuides);
+  r.add('GET', '/api/client/guides/:id', clientGuide);
 }
