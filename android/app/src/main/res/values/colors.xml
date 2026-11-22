@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atelier bg (design/Tokens.kt JKColors.bg): the window and launcher ground. -->
+    <color name="jk_bg">#0E0D0C</color>
+</resources>

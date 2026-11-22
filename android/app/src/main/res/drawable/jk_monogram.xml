@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The interim JK monogram (docs/design/brand/jk-monogram.svg): tint it, never recolour the paths. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:pathData="M20,8 V31 Q20,39.5 12.5,39.5 Q8.5,39.5 7,36"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M20,26 L35,8"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M25.6,19.3 L37,40"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>
