@@ -40,15 +40,14 @@ import kotlinx.coroutines.launch
 import com.jkperformance.app.design.*
 import com.jkperformance.app.design.components.*
 
-// region Weekly feedback (coach)
+// region Letters (coach)
 
-/** The top of a client's Feedback tab: write this week's review, or open a past one. */
+/** A client's letters: write this week's, or open a past one in the composer. */
 @Composable
-fun CoachReportsSection(clientId: String, clientName: String) {
+fun CoachReportsSection(clientId: String, clientName: String, client: PersonRef) {
+    val nav = LocalNav.current
     var data by remember { mutableStateOf<ReportsResponse?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var editingWeek by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
     suspend fun load() {
         try {
@@ -58,229 +57,41 @@ fun CoachReportsSection(clientId: String, clientName: String) {
             if (!e.isCancellation) error = e.readable
         }
     }
+    LaunchedEffect(clientId) { load() }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Label(text = "Weekly feedback")
+    fun state(r: Report): String {
+        val week = "Week of ${Fmt.dayMonth(r.week)}"
+        return when (r.letterStatus ?: if (r.isPublished) "published" else "draft") {
+            "published" -> "$week · delivered" + (if (r.readAt != null) " · read" else "") + (if (r.answer != null) " · answered" else "")
+            "scheduled" -> "$week · scheduled"
+            else -> "$week · draft"
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
         Loadable(value = data, error = error, retry = { load() }) { d ->
-            val current = d.reports.firstOrNull { it.week == d.suggestedWeek }
-            PrimaryButton(onClick = { editingWeek = d.suggestedWeek }) {
-                IconLabel(if (current == null) "Write feedback · week of ${Fmt.dayMonth(d.suggestedWeek)}"
-                    else "Edit feedback · week of ${Fmt.dayMonth(d.suggestedWeek)}", icon = IconKey.edit, style = LocalTextStyle.current)
-            }
-            d.reports.forEach { r ->
-                key(r.week) {
-                    Row(
-                        Modifier.clickable { editingWeek = r.week }.jkSurface(padding = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(r.weekLabel, style = JKType.callout.semibold(), color = JKColors.text)
-                            Text(
-                                if (r.isPublished) (if (r.readAt != null) "Published · read" else "Published · not read yet") else "Draft",
-                                style = JKType.caption,
-                                color = JKColors.textTertiary,
-                            )
-                        }
-                        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
+            val written = d.reports.any { it.week == d.suggestedWeek && it.kind != "milestone" }
+            PrimaryButton(
+                if (written) "Edit the letter · week of ${Fmt.dayMonth(d.suggestedWeek)}" else "Write this week's letter",
+                onClick = { nav.push { LetterComposer(client = client, week = d.suggestedWeek) } },
+            )
+            if (d.reports.isEmpty()) {
+                Text("No letters yet.", style = JKType.caption, color = JKColors.textSecondary)
+            } else {
+                Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) {
+                    d.reports.forEachIndexed { i, r ->
+                        CoachRowLabel(
+                            r.displayHeadline,
+                            Modifier.clickable(enabled = !r.isMilestone) { nav.push { LetterComposer(client = client, week = r.week) } },
+                            icon = if (r.isMilestone) IconKey.milestone else IconKey.letter,
+                            detail = state(r),
+                            chevron = !r.isMilestone,
+                        )
+                        if (i < d.reports.lastIndex) GroupDivider()
                     }
                 }
             }
         }
-    }
-    LaunchedEffect(clientId) { load() }
-
-    editingWeek?.let { week ->
-        // Every way out (Close, publish, delete, system back) reloads the list, like the Swift onDismiss.
-        Sheet(onDismiss = {
-            editingWeek = null
-            scope.launch { load() }
-        }) {
-            key(week) { ReportEditorSheet(clientId = clientId, clientName = clientName, week = week) }
-        }
-    }
-}
-
-/** Write or edit one week's feedback, with that week's figures and next week's plan alongside. */
-@Composable
-fun ReportEditorSheet(clientId: String, clientName: String, week: String) {
-    val dismiss = LocalDismiss.current
-    val scope = rememberCoroutineScope()
-    // The sheet can step to other weeks, so the week shown is its own state.
-    var shown by remember { mutableStateOf(week) }
-    var report by remember { mutableStateOf<Report?>(null) }
-    var summary by remember { mutableStateOf("") }
-    var wins by remember { mutableStateOf("") }
-    var focus by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
-
-    val empty = listOf(summary, wins, focus).all { it.isBlank() }
-
-    fun shift(days: Int) {
-        val d = Day.date(shown) ?: return
-        shown = Day.string(Day.add(days, d))
-    }
-
-    suspend fun load() {
-        report = null
-        try {
-            val r: Report = APIClient.get("/api/reports/week/$shown", query = mapOf("clientId" to clientId))
-            report = r
-            summary = r.summary
-            wins = r.wins
-            focus = r.focus
-            error = null
-        } catch (e: Throwable) {
-            if (!e.isCancellation) error = e.readable
-        }
-    }
-
-    suspend fun save(status: String) {
-        saving = true
-        try {
-            report = APIClient.send<Report, ReportInput>(
-                "PUT",
-                "/api/reports",
-                ReportInput(clientId = clientId, week = shown, summary = summary, wins = wins, focus = focus, status = status),
-            )
-            error = null
-            if (status == "published") dismiss()
-        } catch (e: Throwable) {
-            error = e.readable
-        } finally {
-            saving = false
-        }
-    }
-
-    suspend fun remove() {
-        val id = report?.id ?: return
-        try {
-            APIClient.send<OK>("DELETE", "/api/reports/${seg(id)}")
-            dismiss()
-        } catch (e: Throwable) {
-            error = e.readable
-        }
-    }
-
-    Column(Modifier.jkScreen()) {
-        TopBar(title = clientName, leading = { BarButton("Close") { dismiss() } })
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Glyph(IconKey.back, JKType.body, JKColors.textSecondary, Modifier.clickable { shift(-7) })
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Week of ${Fmt.dayMonth(shown)}", style = JKType.headline, color = JKColors.text)
-                    Text(
-                        when {
-                            report?.isPublished == true -> "Published"
-                            report?.id == null -> "Not started"
-                            else -> "Draft"
-                        },
-                        style = JKType.caption,
-                        color = JKColors.textTertiary,
-                    )
-                }
-                Glyph(IconKey.chevron, JKType.body, JKColors.textSecondary, Modifier.clickable { shift(7) })
-            }
-
-            error?.let { ErrorBanner(it) }
-            val stats = report?.stats
-            if (stats != null) {
-                ReportStatsGrid(stats = stats)
-                val c = stats.checkin
-                if (c != null && (c.note.isNotEmpty() || c.pain.isNotEmpty())) {
-                    val parts = listOfNotNull(
-                        if (c.pain.isEmpty()) null else "pain " + c.pain.joinToString(", "),
-                        c.note.ifEmpty { null },
-                    )
-                    Text("Check-in: " + parts.joinToString(" · "), style = JKType.caption, color = JKColors.textSecondary)
-                }
-                if (!stats.healthShared) {
-                    Text("$clientName hasn't shared Apple Health with you.", style = JKType.caption, color = JKColors.textTertiary)
-                }
-            } else if (error == null) {
-                LoadingCard()
-            }
-
-            ReportField("How the week went", summary) { summary = it }
-            ReportField("Wins", wins) { wins = it }
-            ReportField("Focus for next week", focus) { focus = it }
-
-            report?.plan?.let { PlanList(plan = it) }
-
-            PrimaryButton(onClick = { scope.launch { save("published") } }, enabled = !saving && !empty) {
-                if (saving) {
-                    ProgressView()
-                } else {
-                    Text(if (report?.isPublished == true) "Update" else "Publish to $clientName")
-                }
-            }
-            SecondaryButton(
-                if (report?.isPublished == true) "Unpublish (back to draft)" else "Save draft",
-                onClick = { scope.launch { save("draft") } },
-                enabled = !saving,
-            )
-            if (report?.id != null) {
-                Text(
-                    "Delete",
-                    style = JKType.caption,
-                    color = JKColors.error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().clickable { confirmDelete = true },
-                )
-            }
-            Text(
-                "Publishing shows it on $clientName's Home and sends them a message. You can also write these on the web: Guides › Coach desk on the web.",
-                style = JKType.caption,
-                color = JKColors.textTertiary,
-            )
-        }
-    }
-    LaunchedEffect(shown) { load() }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    scope.launch { remove() }
-                }) { Text("Delete", style = JKType.body.semibold(), color = JKColors.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", style = JKType.body, color = JKColors.text) }
-            },
-            title = { Text("Delete this week's feedback?", style = JKType.headline, color = JKColors.text) },
-            containerColor = JKColors.raised,
-            shape = JKShape.card,
-        )
-    }
-}
-
-/** One of the report's text boxes: a tiny caption over a raised field that grows from 3 to 12 lines. */
-@Composable
-private fun ReportField(title: String, text: String, onTextChange: (String) -> Unit) {
-    val style = JKType.callout.copy(color = JKColors.text)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = JKType.caption, color = JKColors.textTertiary)
-        BasicTextField(
-            value = text,
-            onValueChange = onTextChange,
-            textStyle = style,
-            minLines = 3,
-            maxLines = 12,
-            cursorBrush = SolidColor(JKColors.text),
-            modifier = Modifier.fillMaxWidth(),
-            decorationBox = { field ->
-                Box(Modifier.fillMaxWidth().background(JKColors.raised, JKShape.control).padding(10.dp)) {
-                    if (text.isEmpty()) Text(title, style = style, color = JKColors.textTertiary)
-                    field()
-                }
-            },
-        )
     }
 }
 

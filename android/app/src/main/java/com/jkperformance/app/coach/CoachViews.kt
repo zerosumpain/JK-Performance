@@ -2,7 +2,20 @@
 
 package com.jkperformance.app
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,8 +88,12 @@ import com.jkperformance.app.net.Booking
 import com.jkperformance.app.net.Business
 import com.jkperformance.app.net.ClientSummary
 import com.jkperformance.app.net.ClientsResponse
-import com.jkperformance.app.net.CoachToday
-import com.jkperformance.app.net.FeedbackDue
+import com.jkperformance.app.net.NeedsYou
+import com.jkperformance.app.net.CoachSettings
+import com.jkperformance.app.net.CoachSettingsPatch
+import com.jkperformance.app.net.RhythmSetting
+import com.jkperformance.app.net.ReplyExpectation
+import com.jkperformance.app.net.Media
 import com.jkperformance.app.net.Guide
 import com.jkperformance.app.net.GuidesResponse
 import com.jkperformance.app.net.InstantSerializer
@@ -276,126 +293,56 @@ internal fun CoachSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) =
 
 // MARK: - Today (coach tab root)
 
+/**
+ * The coach's Today (atelier-spec.md, Coach screens 1): date and greeting,
+ * the avatar into Account, then the ranked Needs-you list.
+ */
 @Composable
 fun CoachTodayView() {
-    var today by remember { mutableStateOf<CoachToday?>(null) }
+    val session = AppSession
+    var data by remember { mutableStateOf<NeedsYou?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var showAccount by remember { mutableStateOf(false) }
+    var lettersOnly by remember { mutableStateOf(false) }
 
     val load: suspend () -> Unit = {
-        loadInto({ error = it }, { today = it }) {
-            APIClient.get<CoachToday>("/api/coach/today", mapOf("date" to Day.today))
-        }
+        loadInto({ error = it }, { data = it }) { APIClient.get<NeedsYou>("/api/coach/needs-you") }
     }
     LaunchedEffect(Unit) { load() }
 
-    ScrollScreen(spacing = 14.dp, onRefresh = load) {
-        ScreenHeader(eyebrow = "Coach · ${Fmt.shortDay(Instant.now())}", title = "Today") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(30.dp)
-                        .clickable { showAccount = true }
-                        .semantics { contentDescription = "Account" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Glyph(IconKey.account, JKType.headline, JKColors.text)
+    JKRefreshable(onRefresh = load, modifier = Modifier.jkScreen()) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.xl),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+                    Text(Fmt.fullDay(Instant.now()), style = JKType.caption, color = JKColors.textSecondary)
+                    Text(
+                        "${Fmt.greeting()}, ${Fmt.firstWord(session.me?.name ?: "Coach")}",
+                        style = JKType.display,
+                        color = JKColors.text,
+                        modifier = Modifier.semantics { heading() },
+                    )
                 }
-                Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
                         .size(JKSize.touchTarget)
                         .clip(CircleShape)
-                        .navLink { BusinessView() }
-                        .semantics { contentDescription = "Business" },
+                        .clickable { showAccount = true }
+                        .semantics { contentDescription = "Account" },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Monogram(size = JKSize.iconTab, tint = JKColors.accent, contentDescription = null)
+                    Avatar(initials = Fmt.initials(session.me?.name ?: "Coach"), mediaId = session.me?.coachSettings?.avatarMediaId)
                 }
             }
+            Loadable(value = data, error = error, retry = load) { d ->
+                NeedsYouList(d, lettersOnly) { lettersOnly = it }
+            }
         }
-        Loadable(value = today, error = error, retry = load) { t -> TodayCards(today = t) }
     }
 
     if (showAccount) Sheet(onDismiss = { showAccount = false }) { CoachAccountView() }
-}
-
-/** Clients whose feedback for the week isn't published yet. */
-@Composable
-fun FeedbackDueView(due: FeedbackDue) {
-    PushedScreen(spacing = 10.dp) {
-        ScreenHeader(eyebrow = "Week of ${Fmt.dayMonth(due.week)}", title = "Feedback to write")
-        due.clients.forEach { c ->
-            Row(
-                Modifier
-                    .clip(JKShape.card)
-                    .navLink { ClientDetailView(clientId = c.id, name = c.name, initialTab = ClientDetailTab.feedback) }
-                    .jkSurface(padding = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Avatar(initials = c.displayInitials, size = 32.dp)
-                Text(c.name, style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
-                Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
-            }
-        }
-    }
-}
-
-/** A session on the Today list: times, the slot-colour bar, who, and Next / done / chevron. */
-@Composable
-fun SessionRow(session: Booking, isNext: Boolean) {
-    val done = session.end < Instant.now()
-    val who = session.client?.name ?: session.title ?: "Group"
-    val ink = if (done) JKColors.textTertiary else JKColors.text
-    val shape = JKShape.card
-
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.width(38.dp)) {
-            Text(Fmt.time(session.start), style = JKType.caption.semibold(), color = ink)
-            Text(Fmt.time(session.end), style = JKType.caption, color = JKColors.textTertiary)
-        }
-        Row(
-            Modifier
-                .weight(1f)
-                .clip(shape)
-                .navLink {
-                    val c = session.client
-                    if (c != null) ClientDetailView(clientId = c.id, name = c.name) else ClassDetailView(booking = session)
-                }
-                .background(JKColors.surface, shape)
-                .border(1.dp, if (isNext) JKColors.textSecondary else JKColors.hairline, shape)
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(width = 3.dp, height = 28.dp)
-                    .background(JKColors.slot(session.kind).copy(alpha = if (done) 0.4f else 1f), CircleShape),
-            )
-            Avatar(initials = session.client?.displayInitials ?: "G", size = 28.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                val count = session.attendeeCount ?: session.attendees?.size ?: 0
-                Text(if (session.isGroup) "$who · $count clients" else who, style = JKType.callout.semibold(), color = ink)
-                Text(
-                    listOfNotNull(session.title, session.kindLabel).joinToString(" · "),
-                    style = JKType.caption,
-                    color = JKColors.textTertiary,
-                )
-            }
-            when {
-                isNext -> Text(
-                    "Next",
-                    style = JKType.caption.semibold(),
-                    color = JKColors.primaryLabel,
-                    modifier = Modifier.background(JKColors.text, CircleShape).padding(horizontal = 7.dp, vertical = 3.dp),
-                )
-                done -> Glyph(IconKey.done, JKType.caption, ink)
-                else -> Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
-            }
-        }
-    }
 }
 
 /** A group class: who's coming, and cancel. */
@@ -581,6 +528,7 @@ private fun MrrChart(points: List<Pair<LocalDate, Double>>, low: Double, high: D
 
 // MARK: - Clients (coach tab root)
 
+/** Search, then Needs you, Check in with and On track; each row carries the 7-dot habit week. */
 @Composable
 fun ClientsView() {
     var clients by remember { mutableStateOf<List<ClientSummary>?>(null) }
@@ -592,27 +540,32 @@ fun ClientsView() {
     }
     LaunchedEffect(Unit) { load() }
 
-    ScrollScreen(spacing = 14.dp, onRefresh = load) {
-        ScreenHeader(eyebrow = "Coach", title = "Clients") {
-            IconLabel("Programs", icon = IconKey.stack, style = JKType.caption.semibold(), color = JKColors.text, modifier = Modifier
-                    .clip(CircleShape)
-                    .navLink { ProgramsView() }
-                    .border(1.dp, JKColors.hairline, CircleShape)
-                    .padding(horizontal = 10.dp, vertical = 6.dp))
-        }
-        SearchField(query, { query = it }, prompt = "Search clients", autocorrect = false)
-        Loadable(value = clients, error = error, retry = load) { list ->
-            val shown = list.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }
-            when {
-                shown.isEmpty() -> EmptyCard(title = if (list.isEmpty()) "No clients yet" else "No matches", detail = if (list.isEmpty()) "Clients appear here when they sign up." else null)
-                query.isEmpty() -> {
-                    // The server sends them most-in-need first; group them so the line between is clear.
-                    val later = { c: ClientSummary -> c.demand?.kind == "quiet" || c.demand?.kind == "inactive" }
-                    ClientGroup("Needs you", shown.filter { ClientText.needsYou(it) })
-                    ClientGroup("Check in with", shown.filter(later))
-                    ClientGroup("On track", shown.filter { !ClientText.needsYou(it) && !later(it) })
+    JKRefreshable(onRefresh = load, modifier = Modifier.jkScreen()) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.l),
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("Clients", style = JKType.display, color = JKColors.text, modifier = Modifier.weight(1f).semantics { heading() })
+                if (AppSession.studioTools) {
+                    val nav = LocalNav.current
+                    SmallPill("Programs") { nav.push { ProgramsView() } }
                 }
-                else -> ClientGroup(null, shown)
+            }
+            SearchField(query, { query = it }, prompt = "Search clients", autocorrect = false)
+            Loadable(value = clients, error = error, retry = load) { list ->
+                val shown = list.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }
+                when {
+                    shown.isEmpty() -> EmptyCard(title = if (list.isEmpty()) "No clients yet" else "No matches", detail = if (list.isEmpty()) "Clients appear here when they sign up." else null)
+                    query.isEmpty() -> {
+                        // The server sends them most-in-need first; group them so the line between is clear.
+                        val later = { c: ClientSummary -> c.demand?.kind == "quiet" || c.demand?.kind == "inactive" }
+                        ClientGroup("Needs you", shown.filter { ClientText.needsYou(it) })
+                        ClientGroup("Check in with", shown.filter(later))
+                        ClientGroup("On track", shown.filter { !ClientText.needsYou(it) && !later(it) })
+                    }
+                    else -> ClientGroup(null, shown)
+                }
             }
         }
     }
@@ -621,15 +574,13 @@ fun ClientsView() {
 @Composable
 private fun ClientGroup(title: String?, list: List<ClientSummary>) {
     if (list.isEmpty()) return
-    if (title != null) Label(text = title, trailing = "${list.size}")
-    Column(Modifier.jkSurface(padding = 2.dp)) {
-        list.forEach { c ->
-            ClientRow(
-                client = c,
-                modifier = Modifier.navLink {
-                    ClientDetailView(clientId = c.id, name = c.name, initialTab = ClientText.tab(c))
-                },
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        if (title != null) CoachSectionTitle(title, trailing = "${list.size}")
+        Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) {
+            list.forEachIndexed { i, c ->
+                ClientRow(client = c, modifier = Modifier.navLink { ClientDetailView(clientId = c.id, name = c.name) })
+                if (i < list.lastIndex) GroupDivider(Modifier.padding(start = JKSpace.l + JKSize.avatar + JKSpace.m))
+            }
         }
     }
 }
@@ -637,36 +588,28 @@ private fun ClientGroup(title: String?, list: List<ClientSummary>) {
 @Composable
 private fun ClientRow(client: ClientSummary, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier.fillMaxWidth().padding(horizontal = JKSpace.l, vertical = JKSpace.m),
+        horizontalArrangement = Arrangement.spacedBy(JKSpace.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            Avatar(initials = client.displayInitials, size = 34.dp)
-            ClientText.tint(client)?.let { tint ->
-                // A 9pt dot ringed by a 2pt stroke in the card colour, straddling its edge as SwiftUI's stroke does.
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(x = 1.dp, y = (-1).dp)
-                        .size(11.dp)
-                        .background(JKColors.surface, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Dot(color = tint, size = 7.dp) }
+        Avatar(initials = client.displayInitials)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s), verticalAlignment = Alignment.CenterVertically) {
+                Text(client.name, style = JKType.callout, color = JKColors.text)
+                if ((client.unread ?: 0) > 0) {
+                    Glyph(IconKey.unread, size = JKSize.iconSmall, tint = JKColors.textSecondary, filled = true, contentDescription = "Unread message")
+                }
             }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(client.name, style = JKType.callout.semibold(), color = JKColors.text)
             Text(
                 ClientText.reason(client),
                 style = JKType.caption,
-                color = if (client.demand?.kind == "urgent") JKColors.urgent else JKColors.textTertiary,
+                color = JKColors.textSecondary,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
+            client.habitWeek?.takeIf { it.isNotEmpty() }?.let { ClientWeekDots(it) }
         }
-        if ((client.unread ?: 0) > 0) Glyph(IconKey.messages, JKType.caption, JKColors.textSecondary)
-        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
+        Glyph(IconKey.chevron, size = JKSize.iconSmall, tint = JKColors.textSecondary)
     }
 }
 
@@ -692,12 +635,6 @@ object ClientText {
         return reason
     }
 
-    /** The tab that answers what they need (Swift `tab(for:)`). */
-    fun tab(c: ClientSummary): ClientDetailTab = when (c.demand?.kind) {
-        "urgent", "form", "checkin" -> ClientDetailTab.feedback
-        else -> ClientDetailTab.plan
-    }
-
     fun flag(f: String): String {
         if (f == "no-workout-yet") return "no workout yet"
         if (f == "checkin-overdue") return "check-in overdue"
@@ -712,7 +649,6 @@ object ClientText {
         val first = c.flags?.firstOrNull()
         when {
             first != null -> parts += flag(first)
-            c.adherence != null -> parts += "adherence ${c.adherence}%"
             c.checkinDue == true -> parts += "check-in due"
         }
         return parts.joinToString(" · ")
@@ -1182,7 +1118,7 @@ private fun StartDateDialog(initial: LocalDate, onPick: (LocalDate) -> Unit, onD
     }
 }
 
-// MARK: - Hints & guides (coach tab root)
+// MARK: - Hints & guides (pushed from Account)
 
 @Composable
 fun GuidesView() {
@@ -1207,7 +1143,7 @@ fun GuidesView() {
     }
     LaunchedEffect(Unit) { load() }
 
-    ScrollScreen(spacing = 14.dp, onRefresh = load) {
+    PushedScreen(spacing = 14.dp, onRefresh = load) {
         ScreenHeader(eyebrow = "Coach library", title = "Hints & guides")
         SearchField(query, { query = it }, prompt = "Search guides and cues")
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1306,42 +1242,83 @@ private fun FeaturedCard(g: Guide, modifier: Modifier = Modifier) {
 // MARK: - Coach account
 
 /**
- * The coach's own account: who is signed in, privacy, and signing out (to
- * switch to another account, such as the demo client with "I have a code").
+ * The coach's account (atelier-spec.md, Coach screens 6): the web desk,
+ * preview as a client, notifications, studio tools, letter rhythm, the two
+ * reply lines, portrait and signature, a one-line pulse. The desk-only
+ * editors (Programs, Forms, Autoflows, Plans & prices, Business,
+ * availability) appear here only with "Show studio tools" on; nothing is
+ * deleted in this release.
  */
 @Composable
 fun CoachAccountView() {
     val session = AppSession
     val dismiss = LocalDismiss.current
     val uri = LocalUriHandler.current
+    val nav = LocalNav.current
     var confirmSignOut by remember { mutableStateOf(false) }
+    var showDesk by remember { mutableStateOf(false) }
+    var switchError by remember { mutableStateOf<String?>(null) }
 
-    SheetScreen(title = "Account", spacing = 14.dp, trailing = { BarButton("Done") { dismiss() } }) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(initials = initialsOf(session.me?.name ?: "Coach"), size = 48.dp)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(session.me?.name ?: "Coach", style = JKType.display, color = JKColors.text)
-                Text(session.me?.email ?: "Coach account", style = JKType.caption, color = JKColors.textTertiary)
-            }
-        }
-        Text("Signed in as the coach. Clients who sign up are assigned to you.", style = JKType.caption, color = JKColors.textSecondary)
-        Row(
-            Modifier.clip(JKShape.card).clickable { uri.openUri(APIClient.privacyURL) }.jkSurface(padding = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Column(Modifier.jkScreen()) {
+        TopBar("Account", leading = {}, trailing = { BarButton("Done", bold = true) { dismiss() } })
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.xl),
         ) {
-            RowGlyph(IconKey.handRaised)
-            Text("Privacy policy", style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
-            Glyph(IconKey.trendUp, JKType.caption, JKColors.textTertiary)
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.m), verticalAlignment = Alignment.CenterVertically) {
+                CoachAvatar(mediaId = session.me?.coachSettings?.avatarMediaId, size = JKSize.avatar + JKSpace.m, contentDescription = null)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(session.me?.name ?: "Coach", style = JKType.headline, color = JKColors.text)
+                    Text(session.me?.email ?: "Coach account", style = JKType.caption, color = JKColors.textSecondary)
+                }
+            }
+            PulseLine()
+            AccountGroup {
+                CoachRowLabel("Open the web desk", Modifier.clickable { showDesk = true }, icon = IconKey.desktop, detail = "Programmes, forms and prices live there")
+                GroupDivider()
+                CoachRowLabel(
+                    "Preview as client",
+                    Modifier.clickable {
+                        dismiss()
+                        // The sheet (and its scope) goes with the dismiss; the switch must outlive it.
+                        ProcessLifecycleOwner.get().lifecycleScope.launch {
+                            try { session.switchToDemoClient() } catch (e: Throwable) { switchError = e.readable }
+                        }
+                    },
+                    icon = IconKey.clients,
+                    detail = "Look round as the demo client, Sam Carter",
+                )
+                GroupDivider()
+                CoachRowLabel("Hints & guides", Modifier.clickable { nav.push { GuidesView() } }, icon = IconKey.guide)
+            }
+            switchError?.let { ErrorBanner(it) }
+            CoachNotificationsRow()
+            StudioToolsRow()
+            if (session.studioTools) {
+                AccountGroup {
+                    CoachRowLabel("Programs, autoflows and forms", Modifier.clickable { nav.push { ProgramsView() } }, icon = IconKey.workout)
+                    GroupDivider()
+                    CoachRowLabel("Plans & prices", Modifier.clickable { nav.push { PlansEditorView() } }, icon = IconKey.settings)
+                    GroupDivider()
+                    CoachRowLabel("Business", Modifier.clickable { nav.push { BusinessView() } }, icon = IconKey.progress)
+                    GroupDivider()
+                    CoachRowLabel("Availability", Modifier.clickable { nav.push { AvailabilityScreen() } }, icon = IconKey.week)
+                }
+            }
+            RhythmSection(session.me?.coachSettings)
+            ReplyLinesSection(session.me?.coachSettings)
+            PortraitRow(purpose = "avatar", title = "Change portrait", detail = "Shown on the JK tab, Today and letters")
+            PortraitRow(purpose = "signature", title = "Change signature", detail = "Signs your letters; the monogram stands in until then")
+            CalendarSubscribeCard()
+            WebSessionsRow()
+            AccountGroup {
+                CoachRowLabel("Privacy policy", Modifier.clickable { uri.openUri(APIClient.privacyURL) }, icon = IconKey.lock, chevron = false)
+            }
+            SecondaryButton("Sign out", onClick = { confirmSignOut = true })
         }
-        CoachNotificationsRow()
-        PlansPricesLink()
-        CalendarSubscribeCard()
-        WebSessionsRow()
-        PrimaryButton("Sign out", onClick = { confirmSignOut = true }, modifier = Modifier.padding(top = 12.dp))
-        Text("To see the client side, use Guides › View the app as a client.", style = JKType.caption, color = JKColors.textTertiary)
     }
 
+    if (showDesk) Sheet(onDismiss = { showDesk = false }) { WebDeskSheet() }
     if (confirmSignOut) {
         ConfirmDialog(
             title = "Sign out?",
@@ -1356,8 +1333,185 @@ fun CoachAccountView() {
     }
 }
 
-private fun initialsOf(name: String): String =
-    name.split(" ").filter { it.isNotEmpty() }.take(2).map { it.first() }.joinToString("").uppercase()
+@Composable
+private fun AccountGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs), content = content)
+}
+
+/** "Show studio tools": the desk editors on the phone. Off by default. */
+@Composable
+private fun StudioToolsRow() {
+    val scope = rememberCoroutineScope()
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    Column(Modifier.jkSurface(padding = JKSpace.l), verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.m), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Show studio tools", style = JKType.callout, color = JKColors.text)
+                Text(
+                    "Programs, forms, autoflows, plans and prices, business and availability on the phone. They stay on the web desk either way.",
+                    style = JKType.caption, color = JKColors.textSecondary,
+                )
+            }
+            JKSwitch(checked = AppSession.studioTools, enabled = !busy, onCheckedChange = { on ->
+                scope.launch {
+                    busy = true
+                    try {
+                        AppSession.updateCoachSettings(CoachSettingsPatch(studioTools = on))
+                        error = null
+                    } catch (e: Throwable) {
+                        if (!e.isCancellation) error = e.readable
+                    } finally {
+                        busy = false
+                    }
+                }
+            })
+        }
+        error?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
+    }
+}
+
+/** Letter rhythm per plan, as set on the desk. */
+@Composable
+private fun RhythmSection(settings: CoachSettings?) {
+    val plans = listOf("elite" to "Elite", "performance" to "Performance", "foundation" to "Foundation", "none" to "Free")
+    fun line(r: RhythmSetting?): String {
+        if (r == null || r.every == "none") return "No letters"
+        val every = if (r.every == "fortnightly") "Fortnightly" else "Weekly"
+        return if (r.media == true) "$every, with a voice or video note" else "$every, written"
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        CoachSectionTitle("Letter rhythm")
+        Column(Modifier.jkSurface(padding = JKSpace.l)) {
+            plans.forEach { (id, name) ->
+                Row(Modifier.fillMaxWidth().heightIn(min = JKSize.touchTarget), verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                    Text(line(settings?.letterRhythm?.get(id)), style = JKType.caption, color = JKColors.textSecondary)
+                }
+            }
+        }
+        Text("Per client, a letter can go fortnightly from their page on the desk.", style = JKType.caption, color = JKColors.textSecondary)
+    }
+}
+
+/** The two reply lines clients see under JK's name. */
+@Composable
+private fun ReplyLinesSection(settings: CoachSettings?) {
+    val scope = rememberCoroutineScope()
+    var standard by remember { mutableStateOf(settings?.replyExpectation?.standard ?: "JK replies most evenings") }
+    var priority by remember { mutableStateOf(settings?.replyExpectation?.priority ?: "Same-day replies") }
+    var busy by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        CoachSectionTitle("Reply lines")
+        Column(Modifier.jkSurface(padding = JKSpace.l), verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+            JKField(label = "Standard", text = standard, onTextChange = { standard = it }, prompt = "JK replies most evenings")
+            JKField(label = "Plans with priority replies", text = priority, onTextChange = { priority = it }, prompt = "Same-day replies")
+            notice?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
+            SecondaryButton("Save reply lines", enabled = !busy && standard.isNotBlank(), onClick = {
+                scope.launch {
+                    busy = true
+                    try {
+                        AppSession.updateCoachSettings(
+                            CoachSettingsPatch(replyExpectation = ReplyExpectation(standard = standard.trim(), priority = priority.trim())),
+                        )
+                        notice = "Saved."
+                    } catch (e: Throwable) {
+                        if (!e.isCancellation) notice = e.readable
+                    } finally {
+                        busy = false
+                    }
+                }
+            })
+        }
+    }
+}
+
+/**
+ * Upload JK's portrait (`avatar`: the JK tab, From JK on Today, letters) or
+ * signature (`signature`: the foot of letters). The server sets it in the
+ * coach's settings.
+ */
+@Composable
+private fun PortraitRow(purpose: String, title: String, detail: String) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            try {
+                val jpeg = withContext(Dispatchers.Default) { portraitJpeg(context, uri) }
+                if (jpeg == null) {
+                    error = "Couldn't read that photo."
+                } else {
+                    APIClient.upload<Media>("/api/media", jpeg, "image/jpeg", mapOf("purpose" to purpose))
+                    AppSession.refreshMe()
+                    error = null
+                }
+            } catch (e: Throwable) {
+                if (!e.isCancellation) error = e.readable
+            } finally {
+                busy = false
+            }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        AccountGroup {
+            CoachRowLabel(
+                if (busy) "Uploading…" else title,
+                Modifier.clickable(enabled = !busy) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                icon = IconKey.photos,
+                detail = detail,
+            )
+        }
+        error?.let { ErrorBanner(it) }
+    }
+}
+
+/** A portrait at most 1024 px on the long side, as JPEG (EXIF rotation applied by ImageDecoder). */
+private fun portraitJpeg(context: Context, uri: Uri): ByteArray? = try {
+    val source = ImageDecoder.createSource(context.contentResolver, uri)
+    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+        val longest = maxOf(info.size.width, info.size.height)
+        if (longest > 1024) {
+            val scale = 1024f / longest
+            decoder.setTargetSize((info.size.width * scale).toInt(), (info.size.height * scale).toInt())
+        }
+        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+    }
+    ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+} catch (_: Exception) {
+    null
+}
+
+/** "12 active · £1,840 a month", from the business figures. */
+@Composable
+private fun PulseLine() {
+    var business by remember { mutableStateOf<Business?>(null) }
+    LaunchedEffect(Unit) {
+        business = runCatching { APIClient.get<Business>("/api/coach/business", mapOf("period" to "month")) }.getOrNull()
+    }
+    val b = business
+    Text(
+        if (b == null) " " else "${b.active} active · ${Fmt.pounds(b.mrrPence)} a month",
+        style = JKType.callout.monospacedDigit(),
+        color = JKColors.textSecondary,
+    )
+}
+
+/** Weekly availability, pushed from Account when studio tools are on. */
+@Composable
+fun AvailabilityScreen() {
+    var open by remember { mutableStateOf(false) }
+    CoachSubpage("Availability") {
+        Text("Weekly hours clients can book. The web desk has the same editor.", style = JKType.caption, color = JKColors.textSecondary)
+        PrimaryButton("Edit availability", onClick = { open = true })
+    }
+    if (open) Sheet(onDismiss = { open = false }) { AvailabilityEditor() }
+}
 
 @Serializable
 private data class WebSessions(
