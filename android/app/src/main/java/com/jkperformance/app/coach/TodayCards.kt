@@ -77,7 +77,7 @@ private fun LettersDueList(due: LettersDue) {
                     }
                 }
                 val nav = LocalNav.current
-                SmallPill("Write letter") { nav.push { LetterComposer(client = person, week = due.week) } }
+                SmallPill("Write letter", onClick = { nav.push { LetterComposer(client = person, week = due.week) } })
             }
         }
     }
@@ -164,7 +164,7 @@ fun NeedsYouRow(item: NeedsItem) {
             }
         }
         item.primaryAction?.let { action ->
-            SmallPill(action.label) { nav.push { NeedsDestination(item, action, milestone) } }
+            SmallPill(action.label, onClick = { nav.push { NeedsDestination(item, action, milestone) } })
         }
     }
 }

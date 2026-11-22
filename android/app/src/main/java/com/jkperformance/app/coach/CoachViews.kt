@@ -549,7 +549,7 @@ fun ClientsView() {
                 Text("Clients", style = JKType.display, color = JKColors.text, modifier = Modifier.weight(1f).semantics { heading() })
                 if (AppSession.studioTools) {
                     val nav = LocalNav.current
-                    SmallPill("Programs") { nav.push { ProgramsView() } }
+                    SmallPill("Programs", onClick = { nav.push { ProgramsView() } })
                 }
             }
             SearchField(query, { query = it }, prompt = "Search clients", autocorrect = false)

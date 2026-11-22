@@ -295,20 +295,3 @@ fun ClientWeekDots(week: List<HabitWeekDay>, modifier: Modifier = Modifier) {
     )
 }
 
-/** A small outlined pill action ("Reply", "Write letter"): caption on a hairline capsule, 32dp minimum. */
-@Composable
-fun SmallPill(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    Text(
-        text,
-        style = JKType.caption,
-        color = if (enabled) JKColors.text else JKColors.textTertiary,
-        maxLines = 1,
-        modifier = modifier
-            .widthIn(min = JKSpace.huge)
-            .heightIn(min = JKSpace.xxxl)
-            .clip(JKShape.pill)
-            .clickable(enabled = enabled, onClick = onClick)
-            .border(JKSize.hairline, JKColors.inputBorder, JKShape.pill)
-            .padding(horizontal = JKSpace.m, vertical = 6.dp),
-    )
-}
