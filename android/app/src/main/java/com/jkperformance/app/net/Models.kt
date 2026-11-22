@@ -4,6 +4,7 @@
 package com.jkperformance.app.net
 
 import com.jkperformance.app.design.Fmt
+import com.jkperformance.app.design.IconKey
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -57,7 +58,14 @@ data class Me(
     var onboarded: Boolean? = null,
     /** Clients: their first-run answers, null until answered. */
     var profile: Profile? = null,
+    /** Plan features plus coach toggles (docs/API.md, Atelier). Missing on an older server: show everything. */
+    var features: Features? = null,
+    var preferences: Preferences? = null,
+    /** A coach's own settings; null for clients. */
+    var coachSettings: CoachSettings? = null,
 ) {
+    /** What this client's plan includes (everything, on an older server). */
+    val gate: Gate get() = Gate(features)
     val isCoach: Boolean get() = role == "coach"
     val needsOnboarding: Boolean get() = !isCoach && onboarded == false
     val demo: Boolean get() = isDemo == true
@@ -85,6 +93,14 @@ data class PersonRef(
     var initials: String? = null,
     /** The coach's portrait (GET /api/media/:id with the session token); null until uploaded or on older servers. */
     var avatarMediaId: String? = null,
+    var signatureMediaId: String? = null,
+    var replyExpectation: ReplyExpectation? = null,
+    /** The reply line this client sees ("Same-day replies" on plans with 'priority'). */
+    var replyLine: String? = null,
+    /** Clients in a needs-you item. */
+    var firstName: String? = null,
+    var plan: String? = null,
+    var planName: String? = null,
 ) {
     val displayInitials: String get() = initials ?: Fmt.initials(name)
 }
@@ -242,6 +258,9 @@ data class Workout(
     var completedAt: Instant? = null,
     var createdBy: String? = null,
     var items: List<WorkoutItem>,
+    var completionNote: String? = null,
+    var feel: Int? = null,
+    var feelWord: String? = null,
 ) {
     val doneCount: Int get() = items.count { it.isDone }
 }
@@ -404,8 +423,25 @@ data class Habit(
     var value: Double? = null,
     var done: Boolean,
     var source: String? = null,
+    /** The closed IconKey catalogue name; older servers send only `icon`. */
+    var iconKey: String? = null,
+    /** The +/- increment for count habits. */
+    var step: Double? = null,
+    var introducedAt: Instant? = null,
+    var position: Int? = null,
 ) {
     val isCount: Boolean get() = kind == "count"
+    val key: IconKey get() = IconKey.fromSymbol(iconKey ?: icon)
+    /** One tap's worth: the coach's step, else a tenth of the target, at least 1. */
+    val increment: Double get() = step ?: maxOf(1.0, Math.rint(target / 10))
+    /** 0..1 of today's target. */
+    val fraction: Double
+        get() {
+            if (done) return 1.0
+            val v = value ?: return 0.0
+            if (target <= 0) return 0.0
+            return (v / target).coerceIn(0.0, 1.0)
+        }
     val fromHealth: Boolean get() = source == "health" || healthKind != null
 }
 
@@ -460,6 +496,12 @@ data class HabitsResponse(
     val habits: List<Habit>,
     val streak: Int,
     val nutrition: Nutrition,
+    var dayDone: Boolean? = null,
+    var doneCount: Int? = null,
+    var dayMinimum: Int? = null,
+    var rest: RestDay? = null,
+    var consistency: Consistency? = null,
+    var missedYesterday: Boolean? = null,
 )
 
 @Serializable
@@ -495,6 +537,10 @@ data class CheckIn(
     var submittedAt: Instant? = null,
     var reviewedAt: Instant? = null,
     var reply: String? = null,
+    var stress: Int? = null,
+    var win: String? = null,
+    var struggle: String? = null,
+    var photoIds: List<String>? = null,
 )
 
 @Serializable
@@ -509,6 +555,10 @@ data class CheckInInput(
     var sleep: Int,
     var pain: List<String>,
     var note: String,
+    var stress: Int? = null,
+    var win: String? = null,
+    var struggle: String? = null,
+    var photoIds: List<String>? = null,
 )
 
 @Serializable
@@ -526,6 +576,12 @@ data class Message(
     var workoutId: String? = null,
     val at: Instant,
     var readAt: Instant? = null,
+    /** text | letter | answer | formCheck | mealPhoto */
+    var kind: String? = null,
+    var reportId: String? = null,
+    var exerciseId: String? = null,
+    var mediaId: String? = null,
+    var mediaUrl: String? = null,
 )
 
 @Serializable
@@ -548,6 +604,10 @@ data class MessageInput(
     var text: String,
     var clientId: String? = null,
     var workoutId: String? = null,
+    var reportId: String? = null,
+    var exerciseId: String? = null,
+    var mediaId: String? = null,
+    var kind: String? = null,
 )
 
 // MARK: - Bookings & calendar
@@ -600,6 +660,8 @@ data class Booking(
     var joined: Boolean? = null,
     var cancellable: Boolean? = null,
     var refundable: Boolean? = null,
+    /** The booking's own meeting link, else the coach's default room for video calls. */
+    var meetingUrl: String? = null,
 ) {
     val isGroup: Boolean get() = kind == "group"
 
@@ -661,6 +723,7 @@ data class PersonalRecord(
     val kg: Double,
     var gain: Double? = null,
     var date: String? = null,
+    var isNewThisWeek: Boolean? = null,
 )
 
 @Serializable
@@ -879,6 +942,8 @@ data class ClientSummary(
     var unread: Int? = null,
     var lastMessageAt: Instant? = null,
     var demand: Demand? = null,
+    /** The seven days ending today: done | notDone | rest. */
+    var habitWeek: List<HabitWeekDay>? = null,
 ) {
     val displayInitials: String get() = initials ?: Fmt.initials(name)
 }
@@ -905,6 +970,11 @@ data class ClientDetail(
     var healthShared: Boolean? = null,
     var health: HealthSummary? = null,
     var nextWorkout: Workout? = null,
+    var goals: List<Goal>? = null,
+    var settings: ClientSettings? = null,
+    var restDays: List<RestDay>? = null,
+    var latestCheckin: LatestCheckIn? = null,
+    var nextBooking: Booking? = null,
 )
 
 @Serializable
@@ -1092,9 +1162,41 @@ data class Report(
     var coachName: String? = null,
     var stats: ReportStats? = null,
     var plan: ReportPlan? = null,
+    // The letter (Atelier). Old servers leave these out; the old fields stand in.
+    var kind: String? = null,
+    var letterStatus: String? = null,
+    var headline: String? = null,
+    var keep: String? = null,
+    var adjust: String? = null,
+    var question: String? = null,
+    var answer: String? = null,
+    var answeredAt: Instant? = null,
+    var mediaId: String? = null,
+    var mediaKind: String? = null,
+    var mediaUrl: String? = null,
+    var durationSec: Double? = null,
+    var goalId: String? = null,
+    var deliverAt: Instant? = null,
+    var deliveredAt: Instant? = null,
+    var focusOverride: String? = null,
+    var todayLine: String? = null,
+    var milestoneKey: String? = null,
+    var weekDots: List<LetterDot>? = null,
+    var scoreTrio: List<Score>? = null,
+    var context: LetterContext? = null,
 ) {
     val isPublished: Boolean get() = status == "published"
     val isUnread: Boolean get() = isPublished && readAt == null
+    val isMilestone: Boolean get() = kind == "milestone"
+    /** The headline, or the first sentence of an old report's summary. */
+    val displayHeadline: String
+        get() {
+            headline?.takeIf { it.isNotEmpty() }?.let { return it }
+            val first = summary.split('.', '!', '?').firstOrNull { it.isNotBlank() }?.trim()?.let { "$it." } ?: ""
+            return first.ifEmpty { "Your week" }
+        }
+    val keepText: String get() = keep?.takeIf { it.isNotEmpty() } ?: wins
+    val adjustText: String get() = adjust?.takeIf { it.isNotEmpty() } ?: focus
     val weekLabel: String get() = "Week of ${Fmt.dayMonth(week)}"
 }
 

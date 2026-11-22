@@ -55,6 +55,7 @@ import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Outbox
 import com.jkperformance.app.net.Push
 import com.jkperformance.app.net.TabRouter
+import com.jkperformance.app.net.ClientRoute
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -219,37 +220,73 @@ private fun <T> Tabs(tabs: List<Tab<T>>, selected: T, select: (T) -> Unit) {
     }
 }
 
+/**
+ * The client's three tabs (atelier-spec.md, IA): Today, Progress (plans with
+ * 'progress') and JK. Account is the avatar sheet on Today.
+ */
 @Composable
 fun ClientTabs() {
     val session = AppSession
+    val gate = session.gate
+    LaunchedEffect(gate.progress) {
+        if (!gate.progress && TabRouter.client == TabRouter.Client.progress) TabRouter.client = TabRouter.Client.today
+    }
     Tabs(
-        tabs = listOf(
-            Tab(TabRouter.Client.home, "Home", IconKey.today) { ClientHomeView() },
-            Tab(TabRouter.Client.plan, "Plan", IconKey.workout) { WorkoutPlanView() },
-            Tab(TabRouter.Client.calendar, "Calendar", IconKey.week) { MyCalendarView() },
-            Tab(TabRouter.Client.messages, "Messages", { selected -> JKTabIcon(session.me?.coach?.avatarMediaId, selected) }) {
-                MessagesThreadView(
-                    clientId = null,
-                    otherName = session.me?.coach?.name ?: "Your coach",
-                    subtitle = "Usually replies within an hour",
-                )
-            },
-            Tab(TabRouter.Client.account, "Account", IconKey.account) { AccountView() },
-        ),
+        tabs = buildList {
+            add(Tab(TabRouter.Client.today, "Today", IconKey.today) {
+                RouteDrain(TabRouter.todayRequest) { TabRouter.todayRequest = null }
+                TodayView()
+            })
+            if (gate.progress) add(Tab(TabRouter.Client.progress, "Progress", IconKey.progress) { ProgressTab() })
+            add(Tab(TabRouter.Client.jk, "JK", { selected -> JKTabIcon(session.me?.coach?.avatarMediaId, selected) }) {
+                RouteDrain(TabRouter.jkRequest) { TabRouter.jkRequest = null }
+                JKView()
+            })
+        },
         selected = TabRouter.client,
         select = { TabRouter.client = it },
     )
 }
 
+/** The screen for a client route, pushed on whichever tab asked for it. */
+@Composable
+fun ClientRouteView(route: ClientRoute) {
+    when (route) {
+        is ClientRoute.yourWeek -> YourWeekView(day = route.day)
+        is ClientRoute.session -> WorkoutDetailLoader(workoutId = route.workoutId)
+        is ClientRoute.letter -> LetterView(reportId = route.reportId)
+        ClientRoute.guides -> GuidesList()
+        is ClientRoute.guide -> GuideView(guideId = route.guideId)
+        ClientRoute.challenges -> ChallengesView()
+    }
+}
+
+/** Push a client route on the current tab's stack. */
+fun NavStack.push(route: ClientRoute) = push { ClientRouteView(route) }
+
+/** Drains a TabRouter request (a tapped push, a link from another tab) into this tab's stack. */
+@Composable
+private fun RouteDrain(request: TabRouter.RouteRequest?, consumed: () -> Unit) {
+    val nav = LocalNav.current
+    LaunchedEffect(request?.serial) {
+        val r = request ?: return@LaunchedEffect
+        if (r.reset) nav.popToRoot()
+        r.routes.forEach { nav.push(it) }
+        consumed()
+    }
+}
+
+/**
+ * The coach's three tabs: Today (needs you), Clients and Messages. Schedule
+ * became the day agenda behind Today's strip; Guides moved to Account.
+ */
 @Composable
 fun CoachTabs() {
     Tabs(
         tabs = listOf(
             Tab(TabRouter.Coach.today, "Today", IconKey.coachToday) { CoachTodayView() },
             Tab(TabRouter.Coach.clients, "Clients", IconKey.clients) { ClientsView() },
-            Tab(TabRouter.Coach.schedule, "Schedule", IconKey.week) { ScheduleView() },
             Tab(TabRouter.Coach.messages, "Messages", IconKey.messages) { CoachThreadsView() },
-            Tab(TabRouter.Coach.guides, "Guides", IconKey.guide) { GuidesView() },
         ),
         selected = TabRouter.coach,
         select = { TabRouter.coach = it },

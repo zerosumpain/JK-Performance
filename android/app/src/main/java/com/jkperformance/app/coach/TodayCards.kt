@@ -118,7 +118,7 @@ fun TodayCards(today: CoachToday) {
                 count = today.sessionsLeftThisWeek ?: 0,
                 detail = "sessions still to come",
                 tint = null,
-                modifier = cell().cardButton { TabRouter.coach = TabRouter.Coach.schedule },
+                modifier = cell().cardButton { TabRouter.coach = TabRouter.Coach.today },
             )
         }
     }
@@ -185,7 +185,7 @@ private fun NextSessionCard(sessions: List<Booking>, upcoming: List<Booking>, mo
             value = if (sessions.isEmpty()) "None" else "Done",
             detail = if (sessions.isEmpty()) "Nothing booked" else "All ${sessions.size} finished",
             tint = null,
-            modifier = modifier.cardButton { TabRouter.coach = TabRouter.Coach.schedule },
+            modifier = modifier.cardButton { TabRouter.coach = TabRouter.Coach.today },
         )
     }
 }

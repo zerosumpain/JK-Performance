@@ -114,6 +114,8 @@ object Fmt {
     private val monthYearF = pattern("MMM yyyy")
     private val monthNameF = pattern("MMMM")
     private val weekdayShortF = pattern("EEE")
+    private val weekdayLongF = pattern("EEEE")
+    private val fullDayF = pattern("EEEE d MMMM")
     private val hourMinuteF = pattern("HH:mm")
 
     private fun local(i: Instant) = i.atZone(Day.zone)
@@ -133,6 +135,13 @@ object Fmt {
     fun weekday(d: LocalDate): String = weekdayShortF.format(d)
     fun weekday(d: Instant): String = weekdayShortF.format(local(d))
     fun time(d: Instant): String = hourMinuteF.format(local(d))
+    /** "Tuesday". */
+    fun weekdayName(d: LocalDate): String = weekdayLongF.format(d)
+    /** "Sunday 22 November": Today's date caption. */
+    fun fullDay(d: LocalDate): String = fullDayF.format(d)
+    fun fullDay(d: Instant): String = fullDayF.format(local(d))
+    /** "Tuesday 17 Nov" from "YYYY-MM-DD", or the input if it doesn't parse. */
+    fun longDay(s: String): String = Day.date(s)?.let { longDay(it) } ?: s
 
     /** "2026-12-01" → "1 Dec", or the input if it doesn't parse. */
     fun dayMonth(s: String?): String {

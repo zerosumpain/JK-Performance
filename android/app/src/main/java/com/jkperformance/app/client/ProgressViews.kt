@@ -834,3 +834,7 @@ private fun RatingCard(title: String, hint: String?, value: Int, onChange: (Int)
         }
     }
 }
+
+// STUB (foundation): replaced by the Atelier port.
+@Composable
+fun ProgressTab() { ProgressScreen() }
