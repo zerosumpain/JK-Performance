@@ -14,18 +14,21 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,27 +50,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.Avatar
-import com.jkperformance.app.design.Day
-import com.jkperformance.app.design.EmptyCard
-import com.jkperformance.app.design.ErrorBanner
-import com.jkperformance.app.design.ErrorCard
-import com.jkperformance.app.design.Fmt
-import com.jkperformance.app.design.IconTile
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKRefreshable
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.Loadable
-import com.jkperformance.app.design.LoadingCard
-import com.jkperformance.app.design.LocalNav
-import com.jkperformance.app.design.ProgressView
-import com.jkperformance.app.design.ScreenHeader
-import com.jkperformance.app.design.SystemImage
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.jkScreen
-import com.jkperformance.app.design.navLink
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.InstantSerializer
@@ -76,6 +58,8 @@ import com.jkperformance.app.net.MessageInput
 import com.jkperformance.app.net.MessageThread
 import com.jkperformance.app.net.MessagesResponse
 import com.jkperformance.app.net.ThreadsResponse
+import com.jkperformance.app.net.PlansResponse
+import com.jkperformance.app.net.ClientsResponse
 import com.jkperformance.app.net.isCancellation
 import com.jkperformance.app.net.readable
 import java.time.Instant
@@ -83,6 +67,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /** How often an open thread or the coach's thread list asks for news. */
 private const val POLL_MS = 15_000L
@@ -176,14 +162,14 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
                 error?.let { item(key = "error") { ErrorBanner(it) } }
                 if (shown.isEmpty()) {
                     item(key = "empty") {
-                        EmptyCard(systemName = "bubble.left.and.bubble.right", title = "No messages yet", detail = "Say hello to $otherName.")
+                        EmptyCard(title = "No messages yet", detail = "Say hello to $otherName.")
                     }
                 }
                 shown.forEachIndexed { index, m ->
                     item(key = m.id) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             if (index == 0 || !Day.same(shown[index - 1].at, m.at)) {
-                                Text(dayLabel(m.at), style = JKType.caption2, color = JK.tertiary, modifier = Modifier.padding(top = 8.dp))
+                                Text(dayLabel(m.at), style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.padding(top = 8.dp))
                                 Spacer(Modifier.height(10.dp))
                             }
                             Bubble(message = m, mine = m.fromId == myId)
@@ -199,29 +185,29 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
         }
         sendError?.let { ErrorBanner(it, Modifier.padding(horizontal = 16.dp)) }
         Row(
-            Modifier.fillMaxWidth().background(JK.bg).padding(horizontal = 16.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().background(JKColors.bg).padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val style = JKType.body.copy(color = JK.text)
-            val field = rounded(20.dp)
+            val style = JKType.body.copy(color = JKColors.text)
+            val field = JKShape.sheetAll
             BasicTextField(
                 value = draft,
                 onValueChange = { draft = it },
                 textStyle = style,
                 minLines = 1,
                 maxLines = 4,
-                cursorBrush = SolidColor(JK.text),
+                cursorBrush = SolidColor(JKColors.text),
                 modifier = Modifier.weight(1f),
                 decorationBox = { inner ->
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .background(JK.card, field)
-                            .border(1.dp, JK.stroke, field)
+                            .background(JKColors.surface, field)
+                            .border(JKSize.hairline, JKColors.inputBorder, field)
                             .padding(horizontal = 12.dp, vertical = 9.dp),
                     ) {
-                        if (draft.isEmpty()) Text("Message", style = style, color = JK.tertiary)
+                        if (draft.isEmpty()) Text("Message", style = style, color = JKColors.textSecondary)
                         inner()
                     }
                 },
@@ -231,11 +217,11 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
                 Modifier
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(JK.chrome, CircleShape)
+                    .background(JKColors.primaryFill, CircleShape)
                     .clickable(enabled = canSend) { scope.launch { send() } },
                 contentAlignment = Alignment.Center,
             ) {
-                if (sending) ProgressView(tint = Color.Black) else SystemImage("paperplane.fill", JKType.body, Color.Black)
+                if (sending) ProgressView() else Glyph(IconKey.send, JKType.body, JKColors.primaryLabel)
             }
         }
     }
@@ -250,24 +236,27 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
 private fun ThreadBar(otherName: String, subtitle: String) {
     val nav = LocalNav.current
     Row(
-        Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 8.dp),
+        Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (nav.depth > 0) {
-            Icon(
-                Icons.AutoMirrored.Rounded.ArrowBackIos,
+            Glyph(
+                IconKey.back,
+                modifier = Modifier.clickable { nav.pop() }.padding(horizontal = 4.dp, vertical = 8.dp),
+                size = JKSize.iconTab,
+                tint = JKColors.text,
                 contentDescription = "Back",
-                tint = JK.text,
-                modifier = Modifier.clickable { nav.pop() }.padding(horizontal = 4.dp, vertical = 8.dp).size(18.dp),
             )
         } else {
             Spacer(Modifier.width(8.dp))
         }
-        Avatar(initials = Fmt.initials(otherName), size = 26.dp)
+        // A client's thread is with JK: his portrait (or the monogram) in the champagne ring.
+        if (AppSession.isCoach) Avatar(initials = Fmt.initials(otherName), size = JKSize.avatarSmall)
+        else CoachAvatar(AppSession.me?.coach?.avatarMediaId, size = JKSize.avatarSmall)
         Column {
-            Text(otherName, style = JKType.subheadline.semibold(), color = JK.text, maxLines = 1)
-            Text(subtitle, style = JKType.system(10), color = JK.tertiary, maxLines = 1)
+            Text(otherName, style = JKType.callout.semibold(), color = JKColors.text, maxLines = 1)
+            Text(subtitle, style = JKType.caption, color = JKColors.textSecondary, maxLines = 1)
         }
     }
 }
@@ -292,47 +281,56 @@ private fun Modifier.keyboardAware(): Modifier {
         .padding(bottom = with(density) { (ime - below).coerceAtLeast(0).toDp() })
 }
 
+/** What a non-text message is, in a word or two. */
+private fun bubbleTag(message: Message, mine: Boolean): Pair<IconKey, String>? = when (message.kind) {
+    "formCheck" -> IconKey.formCheck to "Form check"
+    "mealPhoto" -> IconKey.mealPhoto to "Meal photo"
+    "answer" -> IconKey.reply to (if (mine) "Your answer to the letter" else "Answered your letter")
+    "letter" -> IconKey.letter to "Letter delivered"
+    else -> if (message.workoutId != null) IconKey.workout to "Plan updated" else null
+}
+
 /**
- * One message. As on the iPhone, a bubble takes the width the row's
- * spacer leaves it (half the row, at most 280), mine on the right in chrome.
+ * One message: your own words sit raised, the other side's on surface. Form
+ * checks and meal photos play or show their media.
  */
 @Composable
 private fun Bubble(message: Message, mine: Boolean) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val width = minOf(280.dp, (maxWidth - 8.dp) / 2)
-        val shape = rounded(14.dp)
-        val ink = if (mine) Color.Black else JK.text
+        val width = minOf(300.dp, maxWidth - JKSpace.huge)
         Column(
             Modifier
                 .align(if (mine) Alignment.CenterEnd else Alignment.CenterStart)
-                .width(width)
-                .then(if (mine) Modifier.background(JK.chrome, shape) else Modifier.background(JK.card, shape).border(1.dp, JK.stroke, shape))
-                .padding(12.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .widthIn(max = width)
+                .background(if (mine) JKColors.raised else JKColors.surface, JKShape.card)
+                .padding(JKSpace.m)
+                .semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(JKSpace.xs),
         ) {
-            if (message.workoutId != null) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconTile("dumbbell", size = 28.dp)
-                    Column {
-                        Text("Workout", style = JKType.caption.semibold(), color = ink)
-                        Text("Plan updated · see your Plan tab", style = JKType.system(10), color = JK.tertiary)
-                    }
+            bubbleTag(message, mine)?.let { (key, text) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.xs), verticalAlignment = Alignment.CenterVertically) {
+                    Glyph(key, size = JKSize.iconSmall, tint = JKColors.textSecondary)
+                    Text(text, style = JKType.caption, color = JKColors.textSecondary)
                 }
             }
-            if (message.text.isNotEmpty()) {
-                Text(message.text, style = JKType.footnote, color = ink, modifier = Modifier.fillMaxWidth())
-            }
-            Text(Fmt.time(message.at), style = JKType.system(9), color = if (mine) Color.Black.copy(alpha = 0.5f) else JK.tertiary)
+            if (message.text.isNotEmpty()) Text(message.text, style = JKType.body, color = JKColors.text)
+            message.mediaId?.let { MessageMedia(it, isVideo = message.kind == "formCheck") }
+            Text(Fmt.time(message.at), style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.align(Alignment.End))
         }
     }
 }
 
 // MARK: - Coach: thread list
 
+/**
+ * The coach's conversations, newest first. Threads from clients on a plan
+ * with 'priority' carry the word "Priority".
+ */
 @Composable
 fun CoachThreadsView() {
     var threads by remember { mutableStateOf<List<MessageThread>?>(null) }
+    var priority by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var plans by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
@@ -345,6 +343,16 @@ fun CoachThreadsView() {
         }
     }
 
+    /** Which clients are on a plan that includes 'priority'. */
+    suspend fun loadPlans() {
+        val catalogue = runCatching { APIClient.get<PlansResponse>("/api/plans") }.getOrNull() ?: return
+        val clients = runCatching { APIClient.get<ClientsResponse>("/api/coach/clients") }.getOrNull() ?: return
+        val priorityPlans = catalogue.plans.filter { "priority" in it.featureIds }.map { it.id }.toSet()
+        priority = clients.clients.filter { (it.plan ?: "") in priorityPlans }.map { it.id }.toSet()
+        plans = clients.clients.associate { it.id to (it.plan ?: "none") }
+    }
+
+    LaunchedEffect(Unit) { loadPlans() }
     LaunchedEffect(Unit) {
         while (isActive) {
             load()
@@ -354,16 +362,20 @@ fun CoachThreadsView() {
 
     JKRefreshable(onRefresh = { load() }, modifier = Modifier.jkScreen()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.l),
         ) {
-            ScreenHeader(eyebrow = "Coach", title = "Messages")
+            Text("Messages", style = JKType.display, color = JKColors.text, modifier = Modifier.semantics { heading() })
             Loadable(value = threads, error = error, retry = { load() }) { list ->
                 if (list.isEmpty()) {
-                    EmptyCard(systemName = "bubble.left", title = "No conversations yet")
+                    EmptyState("No conversations yet.")
                 } else {
-                    Column(Modifier.jkCard(padding = 2.dp)) {
-                        list.forEach { t -> ThreadRow(t) }
+                    Column(Modifier.jkSurface(SurfaceVariant.Group, padding = 0.dp)) {
+                        list.forEachIndexed { i, t ->
+                            val isPriority = t.client.id in priority
+                            ThreadRow(t, isPriority, subtitle = if (isPriority) "Priority · same-day reply" else Fmt.planName(plans[t.client.id]))
+                            if (i < list.lastIndex) GroupDivider(Modifier.padding(start = JKSpace.l + JKSize.avatar + JKSpace.m))
+                        }
                     }
                 }
             }
@@ -372,37 +384,52 @@ fun CoachThreadsView() {
 }
 
 @Composable
-private fun ThreadRow(t: MessageThread) {
+private fun ThreadRow(t: MessageThread, priority: Boolean, subtitle: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(rounded(12.dp))
-            .navLink { MessagesThreadView(clientId = t.client.id, otherName = t.client.name, subtitle = "Client") }
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .navLink { MessagesThreadView(clientId = t.client.id, otherName = t.client.name, subtitle = subtitle) }
+            .padding(horizontal = JKSpace.l, vertical = JKSpace.m),
+        horizontalArrangement = Arrangement.spacedBy(JKSpace.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(initials = t.client.displayInitials, size = 34.dp)
+        Avatar(initials = t.client.displayInitials)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t.client.name, style = JKType.subheadline.semibold(), color = JK.text, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s), verticalAlignment = Alignment.CenterVertically) {
+                Text(t.client.name, style = JKType.callout, color = JKColors.text, maxLines = 1)
+                if (priority) Text("Priority", style = JKType.caption, color = JKColors.textSecondary)
+                Spacer(Modifier.weight(1f))
                 t.last?.at?.let { at ->
                     Text(
                         if (Day.same(at, Instant.now())) Fmt.time(at) else Fmt.dayMonth(at),
-                        style = JKType.caption2,
-                        color = JK.tertiary,
+                        style = JKType.caption,
+                        color = JKColors.textSecondary,
                     )
                 }
             }
-            Text(t.last?.text ?: "No messages", style = JKType.caption2, color = JK.tertiary, maxLines = 1)
+            Text(threadPreview(t), style = JKType.caption, color = JKColors.textSecondary, maxLines = 1)
         }
         if (t.unread > 0) {
             Text(
                 "${t.unread}",
-                style = JKType.system(10, FontWeight.Bold),
-                color = Color.Black,
-                modifier = Modifier.background(JK.text, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp),
+                style = JKType.caption,
+                color = JKColors.primaryLabel,
+                modifier = Modifier
+                    .background(JKColors.primaryFill, CircleShape)
+                    .padding(horizontal = JKSpace.s, vertical = 2.dp)
+                    .semantics { contentDescription = "${t.unread} unread" },
             )
         }
+    }
+}
+
+private fun threadPreview(t: MessageThread): String {
+    val last = t.last ?: return "No messages"
+    val tail = if (last.text.isEmpty()) "" else " · ${last.text}"
+    return when (last.kind) {
+        "formCheck" -> "Form check$tail"
+        "mealPhoto" -> "Meal photo$tail"
+        "answer" -> "Answered your letter · ${last.text}"
+        else -> last.text
     }
 }

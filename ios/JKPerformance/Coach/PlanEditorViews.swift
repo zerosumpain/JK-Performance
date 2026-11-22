@@ -19,8 +19,8 @@ struct PlansPricesView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ScreenHeader(eyebrow: "Coach · Business", title: "Plans & prices")
                 Text("What your clients see when they choose a plan. Changes apply straight away.")
-                    .font(.caption)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textSecondary)
                 Loadable(value: data, error: error, retry: load) { d in
                     planList(d)
                     footer
@@ -66,14 +66,14 @@ struct PlansPricesView: View {
             } label: {
                 Label("Preview as a client", systemImage: "eye")
             }
-            .buttonStyle(GhostButtonStyle())
+            .buttonStyle(SecondaryButtonStyle())
             Button {
                 confirmReset = true
             } label: {
                 if resetting { ProgressView().controlSize(.small) } else { Text("Reset to defaults") }
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(JK.secondary)
+            .font(.jkCaption.weight(.semibold))
+            .foregroundStyle(JK.textSecondary)
             .frame(maxWidth: .infinity, minHeight: 36)
             .disabled(resetting)
         }
@@ -114,19 +114,19 @@ private struct PlanSummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Text(plan.name).font(.headline).foregroundStyle(JK.text)
+                Text(plan.name).font(.jkHeadline).foregroundStyle(JK.text)
                 if plan.isFeatured { PopularBadge() }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
             Text(plan.detail)
-                .font(.caption2)
-                .foregroundStyle(JK.tertiary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textTertiary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 if plan.isFree {
-                    Text("Free").font(.title3.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Free").font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.text)
                 } else {
                     PriceLabel(pence: plan.monthlyPence)
                     PriceLabel(pence: plan.annualPence, period: .year, font: .subheadline.weight(.semibold))
@@ -134,8 +134,8 @@ private struct PlanSummaryCard: View {
                 Spacer(minLength: 0)
             }
             Text(facts)
-                .font(.caption2)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textSecondary)
         }
         .jkCard()
         .accessibilityElement(children: .combine)
@@ -206,8 +206,8 @@ struct PlanEditorView: View {
                 wordingFields
                 if isFree {
                     Text("The free plan is always free.")
-                        .font(.caption)
-                        .foregroundStyle(JK.secondary)
+                        .font(.jkCaption)
+                        .foregroundStyle(JK.textSecondary)
                         .jkCard(padding: 12)
                 } else {
                     Eyebrow(text: "Prices")
@@ -263,13 +263,13 @@ struct PlanEditorView: View {
             }
             if let priceHint {
                 Text(priceHint)
-                    .font(.caption)
+                    .font(.jkCaption)
                     .monospacedDigit()
-                    .foregroundStyle(JK.secondary)
+                    .foregroundStyle(JK.textSecondary)
             }
             Text("Clients see the new price straight away. Nobody is charged while payments are off; once App Store billing is on, change the price in App Store Connect too.")
-                .font(.caption2)
-                .foregroundStyle(JK.tertiary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -278,19 +278,19 @@ struct PlanEditorView: View {
         VStack(spacing: 12) {
             Stepper(value: $credits, in: 0...31) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Session credits").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Session credits").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                     Text(credits == 1 ? "1 session a month" : "\(credits) sessions a month")
-                        .font(.caption2).foregroundStyle(JK.tertiary)
+                        .font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
             }
-            Divider().overlay(JK.stroke)
+            Divider().overlay(JK.hairline)
             Toggle(isOn: $featured) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Most popular").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                    Text("Shown on one plan at a time").font(.caption2).foregroundStyle(JK.tertiary)
+                    Text("Most popular").font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+                    Text("Shown on one plan at a time").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 }
             }
-            .tint(.green)
+            .tint(JK.accentControl)
         }
         .jkCard(padding: 12)
     }
@@ -303,9 +303,9 @@ struct PlanEditorView: View {
                 Toggle(isOn: featureBinding(f.id)) {
                     FeatureRow(feature: f)
                 }
-                .tint(.green)
+                .tint(JK.accentControl)
                 .padding(12)
-                if f.id != catalogue.last?.id { Divider().overlay(JK.stroke) }
+                if f.id != catalogue.last?.id { Divider().overlay(JK.hairline) }
             }
         }
         .jkCard(padding: 0)
@@ -326,9 +326,9 @@ struct PlanEditorView: View {
         Button {
             Task { await save() }
         } label: {
-            if saving { ProgressView().tint(.black) } else { Text("Save") }
+            if saving { ProgressView().tint(JK.onPrimary) } else { Text("Save") }
         }
-        .buttonStyle(ChromeButtonStyle())
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(saving)
     }
 
@@ -403,23 +403,23 @@ private struct LimitedField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(JK.secondary)
+                Text(title).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.textSecondary)
                 Spacer()
                 Text("\(text.count) / \(limit)")
-                    .font(.caption2)
+                    .font(.jkCaption)
                     .monospacedDigit()
-                    .foregroundStyle(JK.tertiary)
+                    .foregroundStyle(JK.textTertiary)
                     .accessibilityLabel("\(text.count) of \(limit) characters")
             }
             if multiline {
                 TextField(prompt, text: $text, axis: .vertical)
                     .lineLimit(3...8)
-                    .font(.subheadline)
+                    .font(.jkCallout)
                     .foregroundStyle(JK.text)
                     .accessibilityLabel(title)
             } else {
                 TextField(prompt, text: $text)
-                    .font(.subheadline)
+                    .font(.jkCallout)
                     .foregroundStyle(JK.text)
                     .accessibilityLabel(title)
             }
@@ -438,12 +438,12 @@ private struct PoundsField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(JK.secondary)
+            Text(title).font(.jkCaption.weight(.semibold)).foregroundStyle(JK.textSecondary)
             HStack(spacing: 4) {
-                Text("£").font(.title3.weight(.semibold)).foregroundStyle(JK.tertiary)
+                Text("£").font(.jkHeadline.weight(.semibold)).foregroundStyle(JK.textTertiary)
                 TextField("0", text: $text)
                     .keyboardType(.decimalPad)
-                    .font(.title3.weight(.semibold))
+                    .font(.jkHeadline.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(JK.text)
                     .accessibilityLabel("\(title) price in pounds")
@@ -466,8 +466,8 @@ struct ClientAboutCard: View {
                 answers(profile)
             } else {
                 Text("Hasn't answered the first-run questions yet.")
-                    .font(.caption)
-                    .foregroundStyle(JK.tertiary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textTertiary)
             }
         }
         .jkCard()
@@ -481,9 +481,9 @@ struct ClientAboutCard: View {
                 HStack(spacing: 6) {
                     ForEach(goals, id: \.self) { g in
                         Text(g)
-                            .font(.caption2.weight(.medium))
+                            .font(.jkCaption.weight(.medium))
                             .padding(.horizontal, 9).padding(.vertical, 4)
-                            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
+                            .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
                             .foregroundStyle(JK.text)
                     }
                 }
@@ -499,9 +499,9 @@ struct ClientAboutCard: View {
         }
         if let injuries = p.injuries?.trimmingCharacters(in: .whitespacesAndNewlines), !injuries.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Injuries and notes").font(.caption2).foregroundStyle(JK.tertiary)
+                Text("Injuries and notes").font(.jkCaption).foregroundStyle(JK.textTertiary)
                 Text(injuries)
-                    .font(.subheadline)
+                    .font(.jkCallout)
                     .foregroundStyle(JK.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
@@ -522,8 +522,8 @@ struct ClientAboutCard: View {
 
     private func line(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).font(.caption2).foregroundStyle(JK.tertiary).frame(width: 78, alignment: .leading)
-            Text(value).font(.subheadline).foregroundStyle(JK.text)
+            Text(label).font(.jkCaption).foregroundStyle(JK.textTertiary).frame(width: 78, alignment: .leading)
+            Text(value).font(.jkCallout).foregroundStyle(JK.text)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)

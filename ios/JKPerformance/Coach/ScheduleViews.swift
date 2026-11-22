@@ -1,187 +1,125 @@
 import SwiftUI
 
-// MARK: - Schedule (week grid)
+// MARK: - Day agenda
 
-struct ScheduleView: View {
-    enum Filter: String, CaseIterable {
-        case all = "All", inperson = "1:1", video = "Video", group = "Group"
-        func keeps(_ b: Booking) -> Bool {
-            switch self {
-            case .all: return true
-            case .inperson: return b.kind == "inperson"
-            case .video: return b.kind == "video"
-            case .group: return b.kind == "group"
-            }
-        }
-    }
-
-    @State private var anchor = Day.start(Date())
-    @State private var filter: Filter = .all
+/// One day of sessions (atelier-spec.md, Coach screens 1): a time column with
+/// a row per session, swipe or step between days, and Book. Replaces the
+/// Schedule week grid; it opens from the strip on Today.
+struct DayAgendaView: View {
+    @Environment(AppSession.self) private var session
+    @State private var day = Day.start(Date())
     @State private var bookings: [Booking]?
     @State private var error: String?
     @State private var booking = false
     @State private var editingAvailability = false
-    @State private var openBooking: Booking?
 
-    private let hours = Array(6...20)
-    private let rowHeight: CGFloat = 34
-    private var days: [Date] { Day.week(of: anchor) }
+    private var sessions: [Booking] { (bookings ?? []).sorted { $0.start < $1.start } }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ScreenHeader(eyebrow: "Week of \(Fmt.dayMonth(days[0]))", title: "Schedule") {
-                        HStack(spacing: 8) {
-                            Button { editingAvailability = true } label: {
-                                Image(systemName: "clock.badge.checkmark")
-                                    .frame(width: 30, height: 30)
-                                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(JK.stroke, lineWidth: 1))
-                            }
-                            .foregroundStyle(JK.text)
-                            .accessibilityLabel("Availability")
-                            Button { booking = true } label: { Label("Book", systemImage: "plus") }
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(JK.chrome, in: Capsule())
-                                .foregroundStyle(.black)
-                        }
-                    }
-                    HStack {
-                        Button { anchor = Day.add(-7, to: anchor) } label: { Image(systemName: "chevron.left") }
-                        Spacer()
-                        Button("This week") { anchor = Day.start(Date()) }.font(.caption)
-                        Spacer()
-                        Button { anchor = Day.add(7, to: anchor) } label: { Image(systemName: "chevron.right") }
-                    }
-                    .foregroundStyle(JK.secondary)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(Filter.allCases, id: \.self) { f in
-                                let count = (bookings ?? []).filter(f.keeps).count
-                                Chip(label: f == .all ? "All · \(count)" : "\(f.rawValue) · \(count)", selected: filter == f) { filter = f }
-                            }
-                        }
-                    }
-                    if let error, bookings == nil {
-                        ErrorCard(message: error) { await load() }
-                    } else if bookings == nil {
-                        LoadingCard()
-                    } else {
-                        if let error { ErrorBanner(message: error) }
-                        grid
-                        legend
-                        Text("Tap a block for details. The clock button edits your weekly availability.")
-                            .font(.caption2).foregroundStyle(JK.tertiary)
-                    }
-                }
-                .padding(16)
-            }
-            .jkScreen()
-            .jkRefreshable { await load() }
-            .toolbar(.hidden, for: .navigationBar)
-            .task(id: Day.string(days[0])) { await load() }
-            .navigationDestination(item: $openBooking) { b in
-                if let c = b.client, !b.isGroup {
-                    ClientDetailView(clientId: c.id, name: c.name)
+        ScrollView {
+            VStack(alignment: .leading, spacing: JK.Space.l) {
+                dayHeader
+                if let error, bookings == nil {
+                    ErrorCard(message: error) { await load() }
+                } else if bookings == nil {
+                    LoadingCard()
                 } else {
-                    ClassDetailView(booking: b)
+                    if let error { ErrorBanner(message: error) }
+                    agenda
                 }
             }
-            .sheet(isPresented: $booking, onDismiss: { Task { await load() } }) {
-                CoachBookSheet(day: Day.same(anchor, Date()) ? Date() : days[0])
+            .padding(.horizontal, JK.Space.gutter)
+            .padding(.vertical, JK.Space.l)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 40).onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                step(value.translation.width < 0 ? 1 : -1)
+            })
+        }
+        .jkScreen()
+        .jkRefreshable { await load() }
+        .navigationTitle("Agenda")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbar }
+        .task(id: Day.string(day)) { await load() }
+        .sheet(isPresented: $booking, onDismiss: { Task { await load() } }) {
+            CoachBookSheet(day: Day.same(day, Date()) ? Date() : day)
+        }
+        .sheet(isPresented: $editingAvailability) { AvailabilityEditor() }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: JK.Space.m) {
+                if session.studioTools {
+                    Button { editingAvailability = true } label: { Image(systemName: "clock.badge.checkmark") }
+                        .accessibilityLabel("Availability")
+                }
+                Button("Book") { booking = true }
             }
-            .sheet(isPresented: $editingAvailability) { AvailabilitySheet() }
         }
     }
 
-    private var grid: some View {
-        HStack(alignment: .top, spacing: 3) {
+    private var dayHeader: some View {
+        HStack(spacing: JK.Space.s) {
+            Button { step(-1) } label: { Image(systemName: "chevron.left").frame(minWidth: JK.Size.touch, minHeight: JK.Size.touch) }
+                .accessibilityLabel("Previous day")
+            VStack(spacing: 2) {
+                Text(Fmt.fullDay(day)).font(.jkHeadline).foregroundStyle(JK.text)
+                Text(summary).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+            Button { step(1) } label: { Image(systemName: "chevron.right").frame(minWidth: JK.Size.touch, minHeight: JK.Size.touch) }
+                .accessibilityLabel("Next day")
+        }
+        .foregroundStyle(JK.textSecondary)
+    }
+
+    private var summary: String {
+        if Day.same(day, Date()) {
+            let done = sessions.filter { $0.end < Date() }.count
+            return sessions.isEmpty ? "Today · nothing booked" : "Today · \(done) of \(sessions.count) sessions done"
+        }
+        return sessions.isEmpty ? "Nothing booked" : (sessions.count == 1 ? "1 session" : "\(sessions.count) sessions")
+    }
+
+    @ViewBuilder
+    private var agenda: some View {
+        if sessions.isEmpty {
+            EmptyState(line: "Nothing booked. A quiet day.", actionTitle: "Book a session") { booking = true }
+        } else {
             VStack(spacing: 0) {
-                Text(" ").font(.system(size: 9)).frame(height: 24)
-                ForEach(hours, id: \.self) { h in
-                    Text("\(h)").font(.system(size: 9)).foregroundStyle(JK.tertiary).frame(height: rowHeight, alignment: .top)
+                ForEach(sessions) { b in
+                    NavigationLink { destination(b) } label: { DayAgendaRow(booking: b) }
+                        .buttonStyle(.plain)
+                    if b.id != sessions.last?.id { GroupDivider(inset: JK.Space.l + 52) }
                 }
             }
-            .frame(width: 18)
-            ForEach(days, id: \.self) { day in
-                let today = Day.same(day, Date())
-                VStack(spacing: 0) {
-                    Text("\(Fmt.weekday(day).prefix(2)) \(Day.calendar.component(.day, from: day))")
-                        .font(.system(size: 9, weight: today ? .bold : .regular))
-                        .foregroundStyle(today ? Color.black : JK.tertiary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 20)
-                        .background(today ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 5))
-                        .padding(.bottom, 4)
-                    ZStack(alignment: .top) {
-                        VStack(spacing: 0) {
-                            ForEach(hours, id: \.self) { _ in
-                                Rectangle().fill(JK.stroke).frame(height: 1).frame(height: rowHeight, alignment: .top)
-                            }
-                        }
-                        ForEach(blocks(on: day)) { b in
-                            let start = hourOf(b.start), length = max(0.5, b.end.timeIntervalSince(b.start) / 3600)
-                            Button { openBooking = b } label: {
-                                Text(label(b))
-                                    .font(.system(size: 8, weight: .semibold))
-                                    .foregroundStyle(JK.text)
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    .padding(3)
-                                    .frame(height: rowHeight * CGFloat(length) - 2, alignment: .top)
-                                    .background(JK.slot(b.kind).opacity(0.24), in: RoundedRectangle(cornerRadius: 4))
-                                    .overlay(alignment: .leading) {
-                                        UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 4)
-                                            .fill(JK.slot(b.kind)).frame(width: 2)
-                                    }
-                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(JK.slot(b.kind).opacity(0.55), lineWidth: 1))
-                            }
-                            .buttonStyle(.plain)
-                            .offset(y: rowHeight * CGFloat(start - Double(hours[0])))
-                        }
-                    }
-                    .frame(height: rowHeight * CGFloat(hours.count), alignment: .top)
-                    .clipped()
-                }
-            }
+            .surface(.group)
         }
     }
 
-    /// The colour key for the kinds of session on the grid.
-    private var legend: some View {
-        HStack(spacing: 14) {
-            ForEach([("inperson", "1:1 in person"), ("video", "Video call"), ("group", "Group class")], id: \.0) { item in
-                HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 2).fill(JK.slot(item.0)).frame(width: 10, height: 10)
-                    Text(item.1).font(.caption2).foregroundStyle(JK.secondary)
-                }
-            }
+    @ViewBuilder
+    private func destination(_ b: Booking) -> some View {
+        if let c = b.client, !b.isGroup {
+            ClientDetailView(clientId: c.id, name: c.name)
+        } else {
+            ClassDetailView(booking: b)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
     }
 
-    private func blocks(on day: Date) -> [Booking] {
-        (bookings ?? []).filter { Day.same($0.start, day) && filter.keeps($0) }
-    }
-
-    private func hourOf(_ date: Date) -> Double {
-        let c = Day.calendar.dateComponents([.hour, .minute], from: date)
-        return Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60
-    }
-
-    private func label(_ b: Booking) -> String {
-        if b.isGroup { return "Grp" }
-        if b.kind == "video" { return (b.client?.displayInitials ?? "") + " ☎︎" }
-        return b.client?.displayInitials ?? (b.title ?? "1:1")
+    private func step(_ days: Int) {
+        day = Day.add(days, to: day)
     }
 
     private func load() async {
+        let key = Day.string(day)
         do {
-            let reply: BookingsResponse = try await APIClient.shared.get("/api/bookings", query: [
-                "from": Day.string(days[0]), "to": Day.string(days[6]),
-            ])
-            bookings = reply.bookings
+            let reply: BookingsResponse = try await APIClient.shared.get("/api/bookings", query: ["from": key, "to": key])
+            guard key == Day.string(day) else { return }
+            bookings = reply.bookings.filter { Day.same($0.start, day) }
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
@@ -189,9 +127,60 @@ struct ScheduleView: View {
     }
 }
 
+/// A time, then avatar, name, kind glyph and place.
+struct DayAgendaRow: View {
+    let booking: Booking
+
+    private var done: Bool { booking.end < Date() }
+    private var who: String {
+        if booking.isGroup {
+            let count = booking.attendeeCount ?? booking.attendees?.count ?? 0
+            return "\(booking.title ?? "Class") · \(count) going"
+        }
+        return booking.client?.name ?? booking.title ?? booking.kindLabel
+    }
+
+    private var kind: IconKey {
+        switch booking.kind {
+        case "video": return .video
+        case "group": return .group
+        default: return .oneToOne
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: JK.Space.m) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(Fmt.time(booking.start)).font(.jkCallout.monospacedDigit())
+                Text(Fmt.time(booking.end)).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
+            }
+            .frame(minWidth: 44, alignment: .leading)
+            .foregroundStyle(JK.text)
+            Avatar(initials: booking.client?.displayInitials ?? "G", size: JK.Size.avatarSmall)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(who).font(.jkCallout).foregroundStyle(JK.text)
+                HStack(spacing: JK.Space.xs) {
+                    Icon(key: kind, size: 13, label: kind.accessibilityName).foregroundStyle(JK.textSecondary)
+                    Text([booking.kindLabel, booking.location].compactMap { $0 }.joined(separator: " · "))
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
+            }
+            Spacer(minLength: 0)
+            if done {
+                Icon(key: .done, size: 15, label: "Done").foregroundStyle(JK.textSecondary)
+            }
+        }
+        .padding(.horizontal, JK.Space.l)
+        .padding(.vertical, JK.Space.m)
+        .opacity(done ? 0.7 : 1)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Book: class or client session
 
-private struct CoachBookSheet: View {
+struct CoachBookSheet: View {
     enum Mode: String, CaseIterable { case client = "Book a client", group = "Create a class" }
 
     let day: Date
@@ -220,9 +209,9 @@ private struct CoachBookSheet: View {
                                     } label: {
                                         HStack(spacing: 10) {
                                             Avatar(initials: c.displayInitials, size: 28)
-                                            Text(c.name).font(.subheadline).foregroundStyle(JK.text)
+                                            Text(c.name).font(.jkCallout).foregroundStyle(JK.text)
                                             Spacer()
-                                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+                                            Image(systemName: "chevron.right").font(.jkCaption).foregroundStyle(JK.textTertiary)
                                         }
                                         .padding(10)
                                     }
@@ -237,21 +226,21 @@ private struct CoachBookSheet: View {
                     } else {
                         JKField(label: "Title", text: $title)
                         DatePicker("Starts", selection: $start, in: Date()...)
-                            .font(.subheadline).foregroundStyle(JK.text)
+                            .font(.jkCallout).foregroundStyle(JK.text)
                         Stepper("\(minutes) minutes", value: $minutes, in: 15...180, step: 15)
-                            .font(.subheadline).foregroundStyle(JK.text)
+                            .font(.jkCallout).foregroundStyle(JK.text)
                         Stepper("Capacity \(capacity)", value: $capacity, in: 1...50)
-                            .font(.subheadline).foregroundStyle(JK.text)
+                            .font(.jkCallout).foregroundStyle(JK.text)
                         JKField(label: "Location", text: $location)
                         if let error { ErrorBanner(message: error) }
                         Button {
                             Task { await createClass() }
                         } label: {
-                            if saving { ProgressView().tint(.black) } else { Text("Create class") }
+                            if saving { ProgressView().tint(JK.onPrimary) } else { Text("Create class") }
                         }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty)
-                        Text("Clients see every class you create and join for free.").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Clients see every class you create and join for free.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                 }
                 .padding(16)
@@ -296,7 +285,7 @@ private struct CoachBookSheet: View {
 
 /// Weekly availability rules (weekday, start, end, kind). The server cuts
 /// them into bookable slots.
-private struct AvailabilitySheet: View {
+struct AvailabilityEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var rules: [AvailabilityRule]?
     @State private var error: String?
@@ -326,7 +315,7 @@ private struct AvailabilitySheet: View {
                                         self.rules?.removeAll { $0.localId == rule.localId }
                                     } label: { Image(systemName: "trash") }
                                         .buttonStyle(.plain)
-                                        .foregroundStyle(JK.tertiary)
+                                        .foregroundStyle(JK.textTertiary)
                                 }
                                 HStack(spacing: 8) {
                                     JKField(label: "Start", text: $rule.start, prompt: "07:00", keyboard: .numbersAndPunctuation)
@@ -349,15 +338,15 @@ private struct AvailabilitySheet: View {
                                                                 end: last?.end ?? "19:00", kind: last?.kind ?? "inperson",
                                                                 slotMinutes: last?.slotMinutes ?? 60, location: last?.location))
                         } label: { Label("Add hours", systemImage: "plus") }
-                            .buttonStyle(GhostButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                         Button {
                             Task { await save() }
                         } label: {
-                            if saving { ProgressView().tint(.black) } else { Text("Save availability") }
+                            if saving { ProgressView().tint(JK.onPrimary) } else { Text("Save availability") }
                         }
-                        .buttonStyle(ChromeButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(saving)
-                        Text("Times are Europe/London. Existing bookings stay put.").font(.caption2).foregroundStyle(JK.tertiary)
+                        Text("Times are Europe/London. Existing bookings stay put.").font(.jkCaption).foregroundStyle(JK.textTertiary)
                     } else {
                         LoadingCard()
                     }

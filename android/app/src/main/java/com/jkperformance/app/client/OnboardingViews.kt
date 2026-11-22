@@ -29,10 +29,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,23 +50,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jkperformance.app.design.Answers
-import com.jkperformance.app.design.ChoiceCard
-import com.jkperformance.app.design.Choice
-import com.jkperformance.app.design.Eyebrow
-import com.jkperformance.app.design.FeatureRow
-import com.jkperformance.app.design.GhostButton
-import com.jkperformance.app.design.IconTileVector
-import com.jkperformance.app.design.JK
-import com.jkperformance.app.design.JKType
-import com.jkperformance.app.design.LoadingCard
-import com.jkperformance.app.design.ErrorCard
-import com.jkperformance.app.design.Sheet
-import com.jkperformance.app.design.StepScaffold
-import com.jkperformance.app.design.jkCard
-import com.jkperformance.app.design.rememberReduceMotion
-import com.jkperformance.app.design.rounded
-import com.jkperformance.app.design.semibold
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Me
@@ -79,6 +58,8 @@ import com.jkperformance.app.net.PlansResponse
 import com.jkperformance.app.net.isCancellation
 import com.jkperformance.app.net.readable
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /** The first-run steps, in order. Welcome sits outside the progress track. */
 private enum class OnboardingStep { welcome, goals, experience, week, notes, notifications, plans }
@@ -181,7 +162,7 @@ fun OnboardingFlow() {
             }
         },
         label = "onboarding",
-        modifier = Modifier.fillMaxSize().background(JK.bg).systemBarsPadding().imePadding(),
+        modifier = Modifier.fillMaxSize().background(JKColors.bg).systemBarsPadding().imePadding(),
     ) { current ->
         when (current) {
             OnboardingStep.welcome -> StepScaffold(
@@ -194,13 +175,10 @@ fun OnboardingFlow() {
                 onSecondary = escape?.second ?: { finish(withAnswers = false) },
                 message = saveError,
                 header = {
-                    Box(
-                        Modifier.padding(top = 24.dp, bottom = 8.dp).size(64.dp).border(1.dp, JK.secondary, rounded(14.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("JK", style = JKType.title2.semibold(), color = JK.text) }
+                    CoachAvatar(AppSession.me?.coach?.avatarMediaId, size = JKSize.avatarLarge, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
                 },
             ) {
-                Column(Modifier.jkCard(padding = 4.dp)) {
+                Column(Modifier.jkSurface(padding = 4.dp)) {
                     listOf(
                         "Tell us about you" to "Your goals, experience and week",
                         "Your coach writes your programme" to "Built around your answers",
@@ -213,7 +191,7 @@ fun OnboardingFlow() {
 
             OnboardingStep.goals -> StepScaffold(
                 title = "What are you training for?",
-                subtitle = "Pick as many as you like.",
+                subtitle = "Pick as many as you like. JK will turn this into your goal at your first session.",
                 primary = "Continue",
                 onPrimary = { next() },
                 step = position, count = total,
@@ -254,7 +232,7 @@ fun OnboardingFlow() {
             ) {
                 DaysPicker(days) { days = it }
                 Spacer(Modifier.size(4.dp))
-                Eyebrow("When do you usually train?")
+                Label("When do you usually train?")
                 ChoiceGrid(Answers.times, isOn = { it == time }, multi = false) { id -> time = if (time == id) null else id }
             }
 
@@ -270,7 +248,7 @@ fun OnboardingFlow() {
                 NotesField(injuries) { injuries = it.take(INJURIES_MAX) }
                 Text(
                     "Optional. Only your coach sees this.",
-                    style = JKType.caption, color = JK.tertiary,
+                    style = JKType.caption, color = JKColors.textTertiary,
                 )
             }
 
@@ -292,12 +270,18 @@ fun OnboardingFlow() {
                     secondary = if (alreadyOn) null else "Not now",
                     onSecondary = { next() },
                 ) {
-                    Column(Modifier.jkCard(padding = 4.dp)) {
-                        ReasonRow(Icons.Outlined.ChatBubbleOutline, "Coach replies", "When ${coachName ?: "your coach"} answers a message")
-                        ReasonRow(Icons.Outlined.CalendarToday, "Session reminders", "An hour before each session")
-                        ReasonRow(Icons.Outlined.Description, "Your weekly report", "When your feedback and next week's plan are ready")
+                    Column(Modifier.jkSurface(padding = 4.dp)) {
+                        ReasonRow(IconKey.messages, "JK's replies", "When ${coachName ?: "JK"} answers a message")
+                        ReasonRow(IconKey.week, "Session reminders", "An hour before each session")
+                        ReasonRow(IconKey.letter, "JK's letter", "When your letter for the week arrives")
                     }
-                    if (alreadyOn) Text("Notifications are on.", style = JKType.caption, color = JK.tertiary)
+                    if (!HealthSync.optedIn && session.me?.demo != true) {
+                        Text(
+                            "Steps and sleep can fill your habits in by themselves: connect Health Connect in Account, from your initials on Today.",
+                            style = JKType.caption, color = JKColors.textSecondary,
+                        )
+                    }
+                    if (alreadyOn) Text("Notifications are on.", style = JKType.caption, color = JKColors.textTertiary)
                 }
             }
 
@@ -322,16 +306,17 @@ fun OnboardingFlow() {
                         reply == null -> LoadingCard()
                         onPlan -> {
                             val mine = reply.plans.firstOrNull { it.id == membership?.plan }
-                            Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 mine?.featureIds.orEmpty().forEach { id ->
                                     val f = reply.features.firstOrNull { it.id == id }
                                     FeatureRow(id, f?.title ?: id, f?.detail)
                                 }
                             }
+                            SecondaryButton("Take the tour", onClick = { showTour = true }, enabled = !saving)
                         }
                         else -> {
                             reply.plans.filter { !it.isFree }.forEach { p -> PlanSummaryCard(p, compact = true) }
-                            GhostButton("Take the tour", onClick = { showTour = true })
+                            SecondaryButton("Take the tour", onClick = { showTour = true })
                         }
                     }
                 }
@@ -352,27 +337,27 @@ private fun NumberedRow(number: Int, title: String, detail: String) {
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(30.dp).border(1.dp, JK.secondary, CircleShape), contentAlignment = Alignment.Center) {
-            Text("$number", style = JKType.subheadline.semibold(), color = JK.text)
+        Box(Modifier.size(30.dp).border(1.dp, JKColors.textSecondary, CircleShape), contentAlignment = Alignment.Center) {
+            Text("$number", style = JKType.callout.semibold(), color = JKColors.text)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = JKType.subheadline.semibold(), color = JK.text)
-            Text(detail, style = JKType.caption, color = JK.tertiary)
+            Text(title, style = JKType.callout.semibold(), color = JKColors.text)
+            Text(detail, style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
 
 @Composable
-private fun ReasonRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String) {
+private fun ReasonRow(icon: IconKey, title: String, detail: String) {
     Row(
         Modifier.fillMaxWidth().padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTileVector(icon, size = 34.dp)
+        RowGlyph(icon, slot = 34.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = JKType.subheadline.semibold(), color = JK.text)
-            Text(detail, style = JKType.caption, color = JK.tertiary)
+            Text(title, style = JKType.callout.semibold(), color = JKColors.text)
+            Text(detail, style = JKType.caption, color = JKColors.textTertiary)
         }
     }
 }
@@ -398,31 +383,31 @@ private fun ChoiceGrid(choices: List<Choice>, isOn: (String) -> Boolean, multi: 
 /** "How many days a week can you train?": the number big, and seven tappable day pills. */
 @Composable
 private fun DaysPicker(days: Int?, onChange: (Int?) -> Unit) {
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("How many days a week can you train?", style = JKType.subheadline.semibold(), color = JK.text)
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("How many days a week can you train?", style = JKType.callout.semibold(), color = JKColors.text)
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(days?.toString() ?: "–", style = JKType.largeTitle.semibold(), color = if (days == null) JK.tertiary else JK.text)
+            Text(days?.toString() ?: "–", style = JKType.display, color = if (days == null) JKColors.textTertiary else JKColors.text)
             Text(
                 when (days) { null -> "Tap a number"; 1 -> "day a week"; else -> "days a week" },
-                style = JKType.subheadline, color = JK.secondary, modifier = Modifier.padding(bottom = 6.dp),
+                style = JKType.callout, color = JKColors.textSecondary, modifier = Modifier.padding(bottom = 6.dp),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             (1..7).forEach { n ->
                 val on = days == n
-                val shape = rounded(10.dp)
+                val shape = JKShape.control
                 Box(
                     Modifier
                         .weight(1f)
                         .heightIn(min = 44.dp)
                         .clip(shape)
                         .selectable(selected = on, role = Role.RadioButton) { onChange(if (on) null else n) }
-                        .background(if (on) JK.chrome else SolidColor(JK.cardRaised), shape)
-                        .border(1.dp, JK.stroke, shape)
+                        .background(if (on) SolidColor(JKColors.accentControl) else SolidColor(JKColors.raised), shape)
+                        .border(1.dp, JKColors.hairline, shape)
                         .semantics { contentDescription = if (n == 1) "1 day" else "$n days" },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("$n", style = JKType.headline, color = if (on) Color.Black else JK.text)
+                    Text("$n", style = JKType.headline, color = if (on) JKColors.primaryLabel else JKColors.text)
                 }
             }
         }
@@ -432,13 +417,13 @@ private fun DaysPicker(days: Int?, onChange: (Int?) -> Unit) {
 /** A multi-line note with a character counter. */
 @Composable
 private fun NotesField(text: String, onChange: (String) -> Unit) {
-    val style = JKType.body.copy(color = JK.text)
+    val style = JKType.body.copy(color = JKColors.text)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         BasicTextField(
             value = text,
             onValueChange = onChange,
             textStyle = style,
-            cursorBrush = SolidColor(JK.text),
+            cursorBrush = SolidColor(JKColors.text),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Anything your coach should know" },
             decorationBox = { field ->
@@ -446,18 +431,18 @@ private fun NotesField(text: String, onChange: (String) -> Unit) {
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = 160.dp)
-                        .background(JK.card, rounded(JK.corner))
-                        .border(1.dp, JK.stroke, rounded(JK.corner))
+                        .background(JKColors.surface, JKShape.card)
+                        .border(1.dp, JKColors.hairline, JKShape.card)
                         .padding(14.dp),
                 ) {
-                    if (text.isEmpty()) Text("For example: a sore left knee, asthma, or a race in March", style = style, color = JK.tertiary)
+                    if (text.isEmpty()) Text("For example: a sore left knee, asthma, or a race in March", style = style, color = JKColors.textTertiary)
                     field()
                 }
             },
         )
         Text(
             "${text.length} / $INJURIES_MAX",
-            style = JKType.caption2, color = JK.tertiary, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth(),
+            style = JKType.caption, color = JKColors.textTertiary, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth(),
         )
     }
 }

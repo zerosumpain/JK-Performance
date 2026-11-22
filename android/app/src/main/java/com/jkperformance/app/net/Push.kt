@@ -35,26 +35,104 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.Serializable
 
+/** A screen pushed inside a client tab (Today or JK). One type so a tapped notification can open the right one. */
+sealed class ClientRoute {
+    /** Your week, scrolled to this "YYYY-MM-DD" day (null: today). */
+    data class yourWeek(val day: String? = null) : ClientRoute()
+    /** A workout: detail, logger and the session-complete page. */
+    data class session(val workoutId: String) : ClientRoute()
+    data class letter(val reportId: String) : ClientRoute()
+    data object guides : ClientRoute()
+    data class guide(val guideId: String) : ClientRoute()
+    data object challenges : ClientRoute()
+}
+
 /**
- * Which tab is showing. A tapped notification moves it (a message opens
- * Messages, a booking the calendar), so the tab bars bind to this.
+ * Which tab is showing and what is pushed in it. A tapped notification moves
+ * it (a message opens JK, a letter opens the letter, a booking Your week), so
+ * the tab bars and stacks bind to this.
+ *
+ * Android's stacks hold composable lambdas (design/Nav.kt), so a route asked
+ * for from outside a tab is a [RouteRequest]: the tab's root drains it into
+ * its own NavStack (App.kt, RouteDrain) and clears it.
  */
 object TabRouter {
-    enum class Client { home, plan, calendar, messages, account }
-    enum class Coach { today, clients, schedule, messages, guides }
+    /** The three client tabs (atelier-spec.md, IA). */
+    enum class Client { today, progress, jk }
+    enum class Coach { today, clients, messages }
 
-    var client: Client by mutableStateOf(Client.home)
+    /** Routes to push on a tab, after popping it to its root when [reset]. */
+    data class RouteRequest(val routes: List<ClientRoute>, val reset: Boolean, val serial: Long)
+
+    data class ReplyQuote(val reportId: String, val headline: String)
+
+    var client: Client by mutableStateOf(Client.today)
     var coach: Coach by mutableStateOf(Coach.today)
+    var todayRequest: RouteRequest? by mutableStateOf(null)
+    var jkRequest: RouteRequest? by mutableStateOf(null)
+    /** The Account sheet over Today (Account is no longer a tab). */
+    var showAccount: Boolean by mutableStateOf(false)
+    /** Open the Account sheet at Membership. */
+    var showMembership: Boolean by mutableStateOf(false)
+    /** Opens the composer quoting a letter ("Reply to JK"). */
+    var replyQuote: ReplyQuote? by mutableStateOf(null)
+    /** Text to start the JK composer with ("Ask JK for a rest day"). */
+    var composerDraft: String? by mutableStateOf(null)
 
-    fun open(kind: String?) {
-        when (kind) {
-            "message" -> { client = Client.messages; coach = Coach.messages }
-            "report" -> client = Client.home
-            "booking" -> { client = Client.calendar; coach = Coach.schedule }
-            "checkin" -> coach = Coach.today
-            "form" -> { client = Client.home; coach = Coach.today }
+    private var serial = 0L
+
+    /** Show Today with these routes pushed (replacing what was pushed when [reset]). */
+    fun pushToday(vararg routes: ClientRoute, reset: Boolean = false) {
+        client = Client.today
+        todayRequest = RouteRequest(routes.toList(), reset, ++serial)
+    }
+
+    /** Show JK with these routes pushed. */
+    fun pushJK(vararg routes: ClientRoute, reset: Boolean = false) {
+        client = Client.jk
+        jkRequest = RouteRequest(routes.toList(), reset, ++serial)
+    }
+
+    /**
+     * The old tab names, kept so existing payloads and links still land:
+     * home → today; plan and calendar → today, then Your week; messages → JK;
+     * account → today, then the Account sheet.
+     */
+    fun openLegacy(name: String) {
+        when (name) {
+            "home" -> client = Client.today
+            "plan", "calendar" -> pushToday(ClientRoute.yourWeek(null), reset = true)
+            "messages" -> client = Client.jk
+            "account" -> {
+                client = Client.today
+                showAccount = true
+            }
         }
     }
+
+    fun open(kind: String?, id: String? = null) {
+        when (kind) {
+            null -> Unit
+            "message" -> {
+                client = Client.jk
+                coach = Coach.messages
+            }
+            "report" -> if (id != null) pushJK(ClientRoute.letter(id), reset = true) else client = Client.jk
+            "booking" -> {
+                pushToday(ClientRoute.yourWeek(null), reset = true)
+                coach = Coach.today
+            }
+            "checkin" -> coach = Coach.today
+            "form" -> {
+                client = Client.today
+                coach = Coach.today
+            }
+            else -> openLegacy(kind)
+        }
+    }
+
+    /** Your week from Today, scrolled to a day. */
+    fun openWeek(day: String?) = pushToday(ClientRoute.yourWeek(day))
 }
 
 /**
@@ -76,6 +154,8 @@ object Push {
 
     /** The intent extra a tapped notification carries; FCM copies data keys into extras too. */
     const val KIND_EXTRA = "kind"
+    /** The item a push is about (a letter's id), when the server sends one. */
+    const val ID_EXTRA = "id"
 
     private const val TAG = "Push"
     private const val PREFS = "jk.push"
@@ -190,11 +270,12 @@ object Push {
      * banner too; Messages refreshes itself). In the background, Firebase
      * shows the server's notification itself on the same channel.
      */
-    fun show(context: Context, title: String?, body: String?, kind: String?) {
+    fun show(context: Context, title: String?, body: String?, kind: String?, id: String? = null) {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val open = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(KIND_EXTRA, kind)
+            .putExtra(ID_EXTRA, id)
         val tap = PendingIntent.getActivity(
             context, kind.hashCode(), open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -228,6 +309,7 @@ class PushService : FirebaseMessagingService() {
             title = message.notification?.title ?: message.data["title"],
             body = message.notification?.body ?: message.data["body"],
             kind = message.data[Push.KIND_EXTRA],
+            id = message.data[Push.ID_EXTRA],
         )
     }
 }

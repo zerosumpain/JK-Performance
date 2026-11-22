@@ -72,7 +72,7 @@ route('/schedule', async (el, _params, view) => {
 
   const head = screenHeader(`Week of ${fmtShort(days[0])}`, 'Schedule',
     h('button', { class: 'icon-btn square', 'aria-label': 'Availability', title: 'Availability', onclick: () => availabilitySheet() }, icon('clock', 17)),
-    h('button', { class: 'btn primary pill', type: 'button', onclick: () => openBook() }, icon('plus', 15), 'Book'));
+    h('button', { class: 'btn primary pill', type: 'button', onclick: () => openBook() }, icon('plus', 18), 'Book'));
   const weekNav = h('div', { class: 'sched-weeknav' },
     h('button', { class: 'icon-btn', 'aria-label': 'Previous week', onclick: () => setWeek(addDays(ui.monday, -7)) }, icon('back', 16)),
     button('This week', () => setWeek(mondayOf(today)), { small: true }),
@@ -235,7 +235,7 @@ export function sessionRow(b, isNext = false) {
       h('div', { class: 'grow' },
         h('div', { class: 'strong small clamp1' }, isGroup(b) ? `${who} · ${count} clients` : who),
         h('div', { class: 'tiny faint clamp1' }, [b.title, kindLabel(b)].filter(Boolean).join(' · '))),
-      isNext ? h('span', { class: 'next-pill' }, 'Next') : done ? icon('check', 14) : h('span', { class: 'faint' }, icon('chevron', 14))));
+      isNext ? h('span', { class: 'next-pill' }, 'Next') : done ? icon('check', 18) : h('span', { class: 'faint' }, icon('chevron', 18))));
 }
 
 // MARK: - Session (class) detail
@@ -258,7 +258,7 @@ async function findBooking(id, hint) {
 }
 
 route('/schedule/class/:id/:day?', async (el, { id, day }, view) => {
-  const back = link('/schedule', { class: 'back-link' }, icon('back', 14), 'Schedule');
+  const back = link('/schedule', { class: 'back-link' }, icon('back', 18), 'Schedule');
   el.append(back, loading());
   const b = await findBooking(id, day);
   if (!view.fresh()) return;
@@ -291,7 +291,7 @@ route('/schedule/class/:id/:day?', async (el, { id, day }, view) => {
     eyebrow('Attendees', b.capacity ? `${count} of ${b.capacity}` : null),
     people.length
       ? h('div', { class: 'card flush' }, people.map(p => link(`/clients/${encodeURIComponent(p.id)}`, { class: 'person-row' },
-        avatar(initials(p.name), 28), h('div', { class: 'grow' }, p.name), icon('chevron', 14))))
+        avatar(initials(p.name), 28), h('div', { class: 'grow' }, p.name), icon('chevron', 18))))
       : emptyCard('people', 'Nobody yet'),
     status,
     cancelBtn ? h('div', { class: 'mt' }, cancelBtn) : null);
@@ -312,7 +312,7 @@ function bookSheet(day) {
       clients().then(list => {
         fill(box, list.length
           ? h('div', { class: 'card flush' }, list.map(c => h('button', { class: 'person-row', type: 'button', onclick: () => fill(body, bookSession(c, day, () => draw(), close)) },
-            avatar(c.initials || c.name, 28), h('div', { class: 'grow' }, c.name), icon('chevron', 14))))
+            avatar(c.initials || c.name, 28), h('div', { class: 'grow' }, c.name), icon('chevron', 18))))
           : emptyCard('clients', 'No clients yet'));
       }).catch(err => fill(box, errorLine(err), button('Try again', () => draw(), { small: true })));
       return box;
@@ -424,7 +424,7 @@ function bookSession(client, initialDay, onBack, close) {
     const monday = mondayOf(day);
     const days = weekOf(monday);
     fill(root,
-      h('button', { class: 'link small back-btn', type: 'button', onclick: onBack }, icon('back', 13), 'All clients'),
+      h('button', { class: 'link small back-btn', type: 'button', onclick: onBack }, icon('back', 18), 'All clients'),
       h('div', { class: 'card row' }, avatar(client.initials || client.name, 34), h('span', { class: 'strong' }, `Booking for ${client.name}`)),
       h('div', { class: 'sched-weeknav' },
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Previous week', disabled: monday <= mondayOf(today), onclick: () => { day = addDays(day, -7) < today ? today : addDays(day, -7); draw(); } }, icon('back', 16)),
@@ -463,7 +463,7 @@ function availabilitySheet() {
       });
     }, { kind: 'primary' });
     save.disabled = true;
-    const add = button(h('span', { class: 'row gap4' }, icon('plus', 14), 'Add hours'), () => {
+    const add = button(h('span', { class: 'row gap4' }, icon('plus', 18), 'Add hours'), () => {
       const last = rules.at(-1);
       rules.push({ weekday: Math.min((last?.weekday ?? 0) + 1, 7), start: last?.start ?? '07:00', end: last?.end ?? '19:00', kind: last?.kind ?? 'inperson', slotMinutes: last?.slotMinutes ?? 60, location: last?.location ?? '' });
       draw();
@@ -481,7 +481,7 @@ function availabilitySheet() {
         h('div', { class: 'spread' },
           h('select', { class: 'weekday-select', 'aria-label': 'Day', onchange: e => { r.weekday = Number(e.target.value); } },
             WEEKDAYS.map((w, i) => h('option', { value: String(i + 1), selected: r.weekday === i + 1 }, w))),
-          h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Remove these hours', onclick: () => { rules.splice(rules.indexOf(r), 1); draw(); } }, icon('trash', 15))),
+          h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Remove these hours', onclick: () => { rules.splice(rules.indexOf(r), 1); draw(); } }, icon('trash', 18))),
         h('div', { class: 'avail-times' },
           field('Start', input('start', { type: 'time', step: '300' })),
           field('End', input('end', { type: 'time', step: '300' })),

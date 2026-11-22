@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "bedtime" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M524-62.12q-78.96 0-148.56-30.11-69.59-30.12-121.34-81.87t-81.87-121.34q-30.11-69.6-30.11-148.56 0-114.19 61.98-208.48Q266.08-746.77 371.15-792q17.93-7.81 34.1 2.1 16.17 9.9 16.33 28.71 1.53 83.77 33.03 160.23t91.04 135.81q58.85 59.04 135.08 90.34 76.23 31.31 159.69 32.35 19.54.15 29.77 15.31 10.23 15.15 3.23 32.27-44.54 106.26-139.33 169.51Q639.31-62.12 524-62.12Z" />
+    </group>
+</vector>

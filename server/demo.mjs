@@ -2,6 +2,9 @@ import { recordPlan } from './account.mjs';
 import { setUpClient } from './auth.mjs';
 import { WELCOME_MESSAGE } from './catalogue.mjs';
 import { FORM_TEMPLATES } from './forms.mjs';
+import { readFileSync } from 'node:fs';
+import { coachSettings, saveCoachSettings } from './settings.mjs';
+import { storeMedia } from './media.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { buildPerson, programWorkouts, sampleProfile } from './testclients.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, mondayOf } from './time.mjs';
@@ -43,7 +46,21 @@ const SAM_THREAD = [
 const DEMO_CLIENTS = [
   { sub: 'demo-client', name: 'Sam Carter', plan: 'elite', routine: 'strength', days: [0, 2, 4], time: '07:00', adherence: 0.9, weeks: 16,
     weight: [84.6, 79.8], bodyFat: [21.5, 17.2], waist: [91, 84], rhr: [62, 55], shares: true, oneToOne: [2, '11:00', 'inperson'], fortnightly: true,
-    goal: 'Squat 120 kg and get under 80 kg', checkin: [4, 4, ['Knee'], 'Left knee tight after split squats, fine by Thursday.'], thread: SAM_THREAD },
+    goal: 'Squat 120 kg and get under 80 kg', checkin: [4, 4, ['Knee'], 'Left knee tight after split squats, fine by Thursday.'], thread: SAM_THREAD,
+    win: 'Squat 102.5 for 5, felt fast.', struggle: 'Late nights Tuesday and Wednesday.',
+    // Today reads like the design: a weight goal 4.8 kg away, five habits, a letter with an Adjust line.
+    goalSpec: { title: 'Down to 75 kg by March', metric: 'weight', unit: 'kg', baseline: 84.6, target: 75, why: 'To feel strong again after two years off.' },
+    habits: [['Water', 'count', 3, 'L', 'water', null, 0.5], ['Sleep', 'check', 7, 'h', 'sleep', 'sleep'], ['Steps', 'count', 10000, 'steps', 'steps', 'steps'],
+      ['Creatine', 'check', 1, '', 'energy'], ['Protein', 'count', 170, 'g', 'protein', null, 10]],
+    restDays: [[2, 'Travelling for work']],
+    letters: [
+      { headline: 'Strongest week yet.', keep: 'Squat 102.5 kg for 5: up 17.5 kg since you started.', adjust: 'This week: protein at breakfast, and lights out by 10:30.',
+        question: 'How did the knee feel on Wednesday?', answer: null },
+      { headline: 'The work trip did not break the week.', keep: 'You moved Wednesday to Saturday instead of skipping it.', adjust: 'Ten minutes of mobility before every lower session.',
+        question: 'What got in the way on Thursday?', answer: 'Late meeting. I will train first thing on Thursdays.' },
+      { headline: 'Down 1.5 kg, and stronger with it.', keep: 'Protein at breakfast five days out of seven.', adjust: 'Same plan, small load increases where the last set felt easy.',
+        question: 'Which session did you enjoy most?', answer: null },
+    ] },
   { sub: 'demo-priya', name: 'Priya Shah', plan: 'elite', routine: 'hybrid', days: [0, 1, 3, 5], time: '06:00', adherence: 0.92, weeks: 12,
     weight: [63.0, 61.4], shares: true, runner: true, oneToOne: [1, '07:00', 'video'], checkin: [5, 4, [], 'Engine feels better every week.'],
     unread: 'Can we add a second run this week? Race is in five weeks.' },
@@ -79,7 +96,7 @@ function ensureAccounts(db, today) {
 }
 
 // Everything a demo account holds, by owner column. Photos stay (they're files too).
-const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_entries', 'checkins', 'messages', 'reports', 'form_requests', 'autoflow_runs'];
+const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_entries', 'checkins', 'messages', 'reports', 'form_requests', 'autoflow_runs', 'goals', 'rest_days'];
 const USER_TABLES = ['measurements', 'health_samples', 'health_activities', 'challenge_members', 'class_attendees', 'membership_events'];
 const COACH_TABLES = ['bookings', 'programs', 'challenges', 'forms', 'autoflows', 'plan_settings', 'plan_price_events'];
 
@@ -89,6 +106,29 @@ function wipe(db, coach, clients) {
     for (const t of USER_TABLES) db.prepare(`DELETE FROM ${t} WHERE user_id=?`).run(user.id);
   }
   for (const t of COACH_TABLES) db.prepare(`DELETE FROM ${t} WHERE coach_id=?`).run(coach.id);
+}
+
+/**
+ * JK's portrait for the demo coach, from DEMO_COACH_PORTRAIT_FILE (a JPEG or
+ * PNG outside the repo). Stored once as media; no file means the apps fall
+ * back to the monogram. Never throws.
+ */
+export function demoPortrait(db, config, file = process.env.DEMO_COACH_PORTRAIT_FILE) {
+  if (!file || !config?.dataDir) return false;
+  try {
+    const coach = db.prepare("SELECT * FROM users WHERE apple_sub='demo-coach'").get();
+    if (!coach) return false;
+    const s = coachSettings(db, coach.id);
+    if (s.avatarMediaId && db.prepare('SELECT 1 FROM media WHERE id=?').get(s.avatarMediaId)) return false;
+    const bytes = readFileSync(file);
+    const mime = bytes[0] === 0x89 ? 'image/png' : 'image/jpeg';
+    const m = storeMedia(db, config, { ownerId: coach.id, bytes, mime, purpose: 'avatar' });
+    saveCoachSettings(db, coach.id, { ...s, avatarMediaId: m.id });
+    return true;
+  } catch (e) {
+    console.warn(`Demo portrait not set: ${e.message}`);
+    return false;
+  }
 }
 
 /** Build (or rebuild) the whole demo world around `today`. */
@@ -130,6 +170,9 @@ export function buildDemo(db, today = londonDay()) {
       .run(ch, coach.id, 'Monthly 100 km', 'Run, walk or row: everything with a distance counts.', monthStart, addDays(monthStart, 29), nowIso());
     for (const { user } of clients) db.prepare('INSERT INTO challenge_members (challenge_id, user_id, joined_at) VALUES (?,?,?)').run(ch, user.id, at(monthStart));
 
+    // The demo coach shows the coach toggles switched on, so every client surface has something in it.
+    const settings = coachSettings(db, coach.id);
+    saveCoachSettings(db, coach.id, { ...settings, formChecks: true, challenges: true });
     db.prepare("INSERT INTO meta (key, value) VALUES ('demo_built', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(today);
   });
 }
@@ -189,19 +232,23 @@ function library(db, coach, byName, today) {
 }
 
 /** Build the demo world if it isn't there or wasn't built today. Returns whether it built. */
-export function seedDemo(db, today = londonDay()) {
+export function seedDemo(db, today = londonDay(), config = null) {
   const built = db.prepare("SELECT value FROM meta WHERE key='demo_built'").get()?.value;
-  if (built === today && db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-client'").get()) return false;
+  if (built === today && db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-client'").get()) {
+    demoPortrait(db, config);
+    return false;
+  }
   buildDemo(db, today);
+  demoPortrait(db, config);
   return true;
 }
 
 /** Rebuild the demo world once a night, after 03:00 London, so its "today" stays today. */
-export function startDemoClock(db, everyMs = 10 * 60_000) {
+export function startDemoClock(db, everyMs = 10 * 60_000, config = null) {
   const tick = () => {
     try {
       if (londonClock(new Date()) < '03:00') return;
-      if (seedDemo(db)) console.log('Rebuilt the demo world for today');
+      if (seedDemo(db, londonDay(), config)) console.log('Rebuilt the demo world for today');
     } catch (e) {
       console.warn(`Demo rebuild failed: ${e.message}`);
     }

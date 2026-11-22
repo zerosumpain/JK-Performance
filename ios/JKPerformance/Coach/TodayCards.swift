@@ -1,256 +1,229 @@
 import SwiftUI
 
-/// The coach's Today screen as a grid of cards: each says what's waiting,
-/// how many, and when it's from or due, and opens the list behind it.
-/// Urgent clients sit above the grid; today's sessions below it.
-struct TodayCards: View {
-    let today: CoachToday
+// MARK: - Coach Today: one ranked "Needs you" list
 
-    private let grid = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-    private var sessions: [Booking] { today.sessions.sorted { $0.start < $1.start } }
-    private var upcomingSessions: [Booking] { sessions.filter { $0.end > Date() } }
+/// The coach's Today (atelier-spec.md, Coach screens 1): a thin strip with
+/// the next session, the letters-due line, then one ranked list with each
+/// client once and one action, ending "All caught up". From
+/// GET /api/coach/needs-you.
+struct NeedsYouList: View {
+    let data: NeedsYou
+    @Binding var lettersOnly: Bool
 
     var body: some View {
-        if let urgent = today.urgent, !urgent.isEmpty {
-            urgentCard(urgent)
+        VStack(alignment: .leading, spacing: JK.Space.xl) {
+            SessionsStrip(sessions: data.sessionsToday)
+            if let due = data.lettersDue, due.count > 0 {
+                LettersDueHeader(due: due, filtering: $lettersOnly)
+            }
+            if lettersOnly, let due = data.lettersDue {
+                lettersDueList(due)
+            } else {
+                itemsList
+            }
+            AllCaughtUp(done: data.items.isEmpty)
         }
-
-        LazyVGrid(columns: grid, spacing: 10) {
-            nextSessionCard
-            messagesCard
-            NavigationLink {
-                PeopleListView(title: "Check-ins to reply to", people: (today.checkinClients ?? []).map {
-                    PeopleListView.Row(person: $0.ref, detail: $0.at.map { "Sent \(Fmt.relative($0))" } ?? "", tab: .feedback)
-                })
-            } label: {
-                SummaryCard(systemName: "square.and.pencil", title: "Check-ins", count: today.checkinsToReview ?? 0,
-                            detail: oldest(today.checkinClients).map { "Oldest \(Fmt.relative($0))" } ?? "All replied",
-                            tint: (today.checkinsToReview ?? 0) > 0 ? JK.waiting : nil)
-            }
-            .disabled((today.checkinsToReview ?? 0) == 0)
-            NavigationLink { ProgramsView(initialTab: .forms) } label: {
-                SummaryCard(systemName: "doc.text", title: "Forms to read", count: today.formsToReview ?? 0,
-                            detail: names(today.formClients?.map(\.name)) ?? "Nothing new",
-                            tint: (today.formsToReview ?? 0) > 0 ? JK.waiting : nil)
-            }
-            feedbackCard
-            NavigationLink {
-                PeopleListView(title: "Not spoken to lately", people: (today.quiet ?? []).map {
-                    PeopleListView.Row(person: $0.ref, detail: "No contact in \($0.days) days", tab: .plan)
-                })
-            } label: {
-                SummaryCard(systemName: "moon.zzz", title: "Gone quiet", count: today.quiet?.count ?? 0,
-                            detail: today.quiet?.first.map { "\($0.name.split(separator: " ").first ?? "") · \($0.days) days" } ?? "Everyone's in touch",
-                            tint: nil)
-            }
-            .disabled((today.quiet ?? []).isEmpty)
-            NavigationLink { ProgramsView(initialTab: .autoflows) } label: {
-                SummaryCard(systemName: "bolt", title: "Autoflows", count: today.upcoming?.count ?? 0,
-                            detail: autoflowDetail, tint: nil, countLabel: "this week")
-            }
-            Button { TabRouter.shared.coach = .schedule } label: {
-                SummaryCard(systemName: "calendar", title: "This week", count: today.sessionsLeftThisWeek ?? 0,
-                            detail: "sessions still to come", tint: nil)
-            }
-            .buttonStyle(.plain)
-        }
-
-        let inactive = (today.attention ?? []).filter { $0.kind == "inactive" }
-        if !inactive.isEmpty {
-            Eyebrow(text: "No training lately")
-            VStack(spacing: 0) {
-                ForEach(inactive, id: \.self) { item in
-                    NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name) } label: {
-                        personRow(item.client, item.reason)
-                    }
-                }
-            }
-            .jkCard(padding: 2)
-        }
-
-        Eyebrow(text: "Sessions today", trailing: sessions.isEmpty ? nil : "\(upcomingSessions.count) to go")
-        if sessions.isEmpty {
-            Text("Nothing booked today.").font(.caption).foregroundStyle(JK.tertiary)
-        }
-        ForEach(sessions) { s in
-            SessionRow(session: s, isNext: s.id == upcomingSessions.first?.id)
-        }
-    }
-
-    // MARK: Cards
-
-    private func urgentCard(_ items: [AttentionItem]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(items.count == 1 ? "Needs you first" : "\(items.count) need you first", systemImage: "exclamationmark.triangle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(JK.urgent)
-                .padding(.horizontal, 10).padding(.top, 8)
-            ForEach(items, id: \.self) { item in
-                NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name, initialTab: .feedback) } label: {
-                    personRow(item.client, item.reason)
-                }
-            }
-        }
-        .jkCard(padding: 2)
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(JK.urgent.opacity(0.55), lineWidth: 1))
     }
 
     @ViewBuilder
-    private var nextSessionCard: some View {
-        if let next = upcomingSessions.first {
-            NavigationLink {
-                if let c = next.client, !next.isGroup {
-                    ClientDetailView(clientId: c.id, name: c.name)
-                } else {
-                    ClassDetailView(booking: next)
+    private var itemsList: some View {
+        if !data.items.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(data.items) { item in
+                    NeedsYouRow(item: item)
+                    if item.id != data.items.last?.id { GroupDivider(inset: JK.Space.l + JK.Size.avatar + JK.Space.m) }
                 }
-            } label: {
-                SummaryCard(systemName: "clock", title: "Next session", value: Fmt.time(next.start),
-                            detail: "\(next.client?.name ?? next.title ?? next.kindLabel) · \(Fmt.countdown(to: next.start) ?? "now")",
-                            tint: JK.slot(next.kind))
             }
-        } else {
-            Button { TabRouter.shared.coach = .schedule } label: {
-                SummaryCard(systemName: "clock", title: "Sessions today", value: sessions.isEmpty ? "None" : "Done",
-                            detail: sessions.isEmpty ? "Nothing booked" : "All \(sessions.count) finished", tint: nil)
-            }
-            .buttonStyle(.plain)
+            .surface(.group)
         }
     }
 
-    private var messagesCard: some View {
-        Button { TabRouter.shared.coach = .messages } label: {
-            SummaryCard(systemName: "bubble.left", title: "Messages", count: today.unread,
-                        detail: today.unreadClients?.first?.at.map { "Newest \(Fmt.relative($0)) · \(names(today.unreadClients?.map(\.name)) ?? "")" } ?? "No unread",
-                        tint: today.unread > 0 ? JK.waiting : nil, countLabel: "unread")
+    private func lettersDueList(_ due: LettersDue) -> some View {
+        VStack(spacing: 0) {
+            ForEach(due.clients ?? []) { c in
+                let person = PersonRef(id: c.id, name: c.name, initials: c.initials)
+                HStack(spacing: JK.Space.m) {
+                    NavigationLink { ClientDetailView(clientId: c.id, name: c.name) } label: {
+                        HStack(spacing: JK.Space.m) {
+                            Avatar(initials: c.initials ?? Fmt.initials(c.name))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(c.name).font(.jkCallout).foregroundStyle(JK.text)
+                                Text(c.media == true ? "Weekly letter with a voice note" : "Weekly letter")
+                                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { LetterComposer(client: person, week: due.week) } label: {
+                        Text("Write letter")
+                    }
+                    .buttonStyle(SmallPillStyle())
+                }
+                .padding(.horizontal, JK.Space.l)
+                .padding(.vertical, JK.Space.m)
+            }
+        }
+        .surface(.group)
+    }
+}
+
+/// "Next: Sam · 07:00 · Studio" and "3 of 5 sessions today"; opens the day agenda.
+struct SessionsStrip: View {
+    let sessions: SessionsToday?
+
+    var body: some View {
+        NavigationLink { DayAgendaView() } label: {
+            HStack(spacing: JK.Space.m) {
+                Icon(key: .week).foregroundStyle(JK.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(nextLine).font(.jkCallout).foregroundStyle(JK.text)
+                    Text(countLine).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: IconKey.chevron.symbol).font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, JK.Space.s)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityHint("Opens the day agenda.")
     }
 
-    private var feedbackCard: some View {
-        let due = today.feedbackDue
-        let count = due?.clients.count ?? 0
-        return NavigationLink {
-            if let due { FeedbackDueView(due: due) }
+    private var nextLine: String {
+        guard let next = sessions?.next else {
+            return (sessions?.total ?? 0) == 0 ? "No sessions today" : "No more sessions today"
+        }
+        let who = next.isGroup ? (next.title ?? "Class") : (next.client.map { Fmt.firstWord($0.name) } ?? next.title ?? next.kindLabel)
+        return (["Next: \(who)", Fmt.time(next.start), next.location].compactMap { $0 }).joined(separator: " · ")
+    }
+
+    private var countLine: String {
+        guard let s = sessions, s.total > 0 else { return "See the day agenda" }
+        return "\(s.done) of \(s.total) sessions today"
+    }
+}
+
+/// "Letters due: 6 · about 40 min". Tapping filters the list to them.
+struct LettersDueHeader: View {
+    let due: LettersDue
+    @Binding var filtering: Bool
+
+    var body: some View {
+        Button {
+            filtering.toggle()
         } label: {
-            SummaryCard(systemName: "text.bubble", title: "Feedback to write", count: count,
-                        detail: count == 0 ? "All published" : dueText(due), tint: count > 0 && isOverdue(due) ? JK.urgent : (count > 0 ? JK.waiting : nil))
-        }
-        .disabled(count == 0)
-    }
-
-    private var autoflowDetail: String {
-        guard let first = today.upcoming?.first else { return "Nothing due" }
-        let when = Day.date(first.date).map { Day.same($0, Date()) ? "today" : Fmt.weekday($0) } ?? first.date
-        return "\(first.client.name.split(separator: " ").first ?? "") · \(first.action) \(when)"
-    }
-
-    // MARK: Helpers
-
-    private func personRow(_ p: PersonRef, _ reason: String) -> some View {
-        HStack(spacing: 12) {
-            Avatar(initials: p.displayInitials, size: 30)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(p.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                Text(reason).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2)
+            HStack(spacing: JK.Space.s) {
+                Icon(key: .letter).foregroundStyle(JK.textSecondary)
+                Text(line).font(.jkCallout.monospacedDigit()).foregroundStyle(JK.text)
+                Spacer(minLength: 0)
+                Text(filtering ? "Show all" : "Show").font(.jkCaption).foregroundStyle(JK.textSecondary)
             }
-            Spacer()
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
+            .frame(minHeight: JK.Size.touch)
+            .contentShape(Rectangle())
         }
-        .padding(10)
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(filtering ? .isSelected : [])
     }
 
-    private func oldest(_ people: [PersonAt]?) -> Date? { people?.compactMap(\.at).min() }
-
-    private func names(_ list: [String]?) -> String? {
-        guard let list, !list.isEmpty else { return nil }
-        let first = list.prefix(2).map { $0.split(separator: " ").first.map(String.init) ?? $0 }
-        return first.joined(separator: ", ") + (list.count > 2 ? " +\(list.count - 2)" : "")
-    }
-
-    private func dueText(_ due: FeedbackDue?) -> String {
-        guard let due, let by = due.dueBy.flatMap(Day.date) else { return "" }
-        if isOverdue(due) { return "Week of \(Fmt.dayMonth(due.week)) · was due \(Fmt.weekday(by))" }
-        return Day.same(by, Date()) ? "Due today" : "Due \(Fmt.weekday(by)) \(Fmt.dayMonth(by))"
-    }
-
-    private func isOverdue(_ due: FeedbackDue?) -> Bool {
-        guard let by = due?.dueBy.flatMap(Day.date) else { return false }
-        return Day.start(Date()) > by
+    private var line: String {
+        let time = due.estMinutes.map { " · about \($0) min" } ?? ""
+        return "Letters due: \(due.count)\(time)"
     }
 }
 
-/// One card in the Today grid: an icon, a big number (or value), and when.
-struct SummaryCard: View {
-    let systemName: String
-    let title: String
-    var count: Int? = nil
-    var value: String? = nil
-    let detail: String
-    let tint: Color?
-    var countLabel: String? = nil
+/// One client, once: avatar, reason glyphs, one-line reason and one action.
+struct NeedsYouRow: View {
+    let item: NeedsItem
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: systemName).font(.caption).foregroundStyle(tint ?? JK.tertiary)
-                Spacer()
-                if let tint { Dot(color: tint, size: 7) }
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value ?? "\(count ?? 0)")
-                    .font(.title2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle((count ?? 1) == 0 && value == nil ? JK.tertiary : JK.text)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                if let countLabel { Text(countLabel).font(.caption2).foregroundStyle(JK.tertiary) }
-            }
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(JK.text)
-            Text(detail).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2, reservesSpace: true)
+    private var glyphs: [IconKey] {
+        var seen: [IconKey] = []
+        for reason in item.reasons {
+            let key = IconKey(stored: reason.iconKey)
+            if !seen.contains(key) { seen.append(key) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(JK.card, in: RoundedRectangle(cornerRadius: JK.corner, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: JK.corner, style: .continuous).stroke(tint?.opacity(0.4) ?? JK.stroke, lineWidth: 1))
+        return Array(seen.prefix(3))
     }
-}
-
-/// A short list of clients behind a Today card, each opening their page.
-struct PeopleListView: View {
-    struct Row: Identifiable {
-        let person: PersonRef
-        let detail: String
-        let tab: ClientDetailView.Tab
-        var id: String { person.id }
-    }
-
-    let title: String
-    let people: [Row]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ScreenHeader(eyebrow: "Today", title: title)
-                if people.isEmpty {
-                    EmptyCard(systemName: "checkmark", title: "Nothing waiting")
-                }
-                ForEach(people) { row in
-                    NavigationLink { ClientDetailView(clientId: row.person.id, name: row.person.name, initialTab: row.tab) } label: {
-                        HStack(spacing: 12) {
-                            Avatar(initials: row.person.displayInitials, size: 32)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(row.person.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                Text(row.detail).font(.caption2).foregroundStyle(JK.tertiary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
-                        }
-                        .jkCard(padding: 12)
+        HStack(alignment: .center, spacing: JK.Space.m) {
+            NavigationLink { ClientDetailView(clientId: item.client.id, name: item.client.name) } label: {
+                summary
+            }
+            .buttonStyle(.plain)
+            if let action = item.primaryAction {
+                NavigationLink { destination(action) } label: { Text(action.label) }
+                    .buttonStyle(SmallPillStyle())
+            }
+        }
+        .padding(.horizontal, JK.Space.l)
+        .padding(.vertical, JK.Space.m)
+    }
+
+    private var summary: some View {
+        HStack(alignment: .top, spacing: JK.Space.m) {
+            Avatar(initials: item.client.displayInitials)
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                HStack(spacing: JK.Space.s) {
+                    Text(item.client.name).font(.jkCallout).foregroundStyle(JK.text)
+                    ForEach(glyphs, id: \.self) { key in
+                        Icon(key: key, size: 15, label: key.accessibilityName).foregroundStyle(JK.textSecondary)
                     }
                 }
+                Text(item.reasonLine ?? item.reasons.first?.text ?? "")
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
-            .padding(16)
+            Spacer(minLength: 0)
         }
-        .jkScreen()
-        .navigationBarTitleDisplayMode(.inline)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    /// A milestone letter only when the milestone is the top reason.
+    private var milestone: NeedsReason? {
+        guard let top = item.reasons.first, top.kind == "milestone" else { return nil }
+        return top
+    }
+
+    @ViewBuilder
+    private func destination(_ action: NeedsAction) -> some View {
+        switch action.kind {
+        case "writeLetter":
+            LetterComposer(client: item.client, milestone: milestone)
+        case "readAnswers":
+            CoachSubpage(title: "Forms") { ClientAutomationSection(client: item.client) }
+        default:
+            MessagesThreadView(clientId: item.client.id, otherName: item.client.name,
+                               subtitle: item.client.planName ?? Fmt.planName(item.client.plan))
+        }
+    }
+}
+
+/// The end of the list: the brand rule and one serif line.
+struct AllCaughtUp: View {
+    var done = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.m) {
+            BrandRule()
+            Text("All caught up.")
+                .jkText(.quote)
+                .foregroundStyle(JK.text)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, JK.Space.l)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension Fmt {
+    /// "Sam Carter" → "Sam".
+    static func firstWord(_ name: String) -> String {
+        name.split(separator: " ").first.map(String.init) ?? name
     }
 }

@@ -22,32 +22,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
-import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.automirrored.outlined.ShowChart
-import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
-import androidx.compose.material.icons.outlined.AssignmentTurnedIn
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Checklist
-import androidx.compose.material.icons.outlined.Eco
-import androidx.compose.material.icons.outlined.EmojiEvents
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.FitnessCenter
-import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.LocalFireDepartment
-import androidx.compose.material.icons.outlined.MilitaryTech
-import androidx.compose.material.icons.outlined.NightsStay
-import androidx.compose.material.icons.outlined.PermContactCalendar
-import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material.icons.outlined.SelfImprovement
-import androidx.compose.material.icons.outlined.Shuffle
-import androidx.compose.material.icons.outlined.SportsGymnastics
-import androidx.compose.material.icons.outlined.WbSunny
-import androidx.compose.material.icons.outlined.WbTwilight
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import com.jkperformance.app.design.components.*
 
 /*
  * The shared building blocks of the first-run questions, the plan walkthrough
@@ -88,28 +63,28 @@ fun rememberReduceMotion(): Boolean {
 // region Catalogue words and icons
 
 /** One answer the app offers for a first-run question. */
-class Choice(val id: String, val title: String, val detail: String, val icon: ImageVector)
+class Choice(val id: String, val title: String, val detail: String, val icon: IconKey)
 
 object Answers {
     val goals = listOf(
-        Choice("strength", "Get stronger", "Lift more, move heavier", Icons.Outlined.FitnessCenter),
-        Choice("muscle", "Build muscle", "Add size and shape", Icons.Outlined.SportsGymnastics),
-        Choice("fatloss", "Lose fat", "Lean out and keep it off", Icons.Outlined.LocalFireDepartment),
-        Choice("fitness", "Get fitter", "More engine, less puffing", Icons.Outlined.FavoriteBorder),
-        Choice("performance", "Perform in my sport", "Train for the season", Icons.Outlined.EmojiEvents),
-        Choice("mobility", "Move better", "Ease stiffness and aches", Icons.Outlined.SelfImprovement),
-        Choice("health", "Feel healthier", "Energy, sleep and mood", Icons.Outlined.Eco),
+        Choice("strength", "Get stronger", "Lift more, move heavier", IconKey.workout),
+        Choice("muscle", "Build muscle", "Add size and shape", IconKey.cardio),
+        Choice("fatloss", "Lose fat", "Lean out and keep it off", IconKey.flame),
+        Choice("fitness", "Get fitter", "More engine, less puffing", IconKey.heart),
+        Choice("performance", "Perform in my sport", "Train for the season", IconKey.trophy),
+        Choice("mobility", "Move better", "Ease stiffness and aches", IconKey.mobility),
+        Choice("health", "Feel healthier", "Energy, sleep and mood", IconKey.mindfulness),
     )
     val experience = listOf(
-        Choice("new", "New to training", "Under a year, or coming back after a break", Icons.AutoMirrored.Outlined.DirectionsWalk),
-        Choice("some", "Some experience", "I train, but without a plan", Icons.AutoMirrored.Outlined.DirectionsRun),
-        Choice("experienced", "Experienced", "Years of structured training", Icons.Outlined.MilitaryTech),
+        Choice("new", "New to training", "Under a year, or coming back after a break", IconKey.steps),
+        Choice("some", "Some experience", "I train, but without a plan", IconKey.run),
+        Choice("experienced", "Experienced", "Years of structured training", IconKey.record),
     )
     val times = listOf(
-        Choice("morning", "Morning", "Before work", Icons.Outlined.WbTwilight),
-        Choice("midday", "Midday", "Around lunch", Icons.Outlined.WbSunny),
-        Choice("evening", "Evening", "After work", Icons.Outlined.NightsStay),
-        Choice("varies", "It varies", "Different every week", Icons.Outlined.Shuffle),
+        Choice("morning", "Morning", "Before work", IconKey.sunlight),
+        Choice("midday", "Midday", "Around lunch", IconKey.today),
+        Choice("evening", "Evening", "After work", IconKey.sleep),
+        Choice("varies", "It varies", "Different every week", IconKey.shuffle),
     )
 
     fun goal(id: String): Choice? = goals.firstOrNull { it.id == id }
@@ -118,17 +93,17 @@ object Answers {
 }
 
 /** The icon for a catalogue feature id; an id the app doesn't know yet gets a plain check. */
-fun featureIcon(id: String): ImageVector = when (id) {
-    "programme" -> Icons.Outlined.FitnessCenter
-    "messaging" -> Icons.Outlined.Forum
-    "habits" -> Icons.Outlined.Checklist
-    "progress" -> Icons.AutoMirrored.Outlined.ShowChart
-    "checkin" -> Icons.Outlined.AssignmentTurnedIn
-    "sessions" -> Icons.Outlined.PermContactCalendar
-    "nutrition" -> Icons.Outlined.Restaurant
-    "priority" -> Icons.Outlined.Bolt
-    "guides" -> Icons.AutoMirrored.Outlined.MenuBook
-    else -> Icons.Outlined.CheckCircle
+fun featureIcon(id: String): IconKey = when (id) {
+    "programme" -> IconKey.workout
+    "messaging" -> IconKey.messages
+    "habits" -> IconKey.checklist
+    "progress" -> IconKey.progress
+    "checkin" -> IconKey.checkIn
+    "sessions" -> IconKey.week
+    "nutrition" -> IconKey.protein
+    "priority" -> IconKey.energy
+    "guides" -> IconKey.guide
+    else -> IconKey.custom
 }
 
 // endregion
@@ -154,7 +129,7 @@ fun PriceLabel(
     period: String = "month",
     modifier: Modifier = Modifier,
     big: Boolean = false,
-    color: Color = JK.text,
+    color: Color = JKColors.text,
 ) {
     val words = if (pence == 0) "Free" else "${Fmt.pounds(pence)} a $period"
     Row(
@@ -162,9 +137,9 @@ fun PriceLabel(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        Text(Price.label(pence), style = if (big) JKType.title.semibold() else JKType.headline, color = color)
+        Text(Price.label(pence), style = if (big) JKType.display else JKType.headline, color = color)
         if (pence > 0) {
-            Text("/ $period", style = JKType.caption, color = JK.tertiary, modifier = Modifier.padding(bottom = if (big) 5.dp else 2.dp))
+            Text("/ $period", style = JKType.caption, color = JKColors.textTertiary, modifier = Modifier.padding(bottom = if (big) 5.dp else 2.dp))
         }
     }
 }
@@ -174,7 +149,7 @@ fun PriceLabel(
 fun AnnualPriceLine(monthlyPence: Int, annualPence: Int, modifier: Modifier = Modifier) {
     if (annualPence <= 0) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("or ${Fmt.pounds(annualPence)} / year", style = JKType.caption, color = JK.secondary)
+        Text("or ${Fmt.pounds(annualPence)} / year", style = JKType.caption, color = JKColors.textSecondary)
         Price.savePercent(monthlyPence, annualPence)?.let { SaveBadge(it) }
     }
 }
@@ -184,21 +159,21 @@ fun AnnualPriceLine(monthlyPence: Int, annualPence: Int, modifier: Modifier = Mo
 fun SaveBadge(percent: Int, modifier: Modifier = Modifier) {
     Text(
         "Save $percent%",
-        style = JKType.caption2.semibold(),
-        color = JK.text,
-        modifier = modifier.border(1.dp, JK.secondary, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
+        style = JKType.caption.semibold(),
+        color = JKColors.text,
+        modifier = modifier.border(1.dp, JKColors.textSecondary, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
     )
 }
 
-/** "Most popular": the one white capsule on a plan card. */
+/** "Most popular": the one outlined capsule on a plan card (selection-neutral, never champagne). */
 @Composable
 fun PopularBadge(modifier: Modifier = Modifier) {
     Text(
         "Most popular",
-        style = JKType.system(10, FontWeight.SemiBold),
-        color = Color.Black,
+        style = JKType.caption.semibold(),
+        color = JKColors.text,
         maxLines = 1,
-        modifier = modifier.background(JK.chrome, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier = modifier.border(JKSize.hairline, JKColors.inputBorder, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 
@@ -206,22 +181,10 @@ fun PopularBadge(modifier: Modifier = Modifier) {
 
 // region Tiles and rows
 
-/** A rounded square with a feature's white icon, keyed by feature id. */
+/** A feature's unboxed glyph in a fixed slot, keyed by feature id. */
 @Composable
 fun FeatureTile(id: String, size: Dp = 38.dp, modifier: Modifier = Modifier) {
-    IconTileVector(featureIcon(id), size, modifier)
-}
-
-/** [IconTile] for a Material vector rather than an SF Symbol name. */
-@Composable
-fun IconTileVector(icon: ImageVector, size: Dp = 38.dp, modifier: Modifier = Modifier, tint: Color = JK.text) {
-    val shape = rounded(if (size > 50.dp) 18.dp else 10.dp)
-    Box(
-        modifier.size(size).background(JK.cardRaised, shape).border(1.dp, JK.stroke, shape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.5f))
-    }
+    RowGlyph(featureIcon(id), modifier, slot = size)
 }
 
 /** A feature as a compact row: tile, title, one line of detail. */
@@ -234,8 +197,8 @@ fun FeatureRow(id: String, title: String, detail: String?, modifier: Modifier = 
     ) {
         FeatureTile(id, size = 34.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = JKType.subheadline.semibold(), color = JK.text)
-            if (!detail.isNullOrEmpty()) Text(detail, style = JKType.caption2, color = JK.tertiary, maxLines = 2)
+            Text(title, style = JKType.callout.semibold(), color = JKColors.text)
+            if (!detail.isNullOrEmpty()) Text(detail, style = JKType.caption, color = JKColors.textTertiary, maxLines = 2)
         }
         trailing()
     }
@@ -245,10 +208,8 @@ fun FeatureRow(id: String, title: String, detail: String?, modifier: Modifier = 
 @Composable
 fun CheckPoint(text: String, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 1.dp).size(18.dp).background(JK.text, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(13.dp))
-        }
-        Text(text, style = JKType.subheadline, color = JK.secondary, modifier = Modifier.weight(1f))
+        Glyph(IconKey.done, size = JKSize.iconInline, tint = JKColors.text)
+        Text(text, style = JKType.callout, color = JKColors.textSecondary, modifier = Modifier.weight(1f))
     }
 }
 
@@ -261,7 +222,7 @@ fun CheckPoint(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun ChoiceCard(
     title: String,
-    icon: ImageVector,
+    icon: IconKey,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -269,7 +230,7 @@ fun ChoiceCard(
     multi: Boolean = false,
     stacked: Boolean = false,
 ) {
-    val shape = rounded(JK.corner)
+    val shape = JKShape.card
     val pick = if (multi) {
         Modifier.toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
     } else {
@@ -278,13 +239,13 @@ fun ChoiceCard(
     val frame = modifier
         .clip(shape)
         .then(pick)
-        .background(if (selected) JK.cardRaised else JK.card, shape)
-        .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) JK.text else JK.stroke), shape)
+        .background(if (selected) JKColors.raised else JKColors.surface, shape)
+        .border(BorderStroke(if (selected) JKSize.outline else JKSize.hairline, if (selected) JKColors.accentControl else JKColors.hairline), shape)
     if (stacked) {
         Box(frame.heightIn(min = 104.dp).padding(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconTileVector(icon, size = 34.dp)
-                Text(title, style = JKType.subheadline.semibold(), color = JK.text)
+                Glyph(icon, size = JKSize.iconTab, tint = JKColors.textSecondary, filled = selected)
+                Text(title, style = JKType.callout.semibold(), color = JKColors.text)
             }
             SelectionMark(selected, Modifier.align(Alignment.TopEnd))
         }
@@ -294,10 +255,10 @@ fun ChoiceCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconTileVector(icon)
+            RowGlyph(icon, filled = selected, tint = if (selected) JKColors.text else JKColors.textSecondary)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = JKType.subheadline.semibold(), color = JK.text)
-                if (detail != null) Text(detail, style = JKType.caption, color = JK.tertiary)
+                Text(title, style = JKType.callout.semibold(), color = JKColors.text)
+                if (detail != null) Text(detail, style = JKType.caption, color = JKColors.textTertiary)
             }
             SelectionMark(selected)
         }
@@ -307,12 +268,11 @@ fun ChoiceCard(
 /** The filled white check on a selected choice; an empty ring when not. */
 @Composable
 private fun SelectionMark(on: Boolean, modifier: Modifier = Modifier) {
-    Box(modifier.size(22.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.size(JKSize.iconTab), contentAlignment = Alignment.Center) {
         if (on) {
-            Box(Modifier.matchParentSize().background(JK.text, CircleShape))
-            Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(15.dp))
+            Glyph(IconKey.custom, size = JKSize.iconTab, tint = JKColors.accentControl, filled = true)
         } else {
-            Box(Modifier.matchParentSize().border(1.5.dp, JK.track, CircleShape))
+            Box(Modifier.size(JKSize.iconInline).border(JKSize.outline, JKColors.trackStrong, CircleShape))
         }
     }
 }
@@ -331,7 +291,7 @@ fun ProgressTrack(step: Int, count: Int, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         repeat(count) { i ->
-            Box(Modifier.weight(1f).height(4.dp).background(if (i <= step) JK.text else JK.track, CircleShape))
+            Box(Modifier.weight(1f).height(JKSize.rule).background(if (i <= step) JKColors.text else JKColors.track, CircleShape))
         }
     }
 }
@@ -362,9 +322,9 @@ fun StepScaffold(
     header: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(modifier.fillMaxSize().background(JK.bg)) {
+    Column(modifier.fillMaxSize().background(JKColors.bg)) {
         Row(
-            Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(width = 72.dp, height = 44.dp), contentAlignment = Alignment.CenterStart) {
@@ -373,8 +333,8 @@ fun StepScaffold(
                         Modifier.clip(CircleShape).clickable(enabled = !busy, onClick = onBack).padding(horizontal = 6.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, contentDescription = null, tint = JK.text, modifier = Modifier.size(16.dp))
-                        Text("Back", style = JKType.subheadline, color = JK.text)
+                        Glyph(IconKey.back, tint = JKColors.text)
+                        Text("Back", style = JKType.callout, color = JKColors.text)
                     }
                 }
             }
@@ -385,8 +345,8 @@ fun StepScaffold(
                 if (onSkip != null) {
                     Text(
                         skipLabel,
-                        style = JKType.subheadline,
-                        color = JK.secondary,
+                        style = JKType.callout,
+                        color = JKColors.textSecondary,
                         modifier = Modifier.clip(CircleShape).clickable(enabled = !busy, onClick = onSkip).padding(horizontal = 8.dp, vertical = 10.dp),
                     )
                 }
@@ -398,8 +358,8 @@ fun StepScaffold(
         ) {
             header?.invoke()
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, style = JKType.title.semibold(), color = JK.text, modifier = Modifier.semantics { heading() })
-                if (subtitle != null) Text(subtitle, style = JKType.subheadline, color = JK.secondary)
+                Text(title, style = JKType.display, color = JKColors.text, modifier = Modifier.semantics { heading() })
+                if (subtitle != null) Text(subtitle, style = JKType.callout, color = JKColors.textSecondary)
             }
             Spacer(Modifier.height(6.dp))
             content()
@@ -410,14 +370,14 @@ fun StepScaffold(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (message != null) ErrorBanner(message)
-            ChromeButton(onClick = onPrimary, enabled = primaryEnabled && !busy) {
-                if (busy) ProgressView(tint = Color.Black) else Text(primary)
+            PrimaryButton(onClick = onPrimary, enabled = primaryEnabled && !busy) {
+                if (busy) ProgressView() else Text(primary)
             }
             if (secondary != null && onSecondary != null) {
                 Text(
                     secondary,
-                    style = JKType.subheadline,
-                    color = JK.secondary,
+                    style = JKType.callout,
+                    color = JKColors.textSecondary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.clip(CircleShape).clickable(enabled = !busy, onClick = onSecondary).padding(horizontal = 16.dp, vertical = 10.dp),
                 )

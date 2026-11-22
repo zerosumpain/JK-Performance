@@ -1,56 +1,5 @@
 import SwiftUI
 
-/// Forms the coach is waiting on, at the top of the client's Home screen.
-/// Shows nothing when there are none.
-struct ClientFormsCard: View {
-    @State private var waiting: [FormRequest] = []
-    @State private var open: FormRequest?
-    let refresh: Int
-
-    var body: some View {
-        Group {
-            if !waiting.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Eyebrow(text: waiting.count == 1 ? "A form from your coach" : "\(waiting.count) forms from your coach")
-                    ForEach(waiting) { r in
-                        Button { open = r } label: {
-                            HStack(spacing: 12) {
-                                IconTile(systemName: "doc.text", size: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(r.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                    Text("\(r.questions.count) questions · about \(max(1, r.questions.count / 2)) min")
-                                        .font(.caption2).foregroundStyle(JK.tertiary)
-                                }
-                                Spacer()
-                                Text("Fill in")
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 10).padding(.vertical, 6)
-                                    .background(JK.chrome, in: Capsule())
-                                    .foregroundStyle(.black)
-                            }
-                            .jkCard(padding: 12)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .task(id: refresh) { await load() }
-        .sheet(item: $open, onDismiss: { Task { await load() } }) { r in
-            FormFillView(request: r)
-        }
-    }
-
-    private func load() async {
-        do {
-            let reply: FormRequestsResponse = try await APIClient.shared.get("/api/form-requests")
-            waiting = reply.requests.filter { $0.submittedAt == nil }
-        } catch {
-            // The card is a nudge; Home shows its own errors.
-        }
-    }
-}
-
 /// Answer a form, one question per card, and send it once.
 struct FormFillView: View {
     let request: FormRequest
@@ -74,14 +23,14 @@ struct FormFillView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(request.name).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
+                    Text(request.name).font(.jkDisplay).foregroundStyle(JK.text)
                     if let intro = request.intro, !intro.isEmpty {
-                        Text(intro).font(.subheadline).foregroundStyle(JK.secondary)
+                        Text(intro).font(.jkCallout).foregroundStyle(JK.textSecondary)
                     }
                     ForEach(Array(request.questions.enumerated()), id: \.element.id) { index, q in
                         VStack(alignment: .leading, spacing: 8) {
                             Text("\(index + 1). \(q.label)\(q.isRequired ? "" : " (optional)")")
-                                .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                                .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                             input(for: q)
                         }
                         .jkCard(padding: 12)
@@ -90,13 +39,13 @@ struct FormFillView: View {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text("Send to coach") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text("Send to coach") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || !missing.isEmpty)
                     if !missing.isEmpty {
                         Text(missing.count == 1 ? "1 question left" : "\(missing.count) questions left")
-                            .font(.caption2).foregroundStyle(JK.tertiary).frame(maxWidth: .infinity)
+                            .font(.jkCaption).foregroundStyle(JK.textTertiary).frame(maxWidth: .infinity)
                     }
                 }
                 .padding(16)
@@ -116,11 +65,11 @@ struct FormFillView: View {
                     let on = answers[q.id] == .number(n)
                     Button { answers[q.id] = .number(n) } label: {
                         Text("\(n)")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.jkCallout.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .foregroundStyle(on ? Color.black : JK.text)
-                            .background(on ? AnyShapeStyle(JK.chrome) : AnyShapeStyle(JK.cardRaised), in: RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(on ? JK.onPrimary : JK.text)
+                            .background(on ? AnyShapeStyle(JK.primaryFill) : AnyShapeStyle(JK.raised), in: RoundedRectangle(cornerRadius: JK.Radius.chip))
                     }
                     .buttonStyle(.plain)
                 }
@@ -136,7 +85,7 @@ struct FormFillView: View {
                 ForEach(q.options ?? [], id: \.self) { option in
                     Button { answers[q.id] = .text(option) } label: {
                         HStack {
-                            Text(option).font(.subheadline).foregroundStyle(JK.text)
+                            Text(option).font(.jkCallout).foregroundStyle(JK.text)
                             Spacer()
                             CheckCircle(on: answers[q.id] == .text(option))
                         }
@@ -149,9 +98,9 @@ struct FormFillView: View {
         default:
             TextField("Your answer", text: textBinding(q.id), axis: .vertical)
                 .lineLimit(q.kind == "long" ? 3...8 : 1...2)
-                .font(.subheadline).foregroundStyle(JK.text)
+                .font(.jkCallout).foregroundStyle(JK.text)
                 .padding(10)
-                .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(JK.raised, in: RoundedRectangle(cornerRadius: JK.Radius.chip, style: .continuous))
         }
     }
 

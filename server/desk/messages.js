@@ -135,7 +135,7 @@ async function openThread(pane, clientId, knownName, view, onRead, onSent) {
       if (day !== lastDay) { out.push(h('div', { class: 'day-sep' }, dayLabel(m.at))); lastDay = day; }
       const mine = me ? m.fromId === me : m.fromRole === 'coach';
       out.push(h('div', { class: 'bubble ' + (mine ? 'me' : 'them') },
-        m.workoutId ? h('div', { class: 'bubble-workout' }, h('span', { class: 'tile' }, icon('dumbbell', 15)),
+        m.workoutId ? h('div', { class: 'bubble-workout' }, h('span', { class: 'tile' }, icon('dumbbell', 18)),
           h('div', null, h('div', { class: 'small strong' }, 'Workout'), h('div', { class: 'tiny sub' }, 'Plan updated · see your Plan tab'))) : null,
         m.text ? h('div', { class: 'text' }, m.text) : null,
         h('div', { class: 'when' }, mine && m.readAt ? `${time} · Read` : time)));

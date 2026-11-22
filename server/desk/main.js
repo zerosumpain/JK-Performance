@@ -4,7 +4,7 @@
  * routes with core.js.
  */
 import {
-  api, button, errorLine, fill, getToken, go, h, icon, refreshBadges, setBadgeListener, setSignedOutHandler,
+  api, button, errorLine, fill, getToken, go, h, icon, monogram, refreshBadges, setBadgeListener, setSignedOutHandler,
   setToken, startRouter, state, toast,
 } from './core.js';
 import './today.js';
@@ -121,7 +121,7 @@ async function renderSignIn(message) {
 
   const providers = [cfg.google ? googleButton(cfg.googleClientId, status) : null, cfg.apple ? appleButton() : null].filter(Boolean);
   fill(app(), h('main', { class: 'signin' },
-    h('div', { class: 'brand-mark' }, 'JK'),
+    h('div', { class: 'brand-mark' }, monogram(64, { label: 'JK Performance' })),
     h('div', { class: 'eyebrow center' }, 'Performance'),
     h('h1', { class: 'center' }, 'Coach sign in'),
     h('p', { class: 'muted center' }, 'Your clients, programmes, schedule and messages: everything in the coach app, on a bigger screen.'),
@@ -162,7 +162,7 @@ async function signOut() {
 // MARK: - Shell
 
 const NAV = [
-  ['today', 'Today', 'today'],
+  ['today', 'Today', 'coachToday'],
   ['clients', 'Clients', 'clients'],
   ['schedule', 'Schedule', 'schedule'],
   ['messages', 'Messages', 'messages'],
@@ -176,18 +176,18 @@ function renderShell() {
   navItems = {};
   const items = NAV.map(([id, label, ic]) => {
     const badge = h('span', { class: 'nav-badge', hidden: true });
-    const a = h('a', { class: 'nav-item', href: `#/${id}`, 'data-nav': id }, icon(ic, 19), h('span', { class: 'nav-label' }, label), badge);
+    const a = h('a', { class: 'nav-item', href: `#/${id}`, 'data-nav': id }, icon(ic, 22), h('span', { class: 'nav-label' }, label), badge);
     navItems[id] = { a, badge };
     return a;
   });
   const main = h('main', { class: 'content', id: 'outlet' });
   fill(app(), h('div', { class: 'shell' },
     h('nav', { class: 'sidebar', 'aria-label': 'Main' },
-      h('a', { class: 'brand', href: '#/today' }, h('span', { class: 'brand-mark small' }, 'JK'), h('span', null, h('div', { class: 'strong' }, 'JK Performance'), h('div', { class: 'tiny faint' }, 'Coach'))),
+      h('a', { class: 'brand', href: '#/today' }, monogram(30, { label: 'JK' }), h('span', null, h('div', { class: 'strong' }, 'JK Performance'), h('div', { class: 'tiny muted' }, 'The studio'))),
       h('div', { class: 'nav-list' }, items),
       h('div', { class: 'sidebar-foot' },
         h('div', { class: 'small muted clamp1' }, state.me?.name || ''),
-        button(h('span', { class: 'row gap4' }, icon('signout', 15), 'Sign out'), signOut, { small: true }))),
+        button(h('span', { class: 'row gap4' }, icon('signout', 16), 'Sign out'), signOut, { small: true }))),
     main));
   setBadgeListener(updateBadges);
   startRouter(() => document.getElementById('outlet'), selectNav);

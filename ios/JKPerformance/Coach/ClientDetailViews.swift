@@ -1,84 +1,102 @@
+import Charts
 import SwiftUI
 
-/// One client, for the coach: header from the summary, then Plan (edit and
-/// publish workouts), Feedback (weekly write-ups and check-in replies),
-/// Health (Apple Health, if shared), Habits (habits and nutrition targets)
-/// and Sessions (their bookings).
+/// One client, for the coach (atelier-spec.md, Coach screens 3): an Overview
+/// with no segments. Goal, habit week with rest days, the latest check-in and
+/// "Write this week's letter", the next session and three health numbers;
+/// rows below open the plan, sessions, letters, forms and health detail.
 struct ClientDetailView: View {
-    enum Tab: String, CaseIterable { case plan = "Plan", feedback = "Feedback", health = "Health", habits = "Habits", sessions = "Sessions" }
-
     let clientId: String
     let name: String
-    @State private var tab: Tab
 
-    init(clientId: String, name: String, initialTab: Tab = .plan) {
+    init(clientId: String, name: String) {
         self.clientId = clientId
         self.name = name
-        _tab = State(initialValue: initialTab)
     }
+
     @State private var detail: ClientDetail?
+    @State private var history: HabitHistory?
+    @State private var health: HealthWeek?
     @State private var error: String?
+    @State private var actionError: String?
+    @State private var editingGoal: GoalDraftRef?
+    @State private var givingRest = false
+
+    struct GoalDraftRef: Identifiable {
+        let goal: Goal?
+        var id: String { goal?.id ?? "new" }
+    }
+
+    private var fullName: String { detail?.client.name ?? name }
+    private var firstName: String { Fmt.firstWord(fullName) }
+    private var person: PersonRef { PersonRef(id: clientId, name: fullName, initials: detail?.client.initials) }
+    private var goal: Goal? {
+        let goals = detail?.goals ?? []
+        return goals.first { $0.status == "active" } ?? goals.first { $0.isDraft } ?? goals.first
+    }
+    private var lettersOn: Bool { (detail?.settings?.letterRhythm?.every ?? "weekly") != "none" }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                if let detail { ClientAboutCard(profile: detail.profile) }
-                Segmented(options: Tab.allCases, selection: $tab) { $0.rawValue }
-                switch tab {
-                case .plan: CoachPlanTab(clientId: clientId, clientName: detail?.client.name ?? name)
-                case .feedback:
-                    CoachReportsSection(clientId: clientId, clientName: firstName)
-                    Eyebrow(text: "Check-ins")
-                    CoachNotesTab(clientId: clientId)
-                    ClientAutomationSection(client: PersonRef(id: clientId, name: detail?.client.name ?? name))
-                case .health: CoachHealthTab(clientId: clientId, clientName: firstName)
-                case .habits: CoachHabitsTab(clientId: clientId)
-                case .sessions: CoachSessionsTab(client: PersonRef(id: clientId, name: detail?.client.name ?? name))
+            VStack(alignment: .leading, spacing: JK.Space.xxl) {
+                if let error, detail == nil {
+                    ErrorCard(message: error) { await load() }
+                } else if detail == nil {
+                    LoadingCard()
+                } else {
+                    if let error { ErrorBanner(message: error) }
+                    header
+                    GoalCard(goal: goal) { editingGoal = GoalDraftRef(goal: goal) }
+                    habitSection
+                    checkinSection
+                    nextSection
+                    healthSection
+                    links
                 }
             }
-            .padding(16)
+            .padding(.horizontal, JK.Space.gutter)
+            .padding(.vertical, JK.Space.l)
         }
         .jkScreen()
-        .navigationTitle("Clients")
+        .jkRefreshable { await load() }
+        .navigationTitle(firstName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    MessagesThreadView(clientId: clientId, otherName: detail?.client.name ?? name, subtitle: "Client")
-                } label: { Image(systemName: "bubble.left") }
+                    MessagesThreadView(clientId: clientId, otherName: fullName, subtitle: Fmt.planName(detail?.client.plan))
+                } label: { Image(systemName: IconKey.messages.symbol) }
+                    .accessibilityLabel("Messages with \(firstName)")
             }
         }
         .task { await load() }
+        .sheet(item: $editingGoal) { ref in
+            GoalEditorSheet(clientId: clientId, goal: ref.goal) { await load() }
+        }
+        .sheet(isPresented: $givingRest) {
+            RestDaySheet(clientId: clientId, firstName: firstName) { await load() }
+                .presentationDetents([.medium])
+        }
+        .errorAlert($actionError)
     }
 
+    // MARK: Header
+
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Avatar(initials: detail?.client.displayInitials ?? Fmt.initials(name), size: 48)
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            HStack(spacing: JK.Space.m) {
+                Avatar(initials: detail?.client.displayInitials ?? Fmt.initials(name), size: JK.Size.avatar + JK.Space.m)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(detail?.client.name ?? name).font(.title2.weight(.semibold)).foregroundStyle(JK.text)
-                    Text(subtitle).font(.caption).foregroundStyle(JK.tertiary)
+                    Text(fullName).font(.jkHeadline).foregroundStyle(JK.text)
+                    Text(subtitle).font(.jkCaption).foregroundStyle(JK.textSecondary)
                 }
             }
-            if let error { ErrorBanner(message: error) }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(chips, id: \.self) { t in
-                        Text(t)
-                            .font(.system(size: 10, weight: .medium))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .overlay(Capsule().stroke(JK.stroke, lineWidth: 1))
-                            .foregroundStyle(JK.secondary)
-                    }
+            if !pills.isEmpty {
+                HStack(spacing: JK.Space.s) {
+                    ForEach(pills, id: \.text) { pill in StatusPill(text: pill.text, tone: pill.tone) }
                 }
             }
         }
-    }
-
-    private var firstName: String {
-        let full = detail?.client.name ?? name
-        return full.split(separator: " ").first.map(String.init) ?? full
     }
 
     private var subtitle: String {
@@ -88,29 +106,380 @@ struct ClientDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    private var chips: [String] {
+    /// At most two: a word plus a dot.
+    private var pills: [(text: String, tone: StatusPill.Tone)] {
         guard let d = detail else { return [] }
-        var out: [String] = []
-        for reason in d.client.demand?.urgent ?? [] { out.append("⚠︎ \(reason)") }
-        if let a = d.client.adherence { out.append("Adherence \(a)%") }
-        out += (d.client.flags ?? []).map { ClientText.flag($0).prefix(1).uppercased() + ClientText.flag($0).dropFirst() }
-        if d.client.checkinDue == true { out.append("Check-in due") }
-        if d.healthShared == false { out.append("Health not shared") }
-        if let h = d.health {
-            if let steps = h.steps { out.append("\(Fmt.number(steps, digits: 0)) steps") }
-            if let sleep = h.sleepMinutes { out.append("Slept \(Fmt.minutes(sleep))") }
-            if let hr = h.restingHr { out.append("RHR \(Fmt.number(hr, digits: 0))") }
-        }
-        if let next = d.nextWorkout { out.append("Next: \(next.title) \(Fmt.dayMonth(next.date))") }
-        return out
+        var out: [(text: String, tone: StatusPill.Tone)] = []
+        let check = d.latestCheckin
+        if let pain = check?.pain, !pain.isEmpty, check?.reviewedAt == nil { out.append((text: "Pain flagged", tone: .urgent)) }
+        else if !(d.client.demand?.urgent ?? []).isEmpty { out.append((text: "Needs you", tone: .urgent)) }
+        if check != nil, check?.reviewedAt == nil { out.append((text: "Check-in in", tone: .attention)) }
+        if (d.client.unread ?? 0) > 0 { out.append((text: "Message in", tone: .attention)) }
+        if d.client.demand?.kind == "quiet" || d.client.demand?.kind == "inactive" { out.append((text: "Gone quiet", tone: .neutral)) }
+        if out.isEmpty { out.append((text: "On track", tone: .onTrack)) }
+        return Array(out.prefix(2))
     }
 
+    // MARK: Habits and rest days
+
+    private var habitSection: some View {
+        VStack(alignment: .leading, spacing: JK.Space.m) {
+            CoachSectionTitle("Habit week", trailing: minimumLine)
+            if let history {
+                HabitWeekGrid(history: history, restDays: detail?.restDays ?? [])
+            } else {
+                Text("Habit week unavailable.").font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+            restDayList
+            HStack(spacing: JK.Space.s) {
+                NavigationLink {
+                    CoachSubpage(title: "Habits") {
+                        CoachHabitsTab(clientId: clientId, dayMinimum: detail?.settings?.dayMinimum)
+                    }
+                } label: { Text("Edit habits") }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button("Give a rest day") { givingRest = true }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+    }
+
+    private var minimumLine: String? {
+        guard let m = detail?.settings?.dayMinimum, let count = history?.habits.count, count > 0 else { return nil }
+        return "Day done at \(m) of \(count)"
+    }
+
+    @ViewBuilder
+    private var restDayList: some View {
+        let upcoming = (detail?.restDays ?? []).filter { $0.date >= Day.today }
+        if !upcoming.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(upcoming) { rest in
+                    HStack {
+                        CoachRowLabel(icon: .rest, title: Fmt.longDay(rest.date), detail: rest.reason, chevron: false)
+                        Button("Remove") { Task { await removeRest(rest) } }
+                            .buttonStyle(TextButtonStyle())
+                            .padding(.trailing, JK.Space.m)
+                            .accessibilityLabel("Remove the rest day on \(Fmt.longDay(rest.date))")
+                    }
+                }
+            }
+            .surface(.group)
+        }
+    }
+
+    // MARK: Check-in and letter
+
+    @ViewBuilder
+    private var checkinSection: some View {
+        VStack(alignment: .leading, spacing: JK.Space.m) {
+            CoachSectionTitle("Latest check-in", trailing: detail?.latestCheckin?.submittedAt.map { Fmt.relative($0) })
+            if let c = detail?.latestCheckin {
+                LatestCheckInCard(checkin: c)
+            } else {
+                Text("No check-in yet.").font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+            if lettersOn {
+                NavigationLink { LetterComposer(client: person, week: detail?.latestCheckin?.week?.week) } label: {
+                    Text("Write this week's letter")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var nextSection: some View {
+        if let b = detail?.nextBooking {
+            VStack(alignment: .leading, spacing: JK.Space.s) {
+                CoachSectionTitle("Next session")
+                DayAgendaRow(booking: b).surface(.group)
+                Text(Fmt.longDay(b.start)).font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+        }
+    }
+
+    // MARK: Health
+
+    @ViewBuilder
+    private var healthSection: some View {
+        if let h = health {
+            VStack(alignment: .leading, spacing: JK.Space.m) {
+                CoachSectionTitle("Health", trailing: h.shared ? "Last 7 days" : nil)
+                if h.shared {
+                    HStack(alignment: .top, spacing: JK.Space.m) {
+                        healthTile("Steps", h.days.last?.steps.map { Fmt.number($0, digits: 0) }, h.days.map(\.steps))
+                        healthTile("Sleep", h.days.last?.sleepMinutes.map { Fmt.minutes($0) }, h.days.map(\.sleepMinutes))
+                        healthTile("Resting HR", h.days.last?.restingHr.map { Fmt.number($0, digits: 0) }, h.days.map(\.restingHr))
+                    }
+                } else {
+                    Text("\(firstName) hasn't shared Apple Health with you.").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func healthTile(_ label: String, _ value: String?, _ series: [Double?]) -> some View {
+        VStack(alignment: .leading, spacing: JK.Space.xs) {
+            Text(label).font(.jkCaption).foregroundStyle(JK.textSecondary)
+            Text(value ?? "–").font(.jkCallout.monospacedDigit()).foregroundStyle(JK.text)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Sparkline(values: series).frame(height: 28)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .surface(.card, padding: JK.Space.m)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Links
+
+    private var links: some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                CoachSubpage(title: "Plan") { CoachPlanTab(clientId: clientId, clientName: fullName) }
+            } label: { CoachRowLabel(icon: .workout, title: "Plan", detail: "This week, swap an exercise, add a note") }
+            GroupDivider()
+            NavigationLink {
+                CoachSubpage(title: "Sessions") { CoachSessionsTab(client: person) }
+            } label: { CoachRowLabel(icon: .week, title: "Sessions") }
+            GroupDivider()
+            NavigationLink {
+                CoachSubpage(title: "Letters") {
+                    CoachReportsSection(clientId: clientId, clientName: firstName, client: person)
+                    CoachSectionTitle("Check-ins")
+                    CoachNotesTab(clientId: clientId)
+                }
+            } label: { CoachRowLabel(icon: .letter, title: "Letters and check-ins") }
+            GroupDivider()
+            NavigationLink {
+                CoachSubpage(title: "Programme and forms") { ClientAutomationSection(client: person) }
+            } label: { CoachRowLabel(icon: .form, title: "Assign programme, send a form, read answers") }
+            GroupDivider()
+            NavigationLink {
+                CoachSubpage(title: "Health") { CoachHealthTab(clientId: clientId, clientName: firstName) }
+            } label: { CoachRowLabel(icon: .fromHealth, title: "Health detail") }
+            if let profile = detail?.profile, !profile.isEmpty {
+                GroupDivider()
+                NavigationLink {
+                    CoachSubpage(title: "About \(firstName)") { ClientAboutCard(profile: profile) }
+                } label: { CoachRowLabel(icon: .clients, title: "First-run answers") }
+            }
+        }
+        .buttonStyle(.plain)
+        .surface(.group)
+    }
+
+    // MARK: Loading
+
     private func load() async {
+        let week = Day.add(-6, to: Date())
+        async let d: ClientDetail = APIClient.shared.get("/api/coach/clients/\(seg(clientId))")
+        async let h: HabitHistory = APIClient.shared.get("/api/habits/history", query: [
+            "clientId": clientId, "from": Day.string(week), "to": Day.today,
+        ])
+        async let w: HealthWeek = APIClient.shared.get("/api/health/week", query: ["clientId": clientId])
         do {
-            detail = try await APIClient.shared.get("/api/coach/clients/\(seg(clientId))")
+            detail = try await d
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
+        }
+        history = try? await h
+        health = try? await w
+    }
+
+    private func removeRest(_ rest: RestDay) async {
+        do {
+            let _: OK = try await APIClient.shared.send("DELETE", "/api/clients/\(seg(clientId))/rest-days/\(seg(rest.date))")
+            await load()
+        } catch {
+            actionError = error.readable
+        }
+    }
+}
+
+/// The latest check-in, read-only: the reply arrives as the letter.
+struct LatestCheckInCard: View {
+    let checkin: LatestCheckIn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Text(figures).font(.jkCallout.monospacedDigit()).foregroundStyle(JK.text)
+            if let pain = checkin.pain, !pain.isEmpty { line("Pain", pain.joined(separator: ", ")) }
+            if let win = checkin.win, !win.isEmpty { line("Win", win) }
+            if let struggle = checkin.struggle, !struggle.isEmpty { line("Struggle", struggle) }
+            if let note = checkin.note, !note.isEmpty { line("Note", note) }
+            ForEach(Array((checkin.week?.feel ?? []).enumerated()), id: \.offset) { _, f in
+                Text([f.title, f.word ?? Feel.word(f.feel)].compactMap { $0 }.joined(separator: " · "))
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+            if let photos = checkin.photoIds, !photos.isEmpty {
+                Text(photos.count == 1 ? "1 photo" : "\(photos.count) photos").font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+        }
+        .surface(.card)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var figures: String {
+        var parts: [String] = []
+        if let e = checkin.energy { parts.append("Energy \(e)") }
+        if let s = checkin.stress { parts.append("Stress \(s)") }
+        if let s = checkin.sleep { parts.append("Sleep \(s)") }
+        return parts.isEmpty ? "Checked in" : parts.joined(separator: " · ")
+    }
+
+    private func line(_ label: String, _ text: String) -> some View {
+        (Text("\(label): ").foregroundColor(JK.textSecondary) + Text(text).foregroundColor(JK.text))
+            .font(.jkCaption)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+// MARK: - Goal editor
+
+/// Edit the goal in place, or set it from a draft. JK writes the chapter name.
+struct GoalEditorSheet: View {
+    let clientId: String
+    let goal: Goal?
+    let onSaved: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var metric = "weight"
+    @State private var unit = "kg"
+    @State private var baseline = ""
+    @State private var target = ""
+    @State private var hasDate = true
+    @State private var targetDate = Day.add(84, to: Date())
+    @State private var chapter = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    private static let metrics: [(id: String, name: String)] = [
+        ("weight", "Weight"), ("waist", "Waist"), ("measurement", "Measurement"), ("record", "Lift"), ("habit", "Habit"), ("custom", "Other"),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: JK.Space.m) {
+                    if let suggestion = goal?.suggestion, goal?.isDraft == true {
+                        Text("Suggested from onboarding: \(suggestion).").font(.jkCaption).foregroundStyle(JK.textSecondary)
+                    }
+                    JKField(label: "The goal, in their words", text: $title, prompt: "Down to 75 kg by March")
+                    Picker("Measured by", selection: $metric) {
+                        ForEach(Self.metrics, id: \.id) { m in Text(m.name).tag(m.id) }
+                    }
+                    .pickerStyle(.menu)
+                    .font(.jkCallout)
+                    HStack(spacing: JK.Space.s) {
+                        JKField(label: "Start", text: $baseline, prompt: "84.6", keyboard: .decimalPad)
+                        JKField(label: "Target", text: $target, prompt: "75", keyboard: .decimalPad)
+                        JKField(label: "Unit", text: $unit, prompt: "kg")
+                    }
+                    Toggle("Target date", isOn: $hasDate).tint(JK.accentControl).font(.jkCallout)
+                    if hasDate {
+                        DatePicker("By", selection: $targetDate, in: Date()..., displayedComponents: .date)
+                            .font(.jkCallout)
+                    }
+                    JKField(label: "Chapter name (optional, shown on Progress)", text: $chapter, prompt: "Base building")
+                    if let error { ErrorBanner(message: error) }
+                    PrimaryButton(goal == nil || goal?.isDraft == true ? "Set the goal" : "Save goal", busy: saving) {
+                        Task { await save() }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Text("Metrics tied to a lift or a habit are linked on the web desk.")
+                        .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                }
+                .padding(JK.Space.gutter)
+            }
+            .jkScreen()
+            .navigationTitle("Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .onAppear(perform: fill)
+        }
+    }
+
+    private func fill() {
+        guard let goal else { return }
+        title = goal.title
+        metric = goal.metric
+        unit = goal.unit ?? ""
+        baseline = goal.baseline.map { Fmt.number($0, digits: 2) } ?? ""
+        target = goal.target.map { Fmt.number($0, digits: 2) } ?? ""
+        chapter = goal.chapterName ?? ""
+        if let d = goal.targetDate.flatMap(Day.date) { targetDate = d } else { hasDate = goal.targetDate != nil }
+    }
+
+    private func number(_ text: String) -> Double? { parseNumber(text.replacingOccurrences(of: ",", with: "")) }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        let input = GoalInput(clientId: goal == nil ? clientId : nil, title: title.trimmingCharacters(in: .whitespaces),
+                              metric: metric, unit: unit.isEmpty ? nil : unit, baseline: number(baseline), target: number(target),
+                              startDate: goal?.startDate ?? Day.today, targetDate: hasDate ? Day.string(targetDate) : nil,
+                              chapterName: chapter.trimmingCharacters(in: .whitespaces).isEmpty ? nil : chapter,
+                              status: goal == nil || goal?.isDraft == true ? "active" : nil)
+        do {
+            if let id = goal?.id {
+                let _: Goal = try await APIClient.shared.send("PATCH", "/api/goals/\(seg(id))", body: input)
+            } else {
+                let _: Goal = try await APIClient.shared.send("POST", "/api/goals", body: input)
+            }
+            await onSaved()
+            dismiss()
+        } catch {
+            self.error = error.readable
+        }
+    }
+}
+
+// MARK: - Rest day
+
+/// Give a rest day: neither done nor missed.
+struct RestDaySheet: View {
+    let clientId: String
+    let firstName: String
+    let onSaved: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var date = Date()
+    @State private var reason = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: JK.Space.m) {
+                DatePicker("Day", selection: $date, in: Day.add(-7, to: Date())..., displayedComponents: .date)
+                    .font(.jkCallout)
+                JKField(label: "Reason (optional)", text: $reason, prompt: "Travelling for work")
+                Text("The day counts as neither done nor missed for \(firstName).")
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                if let error { ErrorBanner(message: error) }
+                PrimaryButton("Give the day off", busy: saving) { Task { await save() } }
+                Spacer()
+            }
+            .padding(JK.Space.gutter)
+            .jkScreen()
+            .navigationTitle("Rest day")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        let text = reason.trimmingCharacters(in: .whitespaces)
+        do {
+            let _: RestDay = try await APIClient.shared.send("POST", "/api/clients/\(seg(clientId))/rest-days",
+                                                             body: RestDayInput(date: Day.string(date), reason: text.isEmpty ? nil : text))
+            await onSaved()
+            dismiss()
+        } catch {
+            self.error = error.readable
         }
     }
 }
@@ -175,11 +544,11 @@ private struct CoachPlanTab: View {
         HStack {
             Button { day = Day.add(-7, to: day) } label: { Image(systemName: "chevron.left") }
             Spacer()
-            Text("Week of \(Fmt.dayMonth(Day.weekStart(day)))").font(.caption).foregroundStyle(JK.secondary)
+            Text("Week of \(Fmt.dayMonth(Day.weekStart(day)))").font(.jkCaption).foregroundStyle(JK.textSecondary)
             Spacer()
             Button { day = Day.add(7, to: day) } label: { Image(systemName: "chevron.right") }
         }
-        .foregroundStyle(JK.secondary)
+        .foregroundStyle(JK.textSecondary)
         DayStrip(days: Day.week(of: day), selected: $day, marked: Set((week ?? []).map(\.date)))
 
         if let error, week == nil {
@@ -225,8 +594,8 @@ private struct CoachPlanTab: View {
         let binding = Binding<WorkoutDraft>(get: { draft ?? current }, set: { draft = $0 })
         VStack(alignment: .leading, spacing: 2) {
             Text("\(Fmt.weekday(Day.date(current.date) ?? day)) · \(current.title.isEmpty ? "New workout" : current.title)")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-            Text(statusLine(current)).font(.caption2).foregroundStyle(JK.tertiary)
+                .font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
+            Text(statusLine(current)).font(.jkCaption).foregroundStyle(JK.textTertiary)
         }
         VStack(alignment: .leading, spacing: 8) {
             JKField(label: "Title", text: binding.title, prompt: "Lower Body Strength")
@@ -240,31 +609,31 @@ private struct CoachPlanTab: View {
         ItemsEditor(items: binding.items)
         Button { picking = true } label: {
             Label("Add exercise from the library", systemImage: "plus")
-                .font(.caption)
-                .foregroundStyle(JK.secondary)
+                .font(.jkCaption)
+                .foregroundStyle(JK.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.card).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
         }
-        if let notice { Label(notice, systemImage: "checkmark.circle").font(.caption).foregroundStyle(JK.secondary) }
+        if let notice { Label(notice, systemImage: "checkmark.circle").font(.jkCaption).foregroundStyle(JK.textSecondary) }
         if let error { ErrorBanner(message: error) }
         HStack(spacing: 10) {
             Button("Save") { Task { await save(publish: false) } }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
                 .disabled(busy || !valid(current) || (current == saved))
             Button {
                 Task { await save(publish: true) }
             } label: {
-                if busy { ProgressView().tint(.black) } else {
+                if busy { ProgressView().tint(JK.onPrimary) } else {
                     Text(current.published && current == saved ? "Published" : "Publish to \(clientName.split(separator: " ").first.map(String.init) ?? clientName)")
                 }
             }
-            .buttonStyle(ChromeButtonStyle())
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(busy || !valid(current) || (current.published && current == saved))
         }
         if current.id != nil {
             Button("Delete workout", role: .destructive) { confirmDelete = true }
-                .font(.caption)
+                .font(.jkCaption)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -363,6 +732,9 @@ private struct CoachPlanTab: View {
 
 private struct CoachHabitsTab: View {
     let clientId: String
+    var dayMinimum: Int? = nil
+    @State private var minimum = 3
+    @State private var savingMinimum = false
     @State private var data: HabitsResponse?
     @State private var error: String?
     @State private var actionError: String?
@@ -378,23 +750,23 @@ private struct CoachHabitsTab: View {
 
     var body: some View {
         Loadable(value: data, error: error, retry: load) { d in
-            Eyebrow(text: "Daily habits", trailing: "\(d.streak)-day streak")
+            CoachSectionTitle("Daily habits", trailing: "\(d.habits.count) of 5")
             if d.habits.isEmpty {
                 EmptyCard(systemName: "checklist", title: "No habits set")
             } else {
                 VStack(spacing: 0) {
                     ForEach(d.habits) { h in
                         HStack(spacing: 12) {
-                            IconTile(systemName: symbol(h.icon), size: 32)
+                            Icon(key: h.key).foregroundStyle(JK.textSecondary).frame(width: 32)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(h.name).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                                Text(h.name).font(.jkCallout.weight(.semibold)).foregroundStyle(JK.text)
                                 Text(h.isCount ? "\(Fmt.number(h.value ?? 0)) / \(Fmt.number(h.target)) \(h.unit) today" : (h.done ? "Done today" : "Not done today"))
-                                    .font(.caption2).foregroundStyle(JK.tertiary)
+                                    .font(.jkCaption).foregroundStyle(JK.textTertiary)
                             }
                             Spacer()
                             Button(role: .destructive) { Task { await remove(h) } } label: { Image(systemName: "trash") }
                                 .buttonStyle(.plain)
-                                .foregroundStyle(JK.tertiary)
+                                .foregroundStyle(JK.textTertiary)
                         }
                         .padding(10)
                     }
@@ -402,7 +774,13 @@ private struct CoachHabitsTab: View {
                 .jkCard(padding: 2)
             }
             Button { adding = true } label: { Label("Add habit", systemImage: "plus") }
-                .buttonStyle(GhostButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(d.habits.count >= 5)
+            if d.habits.count >= 5 {
+                Text("Five habits is the most a client carries. Remove one to add another.")
+                    .font(.jkCaption).foregroundStyle(JK.textSecondary)
+            }
+            if !d.habits.isEmpty { minimumCard(count: d.habits.count) }
 
             Eyebrow(text: "Nutrition targets", trailing: "Today \(Fmt.number(d.nutrition.totals.kcal, digits: 0)) kcal logged")
             VStack(alignment: .leading, spacing: 8) {
@@ -414,13 +792,13 @@ private struct CoachHabitsTab: View {
                     JKField(label: "Carbs g", text: $carbs, prompt: "260", keyboard: .numberPad)
                     JKField(label: "Fat g", text: $fat, prompt: "80", keyboard: .numberPad)
                 }
-                if let notice { Text(notice).font(.caption2).foregroundStyle(JK.secondary) }
+                if let notice { Text(notice).font(.jkCaption).foregroundStyle(JK.textSecondary) }
                 Button {
                     Task { await saveTargets() }
                 } label: {
-                    if savingTargets { ProgressView().tint(.black) } else { Text("Save targets") }
+                    if savingTargets { ProgressView().tint(JK.onPrimary) } else { Text("Save targets") }
                 }
-                .buttonStyle(ChromeButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(savingTargets || [kcal, protein, carbs, fat].contains { parseNumber($0) == nil })
             }
             .jkCard()
@@ -433,10 +811,37 @@ private struct CoachHabitsTab: View {
             .errorAlert($actionError)
     }
 
+    private func minimumCard(count: Int) -> some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            Stepper(value: $minimum, in: 1...max(1, count)) {
+                Text("A day is done at \(min(minimum, count)) of \(count)").font(.jkCallout).foregroundStyle(JK.text)
+            }
+            Text("The day minimum. The default is three in five.").font(.jkCaption).foregroundStyle(JK.textSecondary)
+            Button("Save minimum") { Task { await saveMinimum() } }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(savingMinimum)
+        }
+        .surface(.card)
+    }
+
+    private func saveMinimum() async {
+        savingMinimum = true
+        defer { savingMinimum = false }
+        do {
+            let fresh: ClientSettings = try await api.send("PATCH", "/api/coach/clients/\(seg(clientId))/settings",
+                                                           body: ClientSettingsPatch(dayMinimum: minimum, letterRhythm: nil))
+            minimum = fresh.dayMinimum ?? minimum
+            notice = "Day minimum saved."
+        } catch {
+            actionError = error.readable
+        }
+    }
+
     private func load() async {
         do {
             let d: HabitsResponse = try await api.get("/api/habits", query: ["clientId": clientId, "date": Day.today])
             data = d
+            minimum = d.dayMinimum ?? dayMinimum ?? minimum
             error = nil
             if let t = d.nutrition.targets {
                 kcal = Fmt.number(t.kcal, digits: 0).replacingOccurrences(of: ",", with: "")
@@ -480,12 +885,14 @@ private struct AddHabitSheet: View {
     @State private var kind = "check"
     @State private var target = "1"
     @State private var unit = ""
-    @State private var icon = "checkmark.circle"
+    @State private var icon: IconKey = .custom
+    @State private var step = ""
     @State private var healthKind = "none"
     @State private var saving = false
     @State private var error: String?
 
-    private let icons = ["checkmark.circle", "drop", "moon", "shoeprints.fill", "bolt", "leaf", "figure.walk", "pills", "book", "fork.knife"]
+    /// The closed catalogue the server accepts.
+    private let icons: [IconKey] = [.water, .sleep, .steps, .protein, .supplement, .energy, .mobility, .mindfulness, .reading, .sunlight, .custom]
 
     var body: some View {
         NavigationStack {
@@ -497,16 +904,21 @@ private struct AddHabitSheet: View {
                         HStack(spacing: 8) {
                             JKField(label: "Target", text: $target, prompt: "3", keyboard: .decimalPad)
                             JKField(label: "Unit", text: $unit, prompt: "L")
+                            JKField(label: "Step", text: $step, prompt: "0.5", keyboard: .decimalPad)
                         }
                     }
                     Eyebrow(text: "Icon")
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 8) {
                         ForEach(icons, id: \.self) { i in
                             Button { icon = i } label: {
-                                IconTile(systemName: i, size: 40)
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(icon == i ? JK.text : .clear, lineWidth: 1.5))
+                                Icon(key: i, filled: icon == i, size: JK.Size.iconHabit)
+                                    .foregroundStyle(icon == i ? JK.text : JK.textSecondary)
+                                    .frame(minWidth: JK.Size.touch, minHeight: JK.Size.touch)
+                                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.control).stroke(icon == i ? JK.inputBorder : Color.clear, lineWidth: 1))
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(i.accessibilityName)
+                            .accessibilityAddTraits(icon == i ? .isSelected : [])
                         }
                     }
                     Eyebrow(text: "Fill from Apple Health")
@@ -515,15 +927,15 @@ private struct AddHabitSheet: View {
                     }
                     if healthKind != "none" {
                         Text("Filled from the client's Apple Health and done once the value reaches the target.")
-                            .font(.caption2).foregroundStyle(JK.tertiary)
+                            .font(.jkCaption).foregroundStyle(JK.textTertiary)
                     }
                     if let error { ErrorBanner(message: error) }
                     Button {
                         Task { await save() }
                     } label: {
-                        if saving { ProgressView().tint(.black) } else { Text("Add habit") }
+                        if saving { ProgressView().tint(JK.onPrimary) } else { Text("Add habit") }
                     }
-                    .buttonStyle(ChromeButtonStyle())
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || (kind == "count" && parseNumber(target) == nil))
                 }
                 .padding(16)
@@ -535,10 +947,10 @@ private struct AddHabitSheet: View {
             .onChange(of: healthKind) { _, hk in
                 switch hk {
                 case "sleep":
-                    kind = "check"; target = "7"; unit = "h"; icon = "moon"
+                    kind = "check"; target = "7"; unit = "h"; icon = .sleep
                     if name.isEmpty { name = "Sleep 7h+" }
                 case "steps":
-                    kind = "count"; target = "10000"; unit = "steps"; icon = "shoeprints.fill"
+                    kind = "count"; target = "10000"; unit = "steps"; icon = .steps; step = "1000"
                     if name.isEmpty { name = "Steps" }
                 default: break
                 }
@@ -551,10 +963,11 @@ private struct AddHabitSheet: View {
         defer { saving = false }
         // A health habit keeps its target whatever the kind ("Sleep 7h+" is check, 7 h).
         let fromHealth = healthKind != "none"
-        let input = HabitInput(clientId: clientId, name: name.trimmingCharacters(in: .whitespaces), kind: kind,
-                               target: (kind == "count" || fromHealth) ? (parseNumber(target) ?? 1) : 1,
-                               unit: (kind == "count" || fromHealth) ? unit : "", icon: icon,
-                               healthKind: fromHealth ? healthKind : nil)
+        let input = HabitEdit(clientId: clientId, name: name.trimmingCharacters(in: .whitespaces), kind: kind,
+                              target: (kind == "count" || fromHealth) ? (parseNumber(target) ?? 1) : 1,
+                              unit: (kind == "count" || fromHealth) ? unit : "", iconKey: icon.rawValue, icon: icon.symbol,
+                              step: kind == "count" ? parseNumber(step) : nil,
+                              healthKind: fromHealth ? healthKind : nil)
         do {
             let _: Habit = try await APIClient.shared.send("POST", "/api/habits", body: input)
             await onSaved()
@@ -577,15 +990,15 @@ private struct CoachSessionsTab: View {
             let upcoming = list.filter { $0.end >= Date() }.sorted { $0.start < $1.start }
             let past = list.filter { $0.end < Date() }.sorted { $0.start > $1.start }
             Eyebrow(text: "Upcoming")
-            if upcoming.isEmpty { Text("Nothing booked.").font(.caption).foregroundStyle(JK.tertiary) }
+            if upcoming.isEmpty { Text("Nothing booked.").font(.jkCaption).foregroundStyle(JK.textTertiary) }
             ForEach(upcoming) { b in row(b) }
             NavigationLink { BookSessionView(client: client) } label: {
                 Label("Book a session for \(client.name)", systemImage: "plus")
-                    .font(.caption)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JK.stroke, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.card).strokeBorder(JK.hairline, style: StrokeStyle(lineWidth: 1, dash: [4])))
             }
             if !past.isEmpty {
                 Eyebrow(text: "Past 30 days")
@@ -625,56 +1038,47 @@ private struct CoachNotesTab: View {
     let clientId: String
     @State private var checkins: [CheckIn]?
     @State private var error: String?
-    @State private var replies: [String: String] = [:]
-    @State private var sending: String?
-    @State private var actionError: String?
 
     var body: some View {
         Loadable(value: checkins, error: error, retry: load) { list in
             if list.isEmpty {
-                EmptyCard(systemName: "doc.text", title: "No check-ins yet")
+                Text("No check-ins yet.").font(.jkCaption).foregroundStyle(JK.textSecondary)
             }
             ForEach(list) { c in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: JK.Space.s) {
                     HStack {
-                        Text("Week of \(Fmt.dayMonth(c.week))").font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
+                        Text("Week of \(Fmt.dayMonth(c.week))").font(.jkCallout).foregroundStyle(JK.text)
                         Spacer()
                         if c.reviewedAt != nil {
-                            Label("Reviewed", systemImage: "checkmark").font(.caption2).foregroundStyle(JK.tertiary)
+                            Text("Answered").font(.jkCaption).foregroundStyle(JK.textSecondary)
                         }
                     }
-                    HStack(spacing: 8) {
-                        StatTile(label: "Energy", value: "\(c.energy)/5")
-                        StatTile(label: "Sleep", value: "\(c.sleep)/5")
-                        StatTile(label: "Pain", value: c.pain.isEmpty ? "None" : c.pain.joined(separator: ", "))
-                    }
-                    if let note = c.note, !note.isEmpty {
-                        Text(note).font(.footnote).foregroundStyle(JK.secondary)
+                    Text(figures(c)).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
+                    ForEach(lines(c), id: \.self) { line in
+                        Text(line).font(.jkCaption).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
                     }
                     if let reply = c.reply, !reply.isEmpty {
-                        Label(reply, systemImage: "arrowshape.turn.up.left").font(.caption).foregroundStyle(JK.text)
-                    }
-                    HStack(spacing: 8) {
-                        TextField(c.reply == nil ? "Reply to this check-in" : "Update your reply",
-                                  text: Binding(get: { replies[c.id] ?? "" }, set: { replies[c.id] = $0 }), axis: .vertical)
-                            .lineLimit(1...4)
-                            .font(.footnote)
-                            .padding(10)
-                            .background(JK.cardRaised, in: RoundedRectangle(cornerRadius: 8))
-                        Button {
-                            Task { await reply(c) }
-                        } label: {
-                            if sending == c.id { ProgressView().controlSize(.small) } else { Image(systemName: "paperplane.fill") }
-                        }
-                        .disabled(sending != nil || (replies[c.id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+                        Text("Your reply: \(reply)").font(.jkCaption).foregroundStyle(JK.textSecondary)
                     }
                 }
-                .jkCard()
+                .surface(.card)
             }
         }
         EmptyView()
             .task { await load() }
-            .errorAlert($actionError)
+    }
+
+    private func figures(_ c: CheckIn) -> String {
+        var parts = ["Energy \(c.energy)"]
+        if let stress = c.stress { parts.append("Stress \(stress)") }
+        parts.append("Sleep \(c.sleep)")
+        parts.append(c.pain.isEmpty ? "No pain" : "Pain: \(c.pain.joined(separator: ", "))")
+        return parts.joined(separator: " · ")
+    }
+
+    private func lines(_ c: CheckIn) -> [String] {
+        [c.win.map { "Win: \($0)" }, c.struggle.map { "Struggle: \($0)" }, c.note]
+            .compactMap { $0 }.filter { !$0.isEmpty }
     }
 
     private func load() async {
@@ -684,20 +1088,6 @@ private struct CoachNotesTab: View {
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
-        }
-    }
-
-    private func reply(_ c: CheckIn) async {
-        let text = (replies[c.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        sending = c.id
-        defer { sending = nil }
-        do {
-            let fresh: CheckIn = try await APIClient.shared.send("POST", "/api/checkins/\(seg(c.id))/review", body: ReplyInput(reply: text))
-            checkins = checkins?.map { $0.id == fresh.id ? fresh : $0 }
-            replies[c.id] = nil
-        } catch {
-            actionError = error.readable
         }
     }
 }

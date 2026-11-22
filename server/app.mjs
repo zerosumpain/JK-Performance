@@ -9,6 +9,11 @@ import { dailyRoutes } from './daily.mjs';
 import { formRoutes } from './forms.mjs';
 import { healthRoutes } from './health.mjs';
 import { createRouter, readBody, sendJson } from './http.mjs';
+import { goalRoutes } from './goals.mjs';
+import { needsRoutes } from './needs.mjs';
+import { timelineRoutes } from './timeline.mjs';
+import { todayRoutes } from './today.mjs';
+import { mediaRoutes } from './media.mjs';
 import { messageRoutes } from './messages.mjs';
 import { planRoutes } from './plans.mjs';
 import { pageRoutes } from './pages.mjs';
@@ -17,13 +22,14 @@ import { pushRoutes } from './push.mjs';
 import { calendarRoutes } from './calendar.mjs';
 import { deskRoutes } from './desk.mjs';
 import { reportRoutes } from './reports.mjs';
+import { settingsRoutes } from './settings.mjs';
 import { trainingRoutes } from './training.mjs';
 
 const JSON_LIMIT = 1024 * 1024;
 
 export function createApp(db, config) {
   const router = createRouter();
-  for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes, pushRoutes, formRoutes, autoflowRoutes, androidRoutes, planRoutes]) add(router);
+  for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes, pushRoutes, formRoutes, autoflowRoutes, androidRoutes, planRoutes, settingsRoutes, mediaRoutes, goalRoutes, todayRoutes, timelineRoutes, needsRoutes]) add(router);
 
   return createServer(async (req, res) => {
     const started = Date.now();
@@ -50,7 +56,11 @@ export function createApp(db, config) {
       const out = await route.handler(req, ctx);
       if (out?.__raw) {
         res.writeHead(out.status, out.headers);
-        res.end(out.body);
+        if (typeof out.body?.pipe === 'function') {
+          // A file stream (media): end the response if the file goes away mid-read.
+          out.body.on('error', () => res.destroy());
+          out.body.pipe(res);
+        } else res.end(out.body);
       } else {
         sendJson(res, 200, out ?? { ok: true });
       }

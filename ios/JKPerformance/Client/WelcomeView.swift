@@ -21,8 +21,8 @@ struct WelcomeView: View {
             VStack(spacing: 10) {
                 if let error {
                     Text(error)
-                        .font(.caption)
-                        .foregroundStyle(JK.secondary)
+                        .font(.jkCaption)
+                        .foregroundStyle(JK.textSecondary)
                         .multilineTextAlignment(.center)
                 }
                 SignInWithAppleButton(.signIn) { request in
@@ -32,25 +32,25 @@ struct WelcomeView: View {
                 }
                 .signInWithAppleButtonStyle(.white)
                 .frame(height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
                 .disabled(busy)
                 .overlay {
-                    if busy { ProgressView().tint(.black) }
+                    if busy { ProgressView().tint(JK.onPrimary) }
                 }
 
                 Button("I have a code") { showCode = true }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCaption.weight(.semibold))
+                    .foregroundStyle(JK.textSecondary)
                     .padding(.top, 4)
 
                 Text("New here? Signing in creates your client account. By continuing you agree to the Terms and Privacy Policy.")
-                    .font(.caption2)
-                    .foregroundStyle(JK.tertiary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textTertiary)
                     .multilineTextAlignment(.center)
                     .padding(.top, 6)
                 Link("Privacy Policy", destination: APIClient.shared.privacyURL)
-                    .font(.caption2)
-                    .foregroundStyle(JK.secondary)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textSecondary)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)

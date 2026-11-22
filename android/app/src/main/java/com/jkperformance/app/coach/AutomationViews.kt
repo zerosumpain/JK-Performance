@@ -14,13 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -29,7 +26,6 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +48,8 @@ import com.jkperformance.app.net.*
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 // region Autoflows (Programs › Autoflows)
 
@@ -77,16 +75,12 @@ fun AutoflowsTab() {
     }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        GhostButton(onClick = { editing = AutoflowDraft() }) {
-            Label("New autoflow", systemImage = "plus", style = LocalTextStyle.current)
+        SecondaryButton(onClick = { editing = AutoflowDraft() }) {
+            IconLabel("New autoflow", icon = IconKey.add, style = LocalTextStyle.current)
         }
         Loadable(value = flows, error = error, retry = { load() }) { list ->
             if (list.isEmpty()) {
-                EmptyCard(
-                    systemName = "bolt",
-                    title = "No autoflows yet",
-                    detail = "Write your routine once: a welcome message on day 0, the intake form, a check-in on day 7. It then runs for every client.",
-                )
+                EmptyCard(title = "No autoflows yet", detail = "Write your routine once: a welcome message on day 0, the intake form, a check-in on day 7. It then runs for every client.")
             }
             list.forEach { flow ->
                 key(flow.id) {
@@ -126,23 +120,23 @@ private fun AutoflowCard(flow: Autoflow, onEdit: () -> Unit, onEnrol: () -> Unit
     var showRuns by remember { mutableStateOf(false) }
     val running = (flow.runs ?: emptyList()).filter { it.stoppedAt == null && it.next != null }
 
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconTile(systemName = if (flow.trigger == "join") "person.badge.plus" else "bolt", size = 34.dp)
+            RowGlyph(IconKey.fromSymbol(if (flow.trigger == "join") "person.badge.plus" else "bolt"), slot = 34.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(flow.name, style = JKType.subheadline.semibold(), color = JK.text)
+                Text(flow.name, style = JKType.callout.semibold(), color = JKColors.text)
                 Text(
                     if (flow.trigger == "join") "Starts when a client joins" else "Starts when you enrol someone",
-                    style = JKType.caption2,
-                    color = JK.tertiary,
+                    style = JKType.caption,
+                    color = JKColors.textTertiary,
                 )
             }
             if (!flow.active) {
                 Text(
                     "Paused",
-                    style = JKType.system(10, FontWeight.SemiBold),
-                    color = JK.secondary,
-                    modifier = Modifier.border(1.dp, JK.stroke, CircleShape).padding(horizontal = 7.dp, vertical = 3.dp),
+                    style = JKType.caption.semibold(),
+                    color = JKColors.textSecondary,
+                    modifier = Modifier.border(1.dp, JKColors.hairline, CircleShape).padding(horizontal = 7.dp, vertical = 3.dp),
                 )
             }
             MenuBox(
@@ -152,7 +146,7 @@ private fun AutoflowCard(flow: Autoflow, onEdit: () -> Unit, onEnrol: () -> Unit
                 ),
             ) {
                 Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-                    SystemImage("ellipsis", JKType.body, JK.secondary)
+                    Glyph(IconKey.more, JKType.body, JKColors.textSecondary)
                 }
             }
         }
@@ -161,17 +155,17 @@ private fun AutoflowCard(flow: Autoflow, onEdit: () -> Unit, onEnrol: () -> Unit
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "Day ${step.day}",
-                        style = JKType.system(10, FontWeight.SemiBold),
-                        color = JK.secondary,
+                        style = JKType.caption.semibold(),
+                        color = JKColors.textSecondary,
                         modifier = Modifier.width(46.dp),
                     )
                     Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                        SystemImage(step.icon, JKType.caption2, JK.tertiary)
+                        Glyph(IconKey.fromSymbol(step.icon), JKType.caption, JKColors.textTertiary)
                     }
                     Text(
                         step.label ?: step.action.replaceFirstChar { it.uppercase() },
                         style = JKType.caption,
-                        color = JK.text,
+                        color = JKColors.text,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -188,10 +182,10 @@ private fun AutoflowCard(flow: Autoflow, onEdit: () -> Unit, onEnrol: () -> Unit
                 Text(
                     if (running.isEmpty()) "${runs.size} finished" else "${running.size} in progress",
                     style = style,
-                    color = JK.secondary,
+                    color = JKColors.textSecondary,
                     modifier = Modifier.weight(1f),
                 )
-                SystemImage(if (showRuns) "chevron.up" else "chevron.down", style, JK.secondary)
+                Glyph(if (showRuns) IconKey.collapse else IconKey.expand, style, JKColors.textSecondary)
             }
             AnimatedVisibility(showRuns) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -232,7 +226,7 @@ fun AutoflowRunRow(run: AutoflowRun, showFlowName: Boolean = false, onChanged: s
     Column(
         Modifier
             .fillMaxWidth()
-            .background(JK.cardRaised.copy(alpha = 0.5f), rounded(10.dp))
+            .background(JKColors.raised.copy(alpha = 0.5f), JKShape.control)
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -242,13 +236,13 @@ fun AutoflowRunRow(run: AutoflowRun, showFlowName: Boolean = false, onChanged: s
                 Text(
                     if (showFlowName) run.autoflowName ?: "Autoflow" else run.client?.name ?: "Client",
                     style = JKType.caption.semibold(),
-                    color = JK.text,
+                    color = JKColors.text,
                 )
-                Text(detail, style = JKType.caption2, color = JK.tertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(detail, style = JKType.caption, color = JKColors.textTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Text("${run.stepsDone}/${run.steps}", style = JKType.caption2.monospacedDigit(), color = JK.secondary)
+            Text("${run.stepsDone}/${run.steps}", style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary)
             if (run.stoppedAt == null && run.next != null) {
-                SystemImage("stop.circle", JKType.body, JK.secondary, Modifier.clickable { confirmStop = true })
+                Glyph(IconKey.stop, JKType.body, JKColors.textSecondary, Modifier.clickable { confirmStop = true })
             }
         }
         ThinBar(fraction = if (run.steps == 0) 0.0 else run.stepsDone.toDouble() / run.steps, height = 2.dp)
@@ -363,9 +357,9 @@ fun AutoflowEditorSheet(draft: AutoflowDraft, onSaved: suspend () -> Unit) {
                 selection = edit.trigger,
                 onSelectionChange = { edit = edit.copy(trigger = it) },
             ) { if (it == "join") "When a client joins" else "When I start it" }
-            JKToggle("Running", isOn = edit.active, onChange = { edit = edit.copy(active = it) }, style = JKType.subheadline)
+            JKToggle("Running", isOn = edit.active, onChange = { edit = edit.copy(active = it) }, style = JKType.callout)
 
-            Eyebrow(text = "Steps", trailing = "Day 0 = the day it starts")
+            Label(text = "Steps", trailing = "Day 0 = the day it starts")
             edit.steps.forEach { step ->
                 key(step.id) {
                     StepEditor(
@@ -384,19 +378,19 @@ fun AutoflowEditorSheet(draft: AutoflowDraft, onSaved: suspend () -> Unit) {
             }
             Text(
                 "Messages can say {first} for the client's first name. A program goes live on their calendar from the following Monday.",
-                style = JKType.caption2,
-                color = JK.tertiary,
+                style = JKType.caption,
+                color = JKColors.textTertiary,
             )
 
             error?.let { ErrorBanner(it) }
-            ChromeButton(
+            PrimaryButton(
                 onClick = { scope.launch { save() } },
                 enabled = !saving && edit.name.isNotBlank() && edit.steps.isNotEmpty(),
             ) {
-                if (saving) ProgressView(tint = Color.Black) else Text(if (edit.flowId == null) "Create autoflow" else "Save autoflow")
+                if (saving) ProgressView() else Text(if (edit.flowId == null) "Create autoflow" else "Save autoflow")
             }
             if (edit.flowId != null) {
-                GhostButton("Delete autoflow", onClick = { confirmDelete = true })
+                SecondaryButton("Delete autoflow", onClick = { confirmDelete = true })
             }
         }
     }
@@ -415,8 +409,8 @@ fun AutoflowEditorSheet(draft: AutoflowDraft, onSaved: suspend () -> Unit) {
 
 @Composable
 private fun AddStepButton(title: String, icon: String, onClick: () -> Unit) {
-    SmallPillButton(onClick = onClick) {
-        Label(title, systemImage = icon, style = LocalTextStyle.current)
+    TextButton(onClick = onClick) {
+        IconLabel(title, icon = IconKey.fromSymbol(icon), style = LocalTextStyle.current)
     }
 }
 
@@ -428,9 +422,9 @@ private fun StepEditor(
     programs: List<Program>,
     onRemove: () -> Unit,
 ) {
-    Column(Modifier.jkCard(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            SystemImage(step.icon, JKType.body, JK.secondary)
+            Glyph(IconKey.fromSymbol(step.icon), JKType.body, JKColors.textSecondary)
             Stepper(
                 label = "Day ${step.day}",
                 value = step.day,
@@ -438,7 +432,7 @@ private fun StepEditor(
                 onValueChange = { onStepChange(step.copy(day = it)) },
                 modifier = Modifier.weight(1f),
             )
-            SystemImage("trash", JKType.body, JK.secondary, Modifier.clickable(onClick = onRemove))
+            Glyph(IconKey.delete, JKType.body, JKColors.textSecondary, Modifier.clickable(onClick = onRemove))
         }
         when (step.action) {
             "message" -> MultilineField(
@@ -449,7 +443,7 @@ private fun StepEditor(
                 radius = 8,
             )
             "form" -> if (forms.isEmpty()) {
-                Text("Make a form first (Forms tab).", style = JKType.caption, color = JK.tertiary)
+                Text("Make a form first (Forms tab).", style = JKType.caption, color = JKColors.textTertiary)
             } else {
                 MenuPicker(
                     options = forms.map { it.id to it.name },
@@ -458,7 +452,7 @@ private fun StepEditor(
                 )
             }
             else -> if (programs.isEmpty()) {
-                Text("Make a program first (Programs tab).", style = JKType.caption, color = JK.tertiary)
+                Text("Make a program first (Programs tab).", style = JKType.caption, color = JKColors.textTertiary)
             } else {
                 MenuPicker(
                     options = programs.map { it.id to it.name },
@@ -494,7 +488,7 @@ fun FormsTab() {
     }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val shape = rounded(12.dp)
+        val shape = JKShape.card
         MenuBox(
             items = listOf(MenuItem("Blank form", "doc") { editing = FormDraft() }) +
                 (data?.templates ?: emptyList()).map { t -> MenuItem(t.name, "doc.on.doc") { editing = FormDraft(template = t) } },
@@ -503,17 +497,17 @@ fun FormsTab() {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(JK.card, shape)
-                    .border(1.dp, JK.stroke, shape)
+                    .background(JKColors.surface, shape)
+                    .border(1.dp, JKColors.hairline, shape)
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Label("New form", systemImage = "plus", style = JKType.subheadline.semibold(), color = JK.text)
+                IconLabel("New form", icon = IconKey.add, style = JKType.callout.semibold(), color = JKColors.text)
             }
         }
         if (inbox.isNotEmpty()) {
-            Eyebrow(text = "Answers to read", trailing = "${inbox.size}")
-            Column(Modifier.jkCard(padding = 2.dp)) {
+            Label(text = "Answers to read", trailing = "${inbox.size}")
+            Column(Modifier.jkSurface(padding = 2.dp)) {
                 inbox.forEach { r ->
                     key(r.id) {
                         FormRequestRow(request = r, showClient = true, modifier = Modifier.navLink { FormResponseView(request = r) })
@@ -522,25 +516,21 @@ fun FormsTab() {
             }
         }
         Loadable(value = data, error = error, retry = { load() }) { reply ->
-            Eyebrow(text = "Your forms")
+            Label(text = "Your forms")
             if (reply.forms.isEmpty()) {
-                EmptyCard(
-                    systemName = "doc.text",
-                    title = "No forms yet",
-                    detail = "Start from Intake or PAR-Q above, or build your own.",
-                )
+                EmptyCard(title = "No forms yet", detail = "Start from Intake or PAR-Q above, or build your own.")
             }
             reply.forms.forEach { f ->
                 key(f.id) {
                     Row(
-                        Modifier.clickable { editing = FormDraft(f) }.jkCard(padding = 12.dp),
+                        Modifier.clickable { editing = FormDraft(f) }.jkSurface(padding = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconTile(systemName = "doc.text", size = 34.dp)
+                        RowGlyph(IconKey.form, slot = 34.dp)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(f.name, style = JKType.subheadline.semibold(), color = JK.text)
-                            Text(formLine(f), style = JKType.caption2, color = JK.tertiary)
+                            Text(f.name, style = JKType.callout.semibold(), color = JKColors.text)
+                            Text(formLine(f), style = JKType.caption, color = JKColors.textTertiary)
                         }
                         MenuBox(
                             items = listOf(
@@ -549,7 +539,7 @@ fun FormsTab() {
                             ),
                         ) {
                             Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-                                SystemImage("ellipsis", JKType.body, JK.secondary)
+                                Glyph(IconKey.more, JKType.body, JKColors.textSecondary)
                             }
                         }
                     }
@@ -604,26 +594,26 @@ fun FormRequestRow(request: FormRequest, showClient: Boolean = false, modifier: 
         if (showClient) {
             Avatar(initials = request.client?.displayInitials ?: "?", size = 30.dp)
         } else {
-            IconTile(systemName = "doc.text", size = 30.dp)
+            RowGlyph(IconKey.form, slot = 30.dp)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 if (showClient) "${request.client?.name ?: "Client"} · ${request.name}" else request.name,
-                style = JKType.subheadline.semibold(),
-                color = JK.text,
+                style = JKType.callout.semibold(),
+                color = JKColors.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 status,
-                style = JKType.caption2,
-                color = if (request.isFlagged && request.reviewedAt == null) JK.urgent else JK.tertiary,
+                style = JKType.caption,
+                color = if (request.isFlagged && request.reviewedAt == null) JKColors.urgent else JKColors.textTertiary,
             )
         }
         if (request.submittedAt != null && request.reviewedAt == null) {
-            Dot(if (request.isFlagged) JK.urgent else JK.waiting)
+            Dot(if (request.isFlagged) JKColors.urgent else JKColors.attention)
         }
-        SystemImage("chevron.right", JKType.caption, JK.tertiary)
+        Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
     }
 }
 
@@ -662,45 +652,45 @@ fun FormResponseView(request: FormRequest) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(current.name, style = JKType.title2.semibold(), color = JK.text)
+                Text(current.name, style = JKType.display, color = JKColors.text)
                 Text(
                     "${current.client?.name ?: "Client"} · sent ${Fmt.dayMonth(current.sentAt)}${if (current.fromAutoflow == true) " by an autoflow" else ""}",
                     style = JKType.caption,
-                    color = JK.tertiary,
+                    color = JKColors.textTertiary,
                 )
             }
             error?.let { ErrorBanner(it) }
             if (current.isFlagged) {
                 Column(
-                    Modifier.jkCard().border(1.dp, JK.urgent.copy(alpha = 0.6f), rounded(JK.corner)),
+                    Modifier.jkSurface().border(1.dp, JKColors.urgent.copy(alpha = 0.6f), JKShape.card),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Label("Answered yes to", systemImage = "exclamationmark.triangle.fill", style = JKType.caption.semibold(), color = JK.urgent)
-                    (current.flagged ?: emptyList()).forEach { Text("• $it", style = JKType.caption, color = JK.text) }
-                    Text("Talk to them before the next hard session.", style = JKType.caption2, color = JK.tertiary)
+                    IconLabel("Answered yes to", icon = IconKey.warning, style = JKType.caption.semibold(), color = JKColors.urgent)
+                    (current.flagged ?: emptyList()).forEach { Text("• $it", style = JKType.caption, color = JKColors.text) }
+                    Text("Talk to them before the next hard session.", style = JKType.caption, color = JKColors.textTertiary)
                 }
             }
             if (current.submittedAt == null) {
-                EmptyCard(systemName = "hourglass", title = "Not answered yet", detail = "Sent ${Fmt.relative(current.sentAt)}.")
-                GhostButton("Withdraw form", onClick = { confirmWithdraw = true })
+                EmptyCard(title = "Not answered yet", detail = "Sent ${Fmt.relative(current.sentAt)}.")
+                SecondaryButton("Withdraw form", onClick = { confirmWithdraw = true })
             } else {
                 current.questions.forEach { q ->
                     val answer = current.answers?.get(q.id)
-                    Column(Modifier.jkCard(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(q.label, style = JKType.caption, color = JK.tertiary)
+                    Column(Modifier.jkSurface(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(q.label, style = JKType.caption, color = JKColors.textTertiary)
                         Text(
                             answer?.display ?: "–",
-                            style = JKType.subheadline.medium(),
-                            color = if (q.flag == true && answer == FormAnswer.yes(true)) JK.urgent else JK.text,
+                            style = JKType.callout,
+                            color = if (q.flag == true && answer == FormAnswer.yes(true)) JKColors.urgent else JKColors.text,
                         )
                     }
                 }
                 current.client?.let { client ->
                     val first = client.name.split(' ').firstOrNull { it.isNotEmpty() } ?: client.name
-                    GhostButton(onClick = {
+                    SecondaryButton(onClick = {
                         nav.push { MessagesThreadView(clientId = client.id, otherName = client.name, subtitle = "Client") }
                     }) {
-                        Label("Message $first", systemImage = "bubble.left", style = LocalTextStyle.current)
+                        IconLabel("Message $first", icon = IconKey.messages, style = LocalTextStyle.current)
                     }
                 }
             }
@@ -802,7 +792,7 @@ fun FormEditorSheet(draft: FormDraft, onSaved: suspend () -> Unit) {
                 onTextChange = { edit = edit.copy(intro = it) },
                 prompt = "A few questions before we start",
             )
-            Eyebrow(text = "Questions", trailing = "${edit.questions.size}")
+            Label(text = "Questions", trailing = "${edit.questions.size}")
             edit.questions.forEachIndexed { index, question ->
                 key(question.id) {
                     QuestionEditor(
@@ -829,24 +819,18 @@ fun FormEditorSheet(draft: FormDraft, onSaved: suspend () -> Unit) {
                     }
                 },
             ) {
-                Label(
-                    "Add question",
-                    systemImage = "plus",
-                    style = JKType.caption.semibold(),
-                    color = JK.text,
-                    modifier = Modifier.border(1.dp, JK.stroke, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
-                )
+                IconLabel("Add question", icon = IconKey.add, style = JKType.caption.semibold(), color = JKColors.text, modifier = Modifier.border(1.dp, JKColors.hairline, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
             }
             error?.let { ErrorBanner(it) }
-            ChromeButton(
+            PrimaryButton(
                 onClick = { scope.launch { save() } },
                 enabled = !saving && edit.name.isNotBlank() && edit.questions.isNotEmpty(),
             ) {
-                if (saving) ProgressView(tint = Color.Black) else Text(if (edit.formId == null) "Create form" else "Save form")
+                if (saving) ProgressView() else Text(if (edit.formId == null) "Create form" else "Save form")
             }
             if (edit.formId != null) {
-                Text("Forms already sent keep the questions they were sent with.", style = JKType.caption2, color = JK.tertiary)
-                GhostButton("Delete form", onClick = { confirmDelete = true })
+                Text("Forms already sent keep the questions they were sent with.", style = JKType.caption, color = JKColors.textTertiary)
+                SecondaryButton("Delete form", onClick = { confirmDelete = true })
             }
         }
     }
@@ -870,17 +854,17 @@ private fun QuestionEditor(
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
 ) {
-    Column(Modifier.jkCard(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(padding = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "$number. ${FormQuestion.kindName(question.kind)}",
                 style = JKType.caption.semibold(),
-                color = JK.secondary,
+                color = JKColors.textSecondary,
                 modifier = Modifier.weight(1f),
             )
-            SystemImage("arrow.up", JKType.caption, JK.secondary, Modifier.clickable { onMove(-1) })
-            SystemImage("arrow.down", JKType.caption, JK.secondary, Modifier.clickable { onMove(1) })
-            SystemImage("trash", JKType.caption, JK.secondary, Modifier.clickable(onClick = onRemove))
+            Glyph(IconKey.arrowUp, JKType.caption, JKColors.textSecondary, Modifier.clickable { onMove(-1) })
+            Glyph(IconKey.arrowDown, JKType.caption, JKColors.textSecondary, Modifier.clickable { onMove(1) })
+            Glyph(IconKey.delete, JKType.caption, JKColors.textSecondary, Modifier.clickable(onClick = onRemove))
         }
         JKField(
             label = "Question",
@@ -985,48 +969,38 @@ fun ClientAutomationSection(client: PersonRef) {
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Eyebrow(text = "Forms", modifier = Modifier.weight(1f))
+            Label(text = "Forms", modifier = Modifier.weight(1f))
             MenuBox(
                 items = forms.map { f -> MenuItem(f.name) { scope.launch { send(f) } } },
                 enabled = forms.isNotEmpty(),
             ) {
-                Label(
-                    "Send",
-                    systemImage = "paperplane",
-                    style = JKType.caption.semibold(),
-                    color = if (forms.isEmpty()) JK.tertiary else JK.text,
-                )
+                IconLabel("Send", icon = IconKey.send, style = JKType.caption.semibold(), color = if (forms.isEmpty()) JKColors.textTertiary else JKColors.text)
             }
         }
         error?.let { ErrorBanner(it) }
         val sent = requests
         when {
             sent == null -> LoadingCard()
-            sent.isEmpty() -> Text("No forms sent yet.", style = JKType.caption, color = JK.tertiary)
-            else -> Column(Modifier.jkCard(padding = 2.dp)) {
+            sent.isEmpty() -> Text("No forms sent yet.", style = JKType.caption, color = JKColors.textTertiary)
+            else -> Column(Modifier.jkSurface(padding = 2.dp)) {
                 sent.forEach { r ->
                     key(r.id) { FormRequestRow(request = r, modifier = Modifier.navLink { FormResponseView(request = r) }) }
                 }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Eyebrow(text = "Autoflows", modifier = Modifier.weight(1f))
+            Label(text = "Autoflows", modifier = Modifier.weight(1f))
             // Only flows they aren't already running can be started again.
             val startable = flows.filter { f -> runs.none { it.autoflowId == f.id && it.stoppedAt == null } }
             MenuBox(
                 items = startable.map { f -> MenuItem(f.name) { scope.launch { enrol(f) } } },
                 enabled = flows.isNotEmpty(),
             ) {
-                Label(
-                    "Start",
-                    systemImage = "bolt",
-                    style = JKType.caption.semibold(),
-                    color = if (flows.isEmpty()) JK.tertiary else JK.text,
-                )
+                IconLabel("Start", icon = IconKey.energy, style = JKType.caption.semibold(), color = if (flows.isEmpty()) JKColors.textTertiary else JKColors.text)
             }
         }
         if (runs.isEmpty()) {
-            Text("Not in any autoflow.", style = JKType.caption, color = JK.tertiary)
+            Text("Not in any autoflow.", style = JKType.caption, color = JKColors.textTertiary)
         }
         runs.forEach { run ->
             key(run.id) { AutoflowRunRow(run = run, showFlowName = true, onChanged = { load() }) }
@@ -1072,10 +1046,10 @@ fun ClientPickerSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            note?.let { Text(it, style = JKType.caption, color = JK.tertiary) }
+            note?.let { Text(it, style = JKType.caption, color = JKColors.textTertiary) }
             val list = clients
             if (list != null) {
-                Column(Modifier.jkCard(padding = 2.dp)) {
+                Column(Modifier.jkSurface(padding = 2.dp)) {
                     list.sortedBy { it.name }.forEach { c ->
                         key(c.id) {
                             Row(
@@ -1084,7 +1058,7 @@ fun ClientPickerSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Avatar(initials = c.displayInitials, size = 28.dp)
-                                Text(c.name, style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
+                                Text(c.name, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
                                 CheckCircle(on = chosen == c.id)
                             }
                         }
@@ -1094,8 +1068,8 @@ fun ClientPickerSheet(
                 LoadingCard()
             }
             error?.let { ErrorBanner(it) }
-            ChromeButton(onClick = { scope.launch { go() } }, enabled = !saving && chosen != null) {
-                if (saving) ProgressView(tint = Color.Black) else Text(action)
+            PrimaryButton(onClick = { scope.launch { go() } }, enabled = !saving && chosen != null) {
+                if (saving) ProgressView() else Text(action)
             }
         }
     }
@@ -1116,8 +1090,6 @@ fun ClientPickerSheet(
 /** One entry of an iOS `Menu`: a title and an optional SF Symbol shown trailing, as iOS does. */
 private class MenuItem(val title: String, val systemImage: String? = null, val action: () -> Unit)
 
-/** The dark grey of an iOS menu or action sheet. */
-private val MenuGround = Color(0.17f, 0.17f, 0.17f)
 
 /** SwiftUI's `Menu { … } label: { … }`: tapping the label opens a dark pop-up list. */
 @Composable
@@ -1133,13 +1105,13 @@ private fun MenuBox(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            containerColor = MenuGround,
-            shape = rounded(12.dp),
+            containerColor = JKColors.raised,
+            shape = JKShape.card,
         ) {
             items.forEach { item ->
                 DropdownMenuItem(
-                    text = { Text(item.title, style = JKType.body, color = JK.text) },
-                    trailingIcon = item.systemImage?.let { name -> @Composable { SystemImage(name, JKType.body, JK.text) } },
+                    text = { Text(item.title, style = JKType.body, color = JKColors.text) },
+                    trailingIcon = item.systemImage?.let { name -> @Composable { Glyph(IconKey.fromSymbol(name), JKType.body, JKColors.text) } },
                     onClick = {
                         expanded = false
                         item.action()
@@ -1152,7 +1124,7 @@ private fun MenuBox(
 
 /**
  * A menu-style `Picker` outside a Form: the chosen option's name with the
- * up-down chevrons, tinted white (`.tint(JK.text)`), opening the options.
+ * up-down chevrons, tinted white (`.tint(JKColors.text)`), opening the options.
  */
 @Composable
 private fun MenuPicker(options: List<Pair<String, String>>, selection: String, onSelect: (String) -> Unit) {
@@ -1162,13 +1134,13 @@ private fun MenuPicker(options: List<Pair<String, String>>, selection: String, o
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(options.firstOrNull { it.first == selection }?.second ?: "", style = JKType.body, color = JK.text)
-            Icon(Icons.Rounded.UnfoldMore, contentDescription = null, tint = JK.text, modifier = Modifier.size(16.dp))
+            Text(options.firstOrNull { it.first == selection }?.second ?: "", style = JKType.body, color = JKColors.text)
+            Glyph(IconKey.unfold, size = JKSize.iconSmall, tint = JKColors.text)
         }
     }
 }
 
-/** SwiftUI's `Toggle(label, isOn:)` with `.tint(JK.secondary)`: the label leading, the switch trailing. */
+/** SwiftUI's `Toggle(label, isOn:)` with `.tint(JKColors.textSecondary)`: the label leading, the switch trailing. */
 @Composable
 private fun JKToggle(
     label: String,
@@ -1178,19 +1150,11 @@ private fun JKToggle(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = style, color = JK.text, modifier = Modifier.weight(1f))
-        Switch(
+        Text(label, style = style, color = JKColors.text, modifier = Modifier.weight(1f))
+        JKSwitch(
             checked = isOn,
-            onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = JK.secondary,
-                checkedBorderColor = Color.Transparent,
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = JK.track,
-                uncheckedBorderColor = Color.Transparent,
-            ),
-        )
+            onCheckedChange = onChange
+    )
     }
 }
 
@@ -1198,43 +1162,43 @@ private fun JKToggle(
 @Composable
 private fun Stepper(label: String, value: Int, range: IntRange, onValueChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = JKType.subheadline.semibold(), color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = JKType.callout.semibold(), color = JKColors.text, modifier = Modifier.weight(1f))
         Row(
-            Modifier.background(JK.cardRaised, rounded(8.dp)).height(32.dp),
+            Modifier.background(JKColors.raised, JKShape.chip).height(32.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StepperHalf(Icons.Rounded.Remove, enabled = value > range.first) { onValueChange(value - 1) }
-            Box(Modifier.width(1.dp).height(18.dp).background(JK.stroke))
-            StepperHalf(Icons.Rounded.Add, enabled = value < range.last) { onValueChange(value + 1) }
+            StepperHalf(IconKey.remove, enabled = value > range.first) { onValueChange(value - 1) }
+            Box(Modifier.width(1.dp).height(18.dp).background(JKColors.hairline))
+            StepperHalf(IconKey.add, enabled = value < range.last) { onValueChange(value + 1) }
         }
     }
 }
 
 @Composable
-private fun StepperHalf(icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
+private fun StepperHalf(icon: IconKey, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.width(47.dp).height(32.dp).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (enabled) JK.text else JK.tertiary, modifier = Modifier.size(18.dp))
+        Glyph(icon, tint = if (enabled) JKColors.text else JKColors.textTertiary)
     }
 }
 
 /** `TextField(axis: .vertical).lineLimit(lines)` on a raised rounded ground: grows with the text. */
 @Composable
 private fun MultilineField(text: String, onTextChange: (String) -> Unit, placeholder: String, lines: IntRange, radius: Int) {
-    val style = JKType.subheadline.copy(color = JK.text)
+    val style = JKType.callout.copy(color = JKColors.text)
     BasicTextField(
         value = text,
         onValueChange = onTextChange,
         textStyle = style,
         minLines = lines.first,
         maxLines = lines.last,
-        cursorBrush = SolidColor(JK.text),
+        cursorBrush = SolidColor(JKColors.text),
         modifier = Modifier.fillMaxWidth(),
         decorationBox = { field ->
-            Box(Modifier.fillMaxWidth().background(JK.cardRaised, rounded(radius.dp)).padding(10.dp)) {
-                if (text.isEmpty()) Text(placeholder, style = style, color = JK.tertiary)
+            Box(Modifier.fillMaxWidth().background(JKColors.raised, RoundedCornerShape(JKRadius.control)).padding(10.dp)) {
+                if (text.isEmpty()) Text(placeholder, style = style, color = JKColors.textTertiary)
                 field()
             }
         },
@@ -1250,19 +1214,17 @@ private fun ConfirmDialog(title: String, action: String, onConfirm: () -> Unit, 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(action, style = JKType.body.semibold(), color = SystemRed) }
+            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(action, style = JKType.body.semibold(), color = JKColors.error) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JK.text) }
+            TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JKColors.text) }
         },
-        title = { Text(title, style = JKType.headline, color = JK.text) },
-        text = message?.let { m -> @Composable { Text(m, style = JKType.footnote, color = JK.secondary) } },
-        containerColor = MenuGround,
-        shape = rounded(14.dp),
+        title = { Text(title, style = JKType.headline, color = JKColors.text) },
+        text = message?.let { m -> @Composable { Text(m, style = JKType.caption, color = JKColors.textSecondary) } },
+        containerColor = JKColors.raised,
+        shape = JKShape.card,
     )
 }
 
-/** iOS's dark-mode `systemRed`, the colour of a destructive role. */
-private val SystemRed = Color(1.0f, 0.27f, 0.23f)
 
 // endregion

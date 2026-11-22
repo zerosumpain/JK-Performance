@@ -48,6 +48,21 @@ object AppSession {
 
     val isCoach: Boolean get() = me?.isCoach == true
 
+    /** What this client's plan includes (everything, on an older server). */
+    val gate: Gate get() = me?.gate ?: Gate(null)
+
+    /**
+     * The coach's "Show studio tools": Programs, Forms, Autoflows, Plans &
+     * prices, Business and availability on the phone. Off by default.
+     */
+    val studioTools: Boolean get() = me?.coachSettings?.studioTools == true
+
+    /** PATCH /api/coach/settings, then keep the fresh settings on `me`. */
+    suspend fun updateCoachSettings(patch: CoachSettingsPatch) {
+        val fresh: CoachSettings = api.send("PATCH", "/api/coach/settings", body = patch)
+        me = me?.copy(coachSettings = fresh)
+    }
+
     /** On launch: confirm the saved token by reading /api/me. */
     suspend fun restore() {
         if (api.token == null) {

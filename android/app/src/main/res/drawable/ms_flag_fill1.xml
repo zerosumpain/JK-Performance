@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "flag" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M282.42-424.04v260.31q0 11.63-8.24 19.85-8.24 8.23-19.65 8.23-11.64 0-19.86-8.23-8.21-8.22-8.21-19.85v-574.96q0-14.03 9.99-24.03 9.99-10.01 24.24-10.01h251.64q12.37 0 21.98 7.73 9.61 7.73 11.92 19.58l10.4 51.88H739.5q14.03 0 24.03 9.96 10.01 9.96 10.01 23.93v280.73q0 14.19-10.01 24.13-10 9.94-24.03 9.94H566.92q-12.39 0-22.02-7.73-9.63-7.73-11.94-19.58l-10.38-51.88H282.42Z" />
+    </group>
+</vector>

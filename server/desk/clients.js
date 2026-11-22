@@ -1,17 +1,19 @@
 /*
- * Clients: the coach's client list (grouped by what they need) and one
- * client's page with its tabs: Plan (write and publish workouts, assign a
- * programme), Feedback (weekly write-ups, check-in replies, forms and
- * autoflows), Health (Apple Health, if shared), Habits (habits and nutrition
- * targets), Sessions (bookings) and Progress (weight, records, photos).
- * Ported from the iPhone app's ClientsView and ClientDetailView.
+ * Clients: the coach's client list (three groups, each row with its habit
+ * week) and one client's page. The page opens on the Overview (goal, habit
+ * week, latest check-in, letter composer: overview.js and letters.js) with the
+ * studio's tabs beside it: Plan (write and publish workouts, assign a
+ * programme), Letters (letters, check-ins, forms and autoflows), Sessions,
+ * Progress and Health.
  */
 import {
-  COLOR, DAYS, MONTHS, addDays, api, apiBlob, avatar, busy, button, card, chip, clearDraft, clientById, clients, confirmBox, dot,
+  COLOR, DAYS, MONTHS, addDays, api, apiBlob, avatar, busy, button, card, chip, clientById, clients, confirmBox, dot,
   emptyCard, errorLine, eyebrow, field, fill, firstName, fmtRelative, fmtShort, fmtTime, fmtWeekday, h, icon, link, loading, londonParts,
-  mondayOf, parseDay, q, readDraft, route, screenHeader, segmented, sheet, toast, todayLondon, writeDraft,
+  mondayOf, parseDay, q, route, screenHeader, segmented, sheet, svgEl, toast, todayLondon, weekDots,
   planName, plans,
 } from './core.js';
+import { overviewTab, statusPills } from './overview.js';
+import { lettersSection } from './letters.js';
 
 // MARK: - Formatting (the iPhone app's Fmt)
 
@@ -30,34 +32,12 @@ const weekdayOf = s => DAYS[parseDay(s).getUTCDay()];
 const longDayOf = iso => { const d = londonParts(iso).day; return `${fmtWeekday(d)} ${fmtShort(d)}`; };
 /** "Aug 2026" */
 const monthYear = s => { const d = parseDay(s); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
-const GOAL = { strength: 'Get stronger', muscle: 'Build muscle', fatloss: 'Lose fat', fitness: 'Get fitter', performance: 'Perform in my sport', mobility: 'Move better', health: 'Feel healthier' };
-const EXPERIENCE = { new: 'New to training', some: 'Some experience', experienced: 'Experienced' };
-const TIME = { morning: 'mornings', midday: 'middays', evening: 'evenings', varies: 'times vary' };
-
-/** The client's answers to the app's first-run questions. */
-function aboutCard(profile, first) {
-  if (!profile) return h('p', { class: 'tiny faint cl-about' }, `${first} hasn’t answered the first-run questions yet.`);
-  const week = [profile.daysPerWeek ? `${profile.daysPerWeek} day${profile.daysPerWeek === 1 ? '' : 's'} a week` : null, TIME[profile.preferredTime] ?? null].filter(Boolean).join(', ');
-  return card({ class: 'cl-about' },
-    h('div', { class: 'eyebrow m0' }, 'About'),
-    profile.goals?.length ? h('div', { class: 'chips' }, profile.goals.map(g => chip(GOAL[g] ?? g, { on: true }))) : null,
-    h('div', { class: 'small muted' }, [EXPERIENCE[profile.experience], week].filter(Boolean).join(' · ') || 'No answers about training yet'),
-    profile.injuries ? h('div', { class: 'small' }, h('span', { class: 'faint' }, 'To know: '), profile.injuries) : null);
-}
-const capitalise = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
-
 // MARK: - Client text (the iPhone app's ClientText)
 
 const WAITING_KINDS = ['urgent', 'message', 'form', 'checkin'];
 /** Something of theirs is waiting on the coach. */
 const needsYou = c => WAITING_KINDS.includes(c.demand?.kind ?? '');
 const quietOrIdle = c => c.demand?.kind === 'quiet' || c.demand?.kind === 'inactive';
-function tintOf(c) {
-  const k = c.demand?.kind;
-  if (k === 'urgent') return COLOR.urgent;
-  if (k === 'message' || k === 'form' || k === 'checkin') return COLOR.waiting;
-  return null;
-}
 function flagText(f) {
   if (f === 'no-workout-yet') return 'no workout yet';
   if (f === 'checkin-overdue') return 'check-in overdue';
@@ -79,50 +59,25 @@ function reasonOf(c) {
   return d.reason;
 }
 /** The tab that answers what they need. */
-const tabFor = c => (['urgent', 'form', 'checkin'].includes(c.demand?.kind) ? 'feedback' : 'plan');
+
 
 // MARK: - Small pieces
 
-const SVG = 'http://www.w3.org/2000/svg';
-function svgEl(tag, attrs, ...kids) {
-  const el = document.createElementNS(SVG, tag);
-  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, String(v));
-  el.append(...kids);
-  return el;
-}
-function pathIcon(d, size = 18) {
-  return svgEl('svg', { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', class: 'icon' },
-    svgEl('path', { d }));
-}
-/** The habit icons the iPhone app offers (SF Symbol names), drawn for the web. */
-const HABIT_ICONS = {
-  'checkmark.circle': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12l3 3 5-6',
-  drop: 'M12 3s-6 7-6 11a6 6 0 0 0 12 0c0-4-6-11-6-11z',
-  moon: 'M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10z',
-  'shoeprints.fill': 'M7 3c2 0 3 2 3 5s-1 5-3 5-3-2-3-5 1-5 3-5zM5 15h4v2a2 2 0 0 1-4 0zM17 7c2 0 3 2 3 5s-1 5-3 5-3-2-3-5 1-5 3-5zM15 19h4v1a2 2 0 0 1-4 0z',
-  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z',
-  leaf: 'M5 19c0-9 6-14 15-14 0 9-5 15-14 15zM5 19l8-8',
-  'figure.walk': 'M13 4.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM10 22l2-7 3 3v4M9 12l2-5 4 3 3 1M11 7l-3 3v3',
-  pills: 'M4.5 13.5l6-6a3.5 3.5 0 0 1 5 5l-6 6a3.5 3.5 0 0 1-5-5zM7.5 10.5l5 5',
-  book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21a2 2 0 0 1 2-2h13',
-  'fork.knife': 'M7 3v18M4 3v5a3 3 0 0 0 6 0V3M17 21V3c-2 0-3 3-3 7h3',
-};
-const habitIcon = (name, size) => pathIcon(HABIT_ICONS[name] || HABIT_ICONS['checkmark.circle'], size);
-const iconTile = (node, size = 32) => h('span', { class: 'cl-tile', style: { width: `${size}px`, height: `${size}px` } }, node);
+const iconTile = node => h('span', { class: 'cl-tile' }, node);
 
 /** A stat tile with a label over a value, and an optional small line under it (the iPhone's StatTile). */
 const tile = (label, value, deltaText) => h('div', { class: 'cl-stat' },
   h('div', { class: 'k' }, label), h('div', { class: 'v' }, value), deltaText ? h('div', { class: 'd' }, deltaText) : null);
 
 /** A dashed full-width button ("+ Add exercise from the library"). */
-const dashed = (text, onclick) => h('button', { class: 'cl-dashed', type: 'button', onclick }, icon('plus', 14), text);
+const dashed = (text, onclick) => h('button', { class: 'cl-dashed', type: 'button', onclick }, icon('plus', 18), text);
 
 /** "Weekday / day number" block with a title and detail (the iPhone's UpcomingRow). */
 function upcomingRow(dayString, title, detail, { chevron = true, onclick = null } = {}) {
   const inner = [
     h('div', { class: 'cl-date' }, h('div', { class: 'wd' }, weekdayOf(dayString).toUpperCase()), h('div', { class: 'dn' }, String(parseDay(dayString).getUTCDate()))),
     h('div', { class: 'grow' }, h('div', { class: 'cl-title' }, title), h('div', { class: 'tiny faint' }, detail)),
-    chevron ? icon('chevron', 14) : null,
+    chevron ? icon('chevron', 18) : null,
   ];
   return onclick ? h('button', { class: 'cl-upcoming', type: 'button', onclick }, inner) : h('div', { class: 'cl-upcoming' }, inner);
 }
@@ -154,7 +109,7 @@ function menuButton(label, iconName, items, { disabled = false } = {}) {
       pop.hidden = false;
       document.addEventListener('click', outside, true);
     },
-  }, icon(iconName, 14), label);
+  }, icon(iconName, 18), label);
   fill(pop, items.map(([text, fn]) => h('button', { type: 'button', role: 'menuitem', onclick: () => { close(); fn(); } }, text)));
   wrap.append(btn, pop);
   return wrap;
@@ -175,7 +130,7 @@ const weekNav = (monday, step, { canBack = true } = {}) => h('div', { class: 'cl
   h('span', { class: 'small muted' }, `Week of ${fmtShort(monday)}`),
   h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Next week', onclick: () => step(7) }, icon('chevron', 16)));
 
-const checkCircle = on => h('span', { class: 'cl-check' + (on ? ' on' : '') }, on ? icon('check', 12) : null);
+const checkCircle = on => h('span', { class: 'cl-check' + (on ? ' on' : '') }, on ? icon('check', 18) : null);
 
 // MARK: - Clients list
 
@@ -184,23 +139,23 @@ route('/clients', async (el, _params, view) => {
   const search = h('input', { type: 'search', placeholder: 'Search clients', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Search clients' });
   const listBox = h('div');
   el.append(
-    screenHeader('Coach', 'Clients', link('/programs/programs', { class: 'btn small' }, icon('programs', 14), 'Programs')),
-    h('label', { class: 'cl-search card' }, icon('search', 16), search),
+    screenHeader(null, 'Clients'),
+    h('label', { class: 'cl-search' }, icon('search', 20), search),
     listBox);
 
-  const row = c => {
-    const tint = tintOf(c);
-    return link(`/clients/${enc(c.id)}/${tabFor(c)}`, { class: 'cl-row' },
-      h('span', { class: 'cl-av' }, avatar(c.initials || c.name, 34), tint ? h('span', { class: 'cl-av-dot', style: { background: tint } }) : null),
+  const row = (c, withReason) => {
+    const line = withReason ? reasonOf(c) : planName(c.plan);
+    return link(`/clients/${enc(c.id)}`, { class: 'cl-row' },
+      avatar(c.initials || c.name, 36),
       h('div', { class: 'grow' },
-        h('div', { class: 'strong' }, c.name),
-        h('div', { class: 'tiny clamp1', title: reasonOf(c), style: { color: c.demand?.kind === 'urgent' ? COLOR.urgent : 'var(--faint)' } }, reasonOf(c))),
-      c.unread > 0 ? h('span', { class: 'muted', title: `${c.unread} unread` }, icon('bubble', 14)) : null,
-      h('span', { class: 'faint' }, icon('chevron', 14)));
+        h('div', { class: 'row gap4 cl-row-name' }, h('span', { class: 'strong clamp1' }, c.name),
+          c.unread > 0 ? h('span', { class: 'muted', title: `${c.unread} unread` }, icon('unread', 16, { label: `${c.unread} unread` })) : null),
+        h('div', { class: 'small muted clamp2', title: line }, withReason ? `${planName(c.plan)} · ${line}` : line)),
+      c.habitWeek?.length ? weekDots(c.habitWeek) : null);
   };
-  const group = (title, list) => (list.length ? h('section', { class: 'cl-group' },
-    title ? eyebrow(title, String(list.length)) : null,
-    card({ class: 'flush' + (title ? '' : ' cl-rows') }, list.map(row))) : null);
+  const group = (title, list, withReason) => (list.length ? h('section', { class: 'cl-group' },
+    title ? h('div', { class: 'cl-group-head' }, h('h2', null, title), h('span', { class: 'small muted t-num' }, String(list.length))) : null,
+    card({ class: 'flush' + (title ? '' : ' cl-rows') }, list.map(c => row(c, withReason)))) : null);
 
   let all = null;
   const draw = () => {
@@ -208,16 +163,15 @@ route('/clients', async (el, _params, view) => {
     const query = search.value.trim().toLowerCase();
     const shown = all.filter(c => !query || c.name.toLowerCase().includes(query));
     if (!shown.length) {
-      fill(listBox, emptyCard('people', all.length ? 'No matches' : 'No clients yet', all.length ? null : 'Clients appear here when they sign up.'));
+      fill(listBox, emptyCard('people', all.length ? 'No one by that name.' : 'No clients yet.', all.length ? null : 'Clients appear here when they sign up.'));
     } else if (!query) {
-      // The server sends them most-in-need first; group them so the line between is clear.
-      // On a wide screen the three groups sit side by side.
+      // The server sends them most-in-need first; three groups, side by side on a wide screen.
       fill(listBox, h('div', { class: 'cl-groups' },
-        group('Needs you', shown.filter(needsYou)),
-        group('Check in with', shown.filter(quietOrIdle)),
-        group('On track', shown.filter(c => !needsYou(c) && !quietOrIdle(c)))));
+        group('Needs you', shown.filter(needsYou), true),
+        group('Check in with', shown.filter(quietOrIdle), true),
+        group('On track', shown.filter(c => !needsYou(c) && !quietOrIdle(c)), false)));
     } else {
-      fill(listBox, group(null, shown));
+      fill(listBox, group(null, shown, true));
     }
   };
   search.addEventListener('input', draw);
@@ -226,65 +180,83 @@ route('/clients', async (el, _params, view) => {
 
 // MARK: - One client
 
-const TABS = [['plan', 'Plan'], ['feedback', 'Feedback'], ['health', 'Health'], ['habits', 'Habits'], ['sessions', 'Sessions'], ['progress', 'Progress']];
-/** Sections of the Feedback tab other screens may link to: #/clients/<id>/checkins scrolls there. */
-const FEEDBACK_SECTIONS = ['checkins', 'forms', 'autoflows'];
+const TABS = [['overview', 'Overview'], ['plan', 'Plan'], ['letters', 'Letters'], ['sessions', 'Sessions'], ['progress', 'Progress'], ['health', 'Health']];
+/** Old and deep-link names: Feedback became Letters, Habits moved into the Overview. */
+const ALIASES = { feedback: 'letters', habits: 'overview', letter: 'overview', checkins: 'letters', forms: 'letters', autoflows: 'letters' };
+/** Sections of the Letters tab other screens may link to: #/clients/<id>/forms scrolls there. */
+const LETTERS_SECTIONS = ['checkins', 'forms', 'autoflows'];
 const details = new Map(); // client id → last GET /api/coach/clients/:id, so switching tabs doesn't flash
 
 route('/clients/:id/:tab?', async (el, params, view) => {
   plans().catch(() => null);
   const id = params.id;
-  const anchor = FEEDBACK_SECTIONS.includes(params.tab) ? params.tab : null;
-  const tab = anchor ? 'feedback' : TABS.some(([k]) => k === params.tab) ? params.tab : 'plan';
+  const anchor = LETTERS_SECTIONS.includes(params.tab) ? params.tab : null;
+  const tab = TABS.some(([k]) => k === params.tab) ? params.tab : ALIASES[params.tab] ?? 'overview';
   const summary = clientById(id);
   const head = h('div');
   const body = h('div', { class: 'cl-tab' });
-  const ctx = { id, view, name: summary?.name || details.get(id)?.client.name || 'Client' };
+  const ctx = { id, view, name: summary?.name || details.get(id)?.client.name || 'Client', planName: planName(summary?.plan) };
   ctx.first = () => firstName(ctx.name);
+  ctx.exercisePicker = exercisePicker;
+  ctx.assignProgram = () => assignProgramSheet({ client: { id, name: ctx.name } });
+  ctx.sendForm = () => sendFormSheet(ctx);
 
   const drawHead = (detail, error) => {
     const c = detail?.client;
-    if (c) ctx.name = c.name;
-    const sub = c ? [planName(c.plan), c.since ? `since ${monthYear(c.since)}` : null].filter(Boolean).join(' · ') : ' ';
-    const chips = [];
-    if (detail) {
-      for (const reason of c.demand?.urgent ?? []) chips.push(chip(`⚠︎ ${reason}`, { tint: COLOR.urgent }));
-      if (c.adherence !== null && c.adherence !== undefined) chips.push(chip(`Adherence ${c.adherence}%`));
-      for (const f of c.flags ?? []) chips.push(chip(capitalise(flagText(f))));
-      if (c.checkinDue) chips.push(chip('Check-in due'));
-      if (detail.healthShared === false) chips.push(chip('Health not shared'));
-      const hd = detail.health;
-      if (hd) {
-        if (hd.steps !== null) chips.push(chip(`${fmtN(hd.steps, 0)} steps`));
-        if (hd.sleepMinutes !== null) chips.push(chip(`Slept ${fmtHM(hd.sleepMinutes)}`));
-        if (hd.restingHr !== null) chips.push(chip(`RHR ${fmtN(hd.restingHr, 0)}`));
-      }
-      if (detail.nextWorkout) chips.push(chip(`Next: ${detail.nextWorkout.title} ${fmtShort(detail.nextWorkout.date)}`));
-    }
+    if (c) { ctx.name = c.name; ctx.planName = planName(c.plan); }
+    const sub = c ? [c.name, planName(c.plan), c.since ? `since ${monthYear(c.since)}` : null].filter(Boolean).join(' · ') : ' ';
     fill(head,
-      h('div', { class: 'cl-crumb' }, link('/clients', { class: 'small muted' }, icon('back', 14), 'Clients')),
+      h('div', { class: 'cl-crumb' }, link('/clients', { class: 'small muted' }, icon('back', 16), 'Clients')),
       h('div', { class: 'cl-head' },
         avatar(c?.initials || ctx.name, 48),
-        h('div', { class: 'grow' }, h('h1', null, ctx.name), h('div', { class: 'small faint' }, sub)),
-        link(`/messages/${enc(id)}`, { class: 'btn', title: `Message ${ctx.first()}` }, icon('bubble', 16), 'Message')),
+        h('div', { class: 'grow' }, h('h1', null, ctx.first()), h('div', { class: 'small muted' }, sub)),
+        detail ? h('div', { class: 'row gap4' }, statusPills(detail)) : null,
+        link(`/messages/${enc(id)}`, { class: 'btn', title: `Message ${ctx.first()}` }, icon('reply', 18), 'Message')),
       error ? errorLine(error) : null,
-      chips.length ? h('div', { class: 'cl-chips' }, chips) : null,
-      detail ? aboutCard(detail.profile, ctx.first()) : null,
       h('nav', { class: 'tabs', 'aria-label': 'Client' }, TABS.map(([k, label]) =>
         link(`/clients/${enc(id)}/${k}`, { class: 'tab' + (k === tab ? ' sel' : ''), 'aria-current': k === tab ? 'page' : null }, label))));
   };
   drawHead(details.get(id) || null);
   el.append(head, body);
 
-  // The header loads beside the tab; neither waits for the other.
-  api('GET', `/api/coach/clients/${enc(id)}`).then(d => {
-    details.set(id, d);
-    if (view.fresh()) drawHead(d);
-  }, err => { if (view.fresh()) drawHead(details.get(id) || null, err); });
+  // The header loads beside the tab; the Overview shares the same request.
+  let pending = null;
+  ctx.reloadDetail = () => {
+    pending = api('GET', `/api/coach/clients/${enc(id)}`).then(d => {
+      details.set(id, d);
+      if (view.fresh()) drawHead(d);
+      return d;
+    });
+    pending.catch(err => { if (view.fresh()) drawHead(details.get(id) || null, err); });
+    return pending;
+  };
+  ctx.detail = () => pending;
+  ctx.reloadDetail();
 
-  const draw = { plan: planTab, feedback: feedbackTab, health: healthTab, habits: habitsTab, sessions: sessionsTab, progress: progressTab }[tab];
+  if (tab === 'overview') { await overviewTab(body, ctx, { openLetter: params.tab === 'letter' }); return; }
+  const draw = { plan: planTab, letters: lettersTab, health: healthTab, sessions: sessionsTab, progress: progressTab }[tab];
   await draw(body, ctx, { anchor });
 });
+
+/** Send one of the coach's forms to this client. */
+function sendFormSheet(ctx) {
+  return sheet(`Send a form to ${ctx.first()}`, (body, close) => {
+    const list = h('div', null, loading());
+    const status = h('div');
+    body.append(list, status);
+    api('GET', '/api/forms').then(f => {
+      fill(list, f.forms.length ? card({ class: 'flush' }, f.forms.map(form => h('button', {
+        class: 'cl-pick', type: 'button',
+        onclick: e => busy(e.currentTarget, status, async () => {
+          await api('POST', `/api/forms/${enc(form.id)}/send`, { clientId: ctx.id });
+          toast(`Sent ${form.name} to ${ctx.first()}.`);
+          close(true);
+        }),
+      }, iconTile(icon('form', 20)), h('div', { class: 'grow' }, h('div', { class: 'strong' }, form.name), form.questions ? h('div', { class: 'small muted' }, `${form.questions.length} questions`) : null), icon('send', 18)))) : emptyCard('form', 'No forms yet.', 'Write one under Programs › Forms.'));
+    }, err => fill(list, errorLine(err)));
+    return h('div', { class: 'row end' }, button('Close', () => close(false)));
+  });
+}
 
 // MARK: - Plan tab
 
@@ -321,7 +293,7 @@ async function planTab(box, ctx) {
 
   const top = h('div', { class: 'spread cl-plan-top' },
     h('span', { class: 'small faint' }, 'Write and publish workouts, or lay down a programme.'),
-    button(h('span', { class: 'row gap4' }, icon('programs', 14), 'Assign a programme'), async () => {
+    button(h('span', { class: 'row gap4' }, icon('programs', 18), 'Assign a programme'), async () => {
       await assignProgramSheet({ client: { id: clientId, name: ctx.name } });
       if (view.fresh()) await loadWeek(); // closed with × after assigning still shows the new drafts
     }, { small: true }));
@@ -451,9 +423,9 @@ async function planTab(box, ctx) {
         h('div', { class: 'spread' },
           h('div', { class: 'row gap4' }, h('span', { class: 'strong' }, it.exerciseName || it.exerciseId), it.id ? null : h('span', { class: 'cl-new' }, 'New')),
           h('div', { class: 'row gap4 cl-item-tools' },
-            h('button', { class: 'icon-btn cl-sm', type: 'button', 'aria-label': 'Move up', disabled: i === 0, onclick: () => { [d.items[i - 1], d.items[i]] = [d.items[i], d.items[i - 1]]; redraw(); } }, pathIcon('M12 19V5M6 11l6-6 6 6', 14)),
-            h('button', { class: 'icon-btn cl-sm', type: 'button', 'aria-label': 'Move down', disabled: i === d.items.length - 1, onclick: () => { [d.items[i + 1], d.items[i]] = [d.items[i], d.items[i + 1]]; redraw(); } }, pathIcon('M12 5v14M6 13l6 6 6-6', 14)),
-            h('button', { class: 'icon-btn cl-sm', type: 'button', 'aria-label': 'Remove', onclick: () => { d.items.splice(i, 1); redraw(); } }, icon('trash', 14)))),
+            h('button', { class: 'icon-btn cl-sm', type: 'button', 'aria-label': 'Move up', disabled: i === 0, onclick: () => { [d.items[i - 1], d.items[i]] = [d.items[i], d.items[i - 1]]; redraw(); } }, icon('up', 16)),
+            h('button', { class: 'icon-btn cl-sm', type: 'button', 'aria-label': 'Move down', disabled: i === d.items.length - 1, onclick: () => { [d.items[i + 1], d.items[i]] = [d.items[i], d.items[i + 1]]; redraw(); } }, icon('down', 16)),
+            h('button', { class: 'icon-btn cl-sm', type: 'button', 'aria-label': 'Remove', onclick: () => { d.items.splice(i, 1); redraw(); } }, icon('trash', 18)))),
         h('div', { class: 'cl-item-fields' },
           input('Sets', 'sets', { type: 'number', min: '1', max: '20', inputmode: 'numeric' }, 'narrow'),
           input('Reps', 'reps', { placeholder: '10', maxlength: '30' }),
@@ -503,7 +475,7 @@ async function planTab(box, ctx) {
             itemsEditor(itemsBox);
             syncButtons();
           }))),
-      notice ? h('p', { class: 'ok row gap4' }, icon('check', 14), notice) : null,
+      notice ? h('p', { class: 'ok row gap4' }, icon('check', 18), notice) : null,
       error ? errorLine(error) : null,
       h('div', { class: 'row cl-actions' }, saveBtn, publishBtn,
         d.id ? h('button', { class: 'btn danger', type: 'button', onclick: remove }, 'Delete workout') : null));
@@ -574,7 +546,7 @@ export function assignProgramSheet({ client = null, program = null } = {}) {
       await busy(go, status, async () => {
         const out = await api('POST', `/api/programs/${enc(programId)}/assign`, { clientId, startDate: start.value });
         created = out.created;
-        fill(status, h('p', { class: 'ok row gap4' }, icon('check', 14), `Created ${created} draft workouts. Publish them from the client's Plan tab.`));
+        fill(status, h('p', { class: 'ok row gap4' }, icon('check', 18), `Created ${created} draft workouts. Publish them from the client's Plan tab.`));
         go.textContent = 'Done';
       });
       go.disabled = false;
@@ -606,256 +578,35 @@ export function assignProgramSheet({ client = null, program = null } = {}) {
 
 // MARK: - Feedback tab
 
-async function feedbackTab(box, ctx, { anchor }) {
-  const reports = h('section', { id: 'cl-feedback' });
+async function lettersTab(box, ctx, { anchor }) {
+  const letters = h('section', { id: 'cl-letters' });
   const checkins = h('section', { id: 'cl-checkins' });
   const automation = h('section', { id: 'cl-automation' });
-  // Phone: feedback, check-ins, forms and autoflows, as the iPhone. Wide: check-ins get the right-hand column.
+  // Letters on the left; check-ins (read only: the letter is the reply) and forms and autoflows beside them.
   fill(box, h('div', { class: 'cl-fb' },
-    h('div', { class: 'cl-fb-reports' }, reports),
-    h('div', { class: 'cl-fb-checkins' }, eyebrow('Check-ins'), checkins),
+    h('div', { class: 'cl-fb-reports' }, h('h2', { class: 'cl-h2' }, 'Letters'), letters),
+    h('div', { class: 'cl-fb-checkins' }, h('h2', { class: 'cl-h2' }, 'Check-ins'), checkins),
     h('div', { class: 'cl-fb-auto' }, automation)));
-  const jobs = [reportsSection(reports, ctx), checkinsSection(checkins, ctx), automationSection(automation, ctx)];
-  if (anchor) {
-    await Promise.allSettled(jobs);
-    if (!ctx.view.fresh()) return;
-    const target = box.querySelector(anchor === 'checkins' ? '.cl-fb-checkins' : anchor === 'forms' ? '#cl-forms' : '#cl-autoflows');
-    target?.scrollIntoView({ block: 'start' });
-  } else {
-    await Promise.allSettled(jobs);
+  await Promise.allSettled([lettersSection(letters, ctx), checkinsSection(checkins, ctx), automationSection(automation, ctx)]);
+  if (anchor && ctx.view.fresh()) {
+    box.querySelector(anchor === 'checkins' ? '.cl-fb-checkins' : anchor === 'forms' ? '#cl-forms' : '#cl-autoflows')?.scrollIntoView({ block: 'start' });
   }
 }
 
-async function reportsSection(box, ctx) {
-  const list = h('div');
-  fill(box, eyebrow('Weekly feedback'), list);
-  await loadInto(list, ctx.view, () => api('GET', `/api/reports?${q({ clientId: ctx.id })}`), d => {
-    const current = d.reports.find(r => r.week === d.suggestedWeek);
-    const openWeek = async week => { await reportEditor(ctx, week); if (ctx.view.fresh()) reportsSection(box, ctx); };
-    fill(list,
-      button(h('span', { class: 'row gap4' }, icon('pencil', 15), `${current ? 'Edit' : 'Write'} feedback · week of ${fmtShort(d.suggestedWeek)}`), () => openWeek(d.suggestedWeek), { kind: 'primary' }),
-      d.reports.map(r => h('button', { class: 'cl-report card', type: 'button', onclick: () => openWeek(r.week) },
-        h('div', { class: 'grow' },
-          h('div', { class: 'strong' }, `Week of ${fmtShort(r.week)}`),
-          h('div', { class: 'tiny faint' }, r.status === 'published' ? (r.readAt ? 'Published · read' : 'Published · not read yet') : 'Draft')),
-        h('span', { class: 'faint' }, icon('chevron', 14)))));
-  });
-}
-
-/** Unsaved feedback text kept in this browser (same keys as the old desk, so drafts survive the move). */
-const reportDraftKey = (clientId, week) => `jk.desk.draft.${clientId}.${week}`;
-
-/** Write or edit one week's feedback, with that week's figures and next week's plan alongside (the iPhone's ReportEditorSheet). */
-function reportEditor(ctx, startWeek) {
-  const name = ctx.first();
-  return sheet(ctx.name, (body, close) => {
-    let week = startWeek;
-    let report = null, saving = false, seq = 0;
-    const title = h('div', { class: 'strong' });
-    const state_ = h('div', { class: 'tiny faint' });
-    const nav = h('div', { class: 'cl-weeknav' },
-      h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Previous week', onclick: () => shift(-7) }, icon('back', 16)),
-      h('div', { class: 'center' }, title, state_),
-      h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Next week', onclick: () => shift(7) }, icon('chevron', 16)));
-    const status = h('div');
-    const figures = h('div');
-    const plan = h('div');
-    const restored = h('p', { class: 'small cl-restored' });
-    const area = (label, placeholder) => {
-      const t = h('textarea', { placeholder, maxlength: '4000', rows: '4' });
-      return { t, el: field(label, t) };
-    };
-    const summary = area('How the week went', 'Training, consistency, how they felt…');
-    const wins = area('Wins', 'Records, streaks, things done well');
-    const focus = area('Focus for next week', 'One to three things for the week ahead');
-    const boxes = [summary.t, wins.t, focus.t];
-    const publishBtn = button('Publish', () => save('published'), { kind: 'primary' });
-    const draftBtn = button('Save draft', () => save('draft'));
-    const deleteBtn = h('button', { class: 'btn danger', type: 'button', onclick: () => remove() }, 'Delete');
-    const empty = () => boxes.every(b => !b.value.trim());
-
-    // Unsaved text from this browser wins over the server's, with a way back.
-    let server = null, draftTimer = null;
-    const key = () => reportDraftKey(ctx.id, week);
-    const differs = v => !!v && !!server && ['summary', 'wins', 'focus'].some(k => (v[k] ?? '') !== server[k]);
-    const showRestored = on => fill(restored, on ? ['Restored unsaved text from this browser · ', h('button', {
-      class: 'link', type: 'button', onclick: () => {
-        summary.t.value = server.summary; wins.t.value = server.wins; focus.t.value = server.focus;
-        clearDraft(key()); showRestored(false); sync();
-      },
-    }, 'Discard')] : null);
-    const keep = () => {
-      clearTimeout(draftTimer);
-      const k = key();
-      draftTimer = setTimeout(() => {
-        const now = { summary: summary.t.value, wins: wins.t.value, focus: focus.t.value };
-        if (differs(now)) writeDraft(k, now); else { clearDraft(k); showRestored(false); }
-      }, 400);
-    };
-    for (const b of boxes) b.addEventListener('input', () => { keep(); sync(); });
-
-    function sync() {
-      const published = report?.status === 'published';
-      fill(title, `Week of ${fmtShort(week)}`);
-      fill(state_, published ? 'Published' : report?.id ? 'Draft' : report ? 'Not started' : ' ');
-      publishBtn.textContent = saving ? 'Saving…' : published ? 'Update' : `Publish to ${name}`;
-      publishBtn.disabled = saving || !report || empty();
-      draftBtn.textContent = published ? 'Unpublish (back to draft)' : 'Save draft';
-      draftBtn.disabled = saving || !report;
-      deleteBtn.hidden = !report?.id;
-      for (const b of boxes) b.disabled = !report;
-    }
-
-    function drawReport() {
-      const s = report.stats;
-      const c = s.checkin;
-      fill(figures,
-        statsGrid(s),
-        c && (c.note || c.pain.length) ? h('p', { class: 'small muted' }, `Check-in: ${[c.pain.length ? `pain ${c.pain.join(', ')}` : null, c.note || null].filter(Boolean).join(' · ')}`) : null,
-        s.healthShared ? null : h('p', { class: 'tiny faint' }, `${name} hasn't shared Apple Health with you.`));
-      fill(plan, planList(report.plan));
-    }
-
-    async function load() {
-      const mine = ++seq;
-      report = null; server = null;
-      fill(status); fill(figures, loading()); fill(plan); showRestored(false);
-      for (const b of boxes) b.value = '';
-      sync();
-      try {
-        const r = await api('GET', `/api/reports/week/${week}?${q({ clientId: ctx.id })}`);
-        if (mine !== seq) return;
-        report = r;
-        server = { summary: r.summary, wins: r.wins, focus: r.focus };
-        const stored = readDraft(key());
-        const start = differs(stored) ? { summary: stored.summary ?? '', wins: stored.wins ?? '', focus: stored.focus ?? '' } : server;
-        if (stored && !differs(stored)) clearDraft(key());
-        summary.t.value = start.summary; wins.t.value = start.wins; focus.t.value = start.focus;
-        showRestored(start !== server);
-        drawReport();
-      } catch (err) {
-        if (mine !== seq) return;
-        fill(figures); fill(status, errorLine(err));
-      }
-      sync();
-    }
-
-    function shift(n) {
-      clearTimeout(draftTimer);
-      // Keep what was typed for the week being left.
-      if (server) {
-        const now = { summary: summary.t.value, wins: wins.t.value, focus: focus.t.value };
-        if (differs(now)) writeDraft(key(), now);
-      }
-      week = addDays(week, n);
-      load();
-    }
-
-    async function save(st) {
-      saving = true; sync(); fill(status);
-      try {
-        report = await api('PUT', '/api/reports', { clientId: ctx.id, week, summary: summary.t.value, wins: wins.t.value, focus: focus.t.value, status: st });
-        clearTimeout(draftTimer);
-        clearDraft(key());
-        server = { summary: report.summary, wins: report.wins, focus: report.focus };
-        showRestored(false);
-        if (st === 'published') { toast(`Published. ${name} can read it in the app.`); saving = false; close(true); return; }
-        fill(status, h('p', { class: 'ok' }, report.status === 'published' ? 'Saved.' : 'Draft saved.'));
-        drawReport();
-      } catch (err) {
-        fill(status, errorLine(err));
-      }
-      saving = false; sync();
-    }
-
-    async function remove() {
-      if (!report?.id) return;
-      const ok = await confirmBox('Delete this week\'s feedback?', { ok: 'Delete', danger: true, detail: report.status === 'published' ? `${name} will no longer see it.` : null });
-      if (!ok) return;
-      try {
-        await api('DELETE', `/api/reports/${enc(report.id)}`);
-        clearDraft(key());
-        close(true);
-      } catch (err) {
-        fill(status, errorLine(err));
-      }
-    }
-
-    body.append(
-      nav,
-      h('div', { class: 'cl-report-grid' },
-        h('div', null, restored, summary.el, wins.el, focus.el, status),
-        h('div', null, figures, plan)),
-      h('p', { class: 'tiny faint' }, `Publishing shows it on ${name}'s Home and sends them a message.`));
-    load();
-    return h('div', { class: 'spread cl-sheet-actions' }, deleteBtn, h('div', { class: 'row end' }, draftBtn, publishBtn));
-  }, { wide: true });
-}
-
-/** The week in numbers. Apple Health figures appear only when shared (the iPhone's ReportStatsGrid). */
-function statsGrid(s) {
-  const tiles = [
-    tile('Sessions', `${s.workoutsDone}/${s.workoutsPlanned}`),
-    tile('Sets logged', String(s.setsLogged)),
-    tile('Habits', s.habitsPct === null ? '–' : `${s.habitsPct}%`),
-  ];
-  if (s.healthShared) {
-    tiles.push(tile('Avg steps', s.avgSteps === null ? '–' : fmtN(s.avgSteps, 0)));
-    tiles.push(tile('Avg sleep', s.avgSleepMinutes === null ? '–' : fmtHM(s.avgSleepMinutes)));
-    tiles.push(tile('Workouts', s.activities ? String(s.activities.count) : '–', s.activities?.minutes > 0 ? fmtDuration(s.activities.minutes) : null));
-  }
-  if (s.weightStart !== null && s.weightEnd !== null) {
-    tiles.push(tile('Weight', `${fmtN(s.weightEnd)} kg`, s.weightStart === s.weightEnd ? null : `${fmtDelta(s.weightEnd - s.weightStart)} kg`));
-  }
-  if (s.checkin) {
-    tiles.push(tile('Energy', `${s.checkin.energy}/5`));
-    tiles.push(tile('Sleep (felt)', `${s.checkin.sleep}/5`));
-  }
-  return h('div', null,
-    eyebrow('The week in numbers'),
-    h('div', { class: 'cl-tiles3' }, tiles),
-    s.activities?.types?.length ? h('p', { class: 'tiny faint' }, s.activities.types.join(' · ')) : null);
-}
-
-/** Next week's workouts (the iPhone's PlanList). */
-function planList(p) {
-  return h('div', null,
-    eyebrow('Next week\'s plan', `${fmtShort(p.from)} – ${fmtShort(p.to)}`),
-    p.workouts.length
-      ? card({ class: 'flush' }, p.workouts.map(w => upcomingRow(w.date, w.title,
-        [w.startsAt, `${w.itemCount} exercises`, w.published ? null : 'Draft'].filter(Boolean).join(' · '), { chevron: false })))
-      : h('p', { class: 'small faint' }, 'Not written yet.'));
-}
-
-/** Weekly check-ins with a reply box each (the iPhone's CoachNotesTab). */
+/** Weekly check-ins, read only. The reply is the week's letter (the per-check-in reply box is gone). */
 async function checkinsSection(box, ctx) {
   await loadInto(box, ctx.view, () => api('GET', `/api/checkins?${q({ clientId: ctx.id })}`), d => {
     const list = d.checkins.slice().sort((a, b) => b.week.localeCompare(a.week));
-    if (!list.length) { fill(box, emptyCard('form', 'No check-ins yet')); return; }
-    const one = c => {
-      const reply = h('textarea', { rows: '1', maxlength: '2000', placeholder: c.reply ? 'Update your reply' : 'Reply to this check-in', 'aria-label': 'Reply' });
-      const send = h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Send reply', disabled: true }, pathIcon('M4 12l16-8-6 16-2-6z', 16));
-      reply.addEventListener('input', () => { send.disabled = !reply.value.trim(); });
-      reply.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && reply.value.trim()) send.click(); });
-      const holder = card(null);
-      send.addEventListener('click', async () => {
-        const text = reply.value.trim();
-        if (!text) return;
-        await busy(send, null, async () => {
-          const fresh = await api('POST', `/api/checkins/${enc(c.id)}/review`, { reply: text });
-          holder.replaceWith(one(fresh));
-        });
-      });
-      fill(holder,
-        h('div', { class: 'spread' }, h('span', { class: 'strong' }, `Week of ${fmtShort(c.week)}`),
-          c.reviewedAt ? h('span', { class: 'tiny faint row gap4' }, icon('check', 12), 'Reviewed') : null),
-        h('div', { class: 'cl-tiles3 mt-s' }, tile('Energy', `${c.energy}/5`), tile('Sleep', `${c.sleep}/5`), tile('Pain', c.pain.length ? c.pain.join(', ') : 'None')),
-        c.note ? h('p', { class: 'small muted' }, c.note) : null,
-        c.reply ? h('p', { class: 'small row gap4 cl-reply' }, pathIcon('M9 14L4 9l5-5M4 9h10a6 6 0 0 1 6 6v5', 14), c.reply) : null,
-        h('div', { class: 'cl-reply-row' }, reply, send));
-      return holder;
-    };
-    fill(box, list.map(one));
+    if (!list.length) { fill(box, emptyCard('checkIn', 'No check-ins yet.')); return; }
+    fill(box, card({ class: 'flush' }, list.map(c => h('div', { class: 'cl-checkin' },
+      h('div', { class: 'spread' }, h('span', { class: 'strong' }, `Week of ${fmtShort(c.week)}`),
+        h('span', { class: 'small muted row gap4' }, c.reviewedAt ? [icon('check', 16), 'Letter written'] : 'Waiting for the letter')),
+      h('div', { class: 'small t-num' }, [`Energy ${c.energy} of 5`, `Sleep ${c.sleep} of 5`, c.stress ? `Stress ${c.stress} of 5` : null].filter(Boolean).join(' · ')),
+      c.pain.length ? h('div', { class: 'small row gap4 tone-urgent' }, icon('pain', 16), `Sore: ${c.pain.join(', ')}`) : null,
+      c.win ? h('div', { class: 'small' }, h('span', { class: 'muted' }, 'Win: '), c.win) : null,
+      c.struggle ? h('div', { class: 'small' }, h('span', { class: 'muted' }, 'Struggle: '), c.struggle) : null,
+      c.note ? h('div', { class: 'small' }, h('span', { class: 'muted' }, 'Note: '), c.note) : null,
+      c.reply ? h('div', { class: 'small muted row gap4' }, icon('reply', 16), c.reply) : null))));
   });
 }
 
@@ -908,7 +659,7 @@ function formRequestRow(r, onclick) {
     h('div', { class: 'grow' }, h('div', { class: 'strong clamp1' }, r.name),
       h('div', { class: 'tiny', style: { color: flagged && !r.reviewedAt ? COLOR.urgent : 'var(--faint)' } }, line)),
     r.submittedAt && !r.reviewedAt ? dot(flagged ? COLOR.urgent : COLOR.waiting) : null,
-    h('span', { class: 'faint' }, icon('chevron', 14)));
+    h('span', { class: 'faint' }, icon('chevron', 18)));
 }
 
 const answerText = v => (v === undefined || v === null ? '–' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'number' ? `${v} / 5` : String(v));
@@ -923,7 +674,7 @@ function formResponse(start, ctx) {
       fill(body,
         h('p', { class: 'small faint m0' }, `${r.client?.name ?? 'Client'} · sent ${fmtShort(londonParts(r.sentAt).day)}${r.fromAutoflow ? ' by an autoflow' : ''}`),
         flagged ? card({ class: 'cl-flagged' },
-          h('div', { class: 'small strong row gap4', style: { color: COLOR.urgent } }, icon('warning', 14), 'Answered yes to'),
+          h('div', { class: 'small strong row gap4', style: { color: COLOR.urgent } }, icon('pain', 16), 'Answered yes to'),
           r.flagged.map(f => h('div', { class: 'small' }, `• ${f}`)),
           h('div', { class: 'tiny faint' }, 'Talk to them before the next hard session.')) : null,
         status,
@@ -941,7 +692,7 @@ function formResponse(start, ctx) {
             return card({ class: 'cl-answer' }, h('div', { class: 'tiny faint' }, qn.label),
               h('div', { class: 'strong', style: qn.flag && v === true ? { color: COLOR.urgent } : null }, answerText(v)));
           }),
-          r.client ? link(`/messages/${enc(r.client.id)}`, { class: 'btn', onclick: () => close(changed) }, icon('bubble', 15), `Message ${firstName(r.client.name)}`) : null,
+          r.client ? link(`/messages/${enc(r.client.id)}`, { class: 'btn', onclick: () => close(changed) }, icon('bubble', 18), `Message ${firstName(r.client.name)}`) : null,
         ]);
     };
     draw(start);
@@ -961,7 +712,7 @@ function autoflowRunRow(run, ctx, onChanged) {
   const fraction = run.steps ? run.stepsDone / run.steps : 0;
   return h('div', { class: 'cl-run' },
     h('div', { class: 'row' },
-      iconTile(icon('bolt', 14), 26),
+      iconTile(icon('bolt', 18), 26),
       h('div', { class: 'grow' }, h('div', { class: 'small strong' }, run.autoflowName ?? 'Autoflow'), h('div', { class: 'tiny faint clamp2' }, detail)),
       h('span', { class: 'tiny muted cl-num' }, `${run.stepsDone}/${run.steps}`),
       !run.stoppedAt && run.next ? h('button', {
@@ -971,7 +722,7 @@ function autoflowRunRow(run, ctx, onChanged) {
           if (!ok) return;
           await busy(null, status, async () => { await api('DELETE', `/api/autoflows/${enc(run.autoflowId)}/runs/${enc(run.id)}`); onChanged(); });
         },
-      }, pathIcon('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9 9h6v6H9z', 16)) : null),
+      }, icon('stop', 18)) : null),
     h('div', { class: 'cl-bar' }, h('div', { style: { width: `${Math.round(fraction * 100)}%` } })),
     status);
 }
@@ -1017,107 +768,6 @@ async function healthTab(box, ctx) {
   });
 }
 
-// MARK: - Habits tab
-
-async function habitsTab(box, ctx) {
-  const reload = () => habitsTab(box, ctx);
-  await loadInto(box, ctx.view, () => api('GET', `/api/habits?${q({ clientId: ctx.id, date: todayLondon() })}`), d => {
-    const t = d.nutrition.targets;
-    const numInput = (label, value, placeholder) => {
-      const input = h('input', { type: 'text', inputmode: 'decimal', value: value === undefined || value === null ? '' : String(Math.round(value)), placeholder });
-      return { input, el: field(label, input) };
-    };
-    const kcal = numInput('kcal', t?.kcal, '2500');
-    const protein = numInput('Protein g', t?.protein, '170');
-    const carbs = numInput('Carbs g', t?.carbs, '260');
-    const fat = numInput('Fat g', t?.fat, '80');
-    const parse = s => { const v = Number(String(s).replace(',', '.').trim()); return String(s).trim() !== '' && Number.isFinite(v) ? v : null; };
-    const fields = [kcal, protein, carbs, fat];
-    const status = h('div');
-    const saveBtn = button('Save targets', async () => {
-      const [k, p, c, f] = fields.map(x => parse(x.input.value));
-      await busy(saveBtn, status, async () => {
-        await api('PUT', '/api/nutrition/targets', { clientId: ctx.id, kcal: k, protein: p, carbs: c, fat: f });
-        fill(status, h('p', { class: 'tiny muted' }, 'Targets saved.'));
-      });
-      syncSave();
-    }, { kind: 'primary' });
-    const syncSave = () => { saveBtn.disabled = fields.some(x => parse(x.input.value) === null); };
-    for (const x of fields) x.input.addEventListener('input', syncSave);
-    syncSave();
-    const listStatus = h('div');
-
-    fill(box, h('div', { class: 'cl-cols' },
-      h('div', null,
-        eyebrow('Daily habits', `${d.streak}-day streak`),
-        listStatus,
-        d.habits.length
-          ? card({ class: 'flush' }, d.habits.map(hb => h('div', { class: 'cl-pick static' },
-            iconTile(habitIcon(hb.icon, 16), 32),
-            h('div', { class: 'grow' }, h('div', { class: 'strong' }, hb.name),
-              h('div', { class: 'tiny faint' }, hb.kind === 'count' ? `${fmtN(hb.value ?? 0)} / ${fmtN(hb.target)} ${hb.unit} today` : hb.done ? 'Done today' : 'Not done today')),
-            h('button', {
-              class: 'icon-btn cl-sm', type: 'button', 'aria-label': `Remove ${hb.name}`, title: 'Remove',
-              onclick: async () => {
-                if (!await confirmBox(`Remove “${hb.name}”?`, { ok: 'Remove', danger: true, detail: `It goes from ${ctx.first()}'s Home.` })) return;
-                await busy(null, listStatus, async () => { await api('DELETE', `/api/habits/${enc(hb.id)}`); reload(); });
-              },
-            }, icon('trash', 14)))))
-          : emptyCard('check', 'No habits set'),
-        button(h('span', { class: 'row gap4' }, icon('plus', 14), 'Add habit'), async () => { if (await addHabitSheet(ctx)) reload(); })),
-      h('div', null,
-        eyebrow('Nutrition targets', `Today ${fmtN(d.nutrition.totals.kcal, 0)} kcal logged`),
-        card(null, h('div', { class: 'grid2' }, kcal.el, protein.el), h('div', { class: 'grid2' }, carbs.el, fat.el), status, saveBtn))));
-  });
-}
-
-/** New habit (the iPhone's AddHabitSheet). Resolves true when one was added. */
-function addHabitSheet(ctx) {
-  return sheet('New habit', (body, close) => {
-    let kind = 'check', icon_ = 'checkmark.circle', healthKind = 'none';
-    const name = h('input', { placeholder: 'Water', maxlength: '40' });
-    const target = h('input', { value: '1', inputmode: 'decimal', placeholder: '3' });
-    const unit = h('input', { placeholder: 'L', maxlength: '12' });
-    const kindBox = h('div'), targetBox = h('div'), iconBox = h('div', { class: 'cl-icons' }), healthBox = h('div'), healthNote = h('div');
-    const status = h('div');
-    const parse = s => { const v = Number(String(s).replace(',', '.').trim()); return String(s).trim() !== '' && Number.isFinite(v) ? v : null; };
-    const add = button('Add habit', () => save(), { kind: 'primary' });
-    const sync = () => { add.disabled = !name.value.trim() || (kind === 'count' && parse(target.value) === null); };
-    const draw = () => {
-      fill(kindBox, segmented([['check', 'Tick off'], ['count', 'Count to a target']], kind, v => { kind = v; draw(); }));
-      targetBox.hidden = !(kind === 'count' || healthKind !== 'none');
-      fill(iconBox, Object.keys(HABIT_ICONS).map(i => h('button', { type: 'button', class: 'cl-icon-pick' + (i === icon_ ? ' sel' : ''), 'aria-label': i, 'aria-pressed': String(i === icon_), onclick: () => { icon_ = i; draw(); } }, habitIcon(i, 20))));
-      fill(healthBox, segmented([['none', 'None'], ['steps', 'Steps'], ['sleep', 'Sleep']], healthKind, v => {
-        healthKind = v;
-        if (v === 'sleep') { kind = 'check'; target.value = '7'; unit.value = 'h'; icon_ = 'moon'; if (!name.value) name.value = 'Sleep 7h+'; }
-        if (v === 'steps') { kind = 'count'; target.value = '10000'; unit.value = 'steps'; icon_ = 'shoeprints.fill'; if (!name.value) name.value = 'Steps'; }
-        draw();
-      }));
-      fill(healthNote, healthKind !== 'none' ? h('p', { class: 'tiny faint' }, 'Filled from the client\'s Apple Health and done once the value reaches the target.') : null);
-      sync();
-    };
-    name.addEventListener('input', sync);
-    target.addEventListener('input', sync);
-    fill(targetBox, h('div', { class: 'grid2' }, field('Target', target), field('Unit', unit)));
-    async function save() {
-      // A health habit keeps its target whatever the kind ("Sleep 7h+" is check, 7 h).
-      const fromHealth = healthKind !== 'none';
-      const withTarget = kind === 'count' || fromHealth;
-      await busy(add, status, async () => {
-        await api('POST', '/api/habits', {
-          clientId: ctx.id, name: name.value.trim(), kind, target: withTarget ? (parse(target.value) ?? 1) : 1,
-          unit: withTarget ? unit.value.trim() : '', icon: icon_, healthKind: fromHealth ? healthKind : null,
-        });
-        close(true);
-      });
-    }
-    body.append(field('Name', name), kindBox, targetBox, eyebrow('Icon'), iconBox, eyebrow('Fill from Apple Health'), healthBox, healthNote, status);
-    draw();
-    setTimeout(() => name.focus(), 0);
-    return h('div', { class: 'row end' }, button('Cancel', () => close(false)), add);
-  }).then(v => v === true);
-}
-
 // MARK: - Sessions tab
 
 const kindLabel = k => (k === 'video' ? 'Video' : k === 'group' ? 'Group' : '1:1');
@@ -1154,7 +804,7 @@ function bookingSheet(b) {
   return sheet(b.title ?? kindLabel(b.kind), (body, close) => {
     const people = b.attendees?.length ? b.attendees : b.client ? [b.client] : [];
     const status = h('div');
-    body.append(
+    fill(body,
       h('p', { class: 'small muted m0' }, `${longDayOf(b.start)} · ${fmtTime(b.start)}–${fmtTime(b.end)}`),
       b.location ? h('p', { class: 'small faint m0' }, b.location) : null,
       eyebrow('Attendees', b.capacity ? `${b.attendeeCount ?? b.attendees?.length ?? 0} of ${b.capacity}` : null),
@@ -1244,12 +894,8 @@ function weightChart(series) {
   const x = d => (t1 === t0 ? 0 : ((parseDay(d).getTime() - t0) / (t1 - t0)) * W);
   const y = v => H - ((v - low) / (high - low)) * H;
   const pts = series.map(p => `${x(p.date).toFixed(1)},${y(p.value).toFixed(1)}`);
-  const grad = `cl-wg-${Math.random().toString(36).slice(2, 8)}`;
   return svgEl('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'cl-chart', role: 'img', 'aria-label': `Body weight from ${fmtN(values[0])} to ${fmtN(values.at(-1))} kg` },
-    svgEl('defs', null, svgEl('linearGradient', { id: grad, x1: 0, y1: 0, x2: 0, y2: 1 },
-      svgEl('stop', { offset: '0', 'stop-color': '#fff', 'stop-opacity': '0.35' }), svgEl('stop', { offset: '1', 'stop-color': '#fff', 'stop-opacity': '0' }))),
-    svgEl('polygon', { points: `0,${H} ${pts.join(' ')} ${W},${H}`, fill: `url(#${grad})` }),
-    svgEl('polyline', { points: pts.join(' '), fill: 'none', stroke: '#fff', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
+    svgEl('polyline', { points: pts.join(' '), fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
 }
 
 async function progressTab(box, ctx) {

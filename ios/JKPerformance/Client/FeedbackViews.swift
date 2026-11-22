@@ -1,121 +1,7 @@
 import SwiftUI
 
-// MARK: - Weekly feedback (client)
-
-/// Every week the coach has written up, newest first; unread ones marked.
-struct WeeklyFeedbackListView: View {
-    @Environment(AppSession.self) private var session
-    @State private var reports: [Report]?
-    @State private var error: String?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                ScreenHeader(eyebrow: "From \(session.me?.coach?.name ?? "your coach")", title: "Feedback")
-                Loadable(value: reports, error: error, retry: load) { list in
-                    if list.isEmpty {
-                        EmptyCard(systemName: "text.bubble", title: "Nothing yet",
-                                  detail: "Your coach's review of each week appears here, with the plan for the next one.")
-                    }
-                    ForEach(list) { r in
-                        NavigationLink { ReportDetailView(reportId: r.id ?? "") } label: {
-                            HStack(spacing: 12) {
-                                IconTile(systemName: "text.bubble")
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(r.weekLabel).font(.subheadline.weight(.semibold)).foregroundStyle(JK.text)
-                                    Text(firstLine(r)).font(.caption2).foregroundStyle(JK.tertiary).lineLimit(2)
-                                }
-                                Spacer()
-                                if r.isUnread {
-                                    Circle().fill(JK.text).frame(width: 8, height: 8).accessibilityLabel("New")
-                                }
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(JK.tertiary)
-                            }
-                            .jkCard(padding: 12)
-                        }
-                    }
-                }
-            }
-            .padding(16)
-        }
-        .jkScreen()
-        .jkRefreshable { await load() }
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-    }
-
-    private func firstLine(_ r: Report) -> String {
-        [r.summary, r.wins, r.focus].first { !$0.isEmpty } ?? ""
-    }
-
-    private func load() async {
-        do {
-            let reply: ReportsResponse = try await APIClient.shared.get("/api/reports")
-            reports = reply.reports
-            error = nil
-        } catch {
-            if !error.isCancellation { self.error = error.readable }
-        }
-    }
-}
-
-/// One week's feedback: the coach's words, the week's figures, next week's plan.
-struct ReportDetailView: View {
-    let reportId: String
-    @State private var report: Report?
-    @State private var error: String?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Loadable(value: report, error: error, retry: load) { r in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Eyebrow(text: "\(Fmt.dayMonth(r.week)) – \(Fmt.dayMonth(r.weekEnd))")
-                        Text("Your week").font(.largeTitle.weight(.semibold)).foregroundStyle(JK.text)
-                        if let by = r.coachName {
-                            Text("From \(by)" + (r.publishedAt.map { " · \(Fmt.dayMonth($0))" } ?? ""))
-                                .font(.caption).foregroundStyle(JK.tertiary)
-                        }
-                    }
-                    ReportSection(title: "How it went", text: r.summary)
-                    ReportSection(title: "Wins", text: r.wins)
-                    ReportSection(title: "Focus for next week", text: r.focus)
-                    if let stats = r.stats { ReportStatsGrid(stats: stats) }
-                    if let plan = r.plan { PlanList(plan: plan, linkWorkouts: true) }
-                }
-            }
-            .padding(16)
-        }
-        .jkScreen()
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-    }
-
-    private func load() async {
-        do {
-            report = try await APIClient.shared.get("/api/reports/\(seg(reportId))")
-            error = nil
-        } catch {
-            if !error.isCancellation { self.error = error.readable }
-        }
-    }
-}
-
-private struct ReportSection: View {
-    let title: String
-    let text: String
-
-    var body: some View {
-        if !text.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Eyebrow(text: title)
-                Text(text).font(.body).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .jkCard()
-        }
-    }
-}
+// Report figures, kept for the coach's report screens. The client reads
+// letters in LetterView.
 
 /// The week in numbers. Apple Health figures appear only when shared.
 struct ReportStatsGrid: View {
@@ -144,7 +30,7 @@ struct ReportStatsGrid: View {
                 }
             }
             if let types = stats.activities?.types, !types.isEmpty {
-                Text(types.joined(separator: " · ")).font(.caption2).foregroundStyle(JK.tertiary)
+                Text(types.joined(separator: " · ")).font(.jkCaption).foregroundStyle(JK.textTertiary)
             }
         }
     }
@@ -159,7 +45,7 @@ struct PlanList: View {
         VStack(alignment: .leading, spacing: 8) {
             Eyebrow(text: "Next week's plan", trailing: "\(Fmt.dayMonth(plan.from)) – \(Fmt.dayMonth(plan.to))")
             if plan.workouts.isEmpty {
-                Text("Not written yet.").font(.caption).foregroundStyle(JK.tertiary)
+                Text("Not written yet.").font(.jkCaption).foregroundStyle(JK.textTertiary)
             } else {
                 VStack(spacing: 0) {
                     ForEach(plan.workouts) { w in
@@ -168,7 +54,7 @@ struct PlanList: View {
                         } else {
                             row(w, chevron: false)
                         }
-                        if w.id != plan.workouts.last?.id { Divider().overlay(JK.stroke) }
+                        if w.id != plan.workouts.last?.id { Divider().overlay(JK.hairline) }
                     }
                 }
                 .jkCard(padding: 4)

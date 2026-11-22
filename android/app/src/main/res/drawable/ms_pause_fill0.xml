@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "pause" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M587.58-226.46q-22.88 0-39.42-16.55-16.54-16.54-16.54-39.41v-395.16q0-22.87 16.54-39.41 16.54-16.55 39.42-16.55h90q22.87 0 39.41 16.55 16.55 16.54 16.55 39.41v395.16q0 22.87-16.55 39.41-16.54 16.55-39.41 16.55h-90Zm-305.16 0q-22.87 0-39.41-16.55-16.55-16.54-16.55-39.41v-395.16q0-22.87 16.55-39.41 16.54-16.55 39.41-16.55h90q22.88 0 39.42 16.55 16.54 16.54 16.54 39.41v395.16q0 22.87-16.54 39.41-16.54 16.55-39.42 16.55h-90Zm305.16-55.96h90v-395.16h-90v395.16Zm-305.16 0h90v-395.16h-90v395.16Zm0-395.16v395.16-395.16Zm305.16 0v395.16-395.16Z" />
+    </group>
+</vector>

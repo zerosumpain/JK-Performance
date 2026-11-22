@@ -1,9 +1,9 @@
 <resources>
-    <!-- Black ground behind Compose, dark system bars: the app is dark-only like the iPhone app. -->
+    <!-- Warm off-black ground behind Compose, dark system bars: the app is dark-only (Atelier bg). -->
     <style name="Theme.JK" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:statusBarColor">@android:color/black</item>
-        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowBackground">@color/jk_bg</item>
+        <item name="android:statusBarColor">@color/jk_bg</item>
+        <item name="android:navigationBarColor">@color/jk_bg</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

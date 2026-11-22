@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { canSee, clientFor, coachIdOf, initials, requireCoach } from './access.mjs';
-import { habitStreak } from './daily.mjs';
+import { minimumStreak } from './daily.mjs';
 import { day, fail, num, oneOf, raw, str } from './http.mjs';
 import { newId, nowIso } from './store.mjs';
-import { addDays, daysBetween, londonDay } from './time.mjs';
+import { addDays, daysBetween, londonDay, mondayOf } from './time.mjs';
 import { loadKg } from './training.mjs';
 
 export const MEASUREMENT_KINDS = ['weight', 'bodyFat', 'waist', 'restingHr'];
@@ -14,7 +14,7 @@ const round1 = v => Math.round(v * 10) / 10;
 
 // MARK: - Progress
 
-function progressOf(db, client, range) {
+export function progressOf(db, client, range) {
   const today = londonDay();
   const from = range === '6m' ? addDays(today, -183) : range === 'all' ? '0000-01-01' : addDays(today, -92);
   const series = kind => db.prepare('SELECT date, value FROM measurements WHERE user_id=? AND kind=? AND date>=? ORDER BY date').all(client.id, kind, from);
@@ -38,7 +38,8 @@ function progressOf(db, client, range) {
     byExercise.set(l.name, r);
   }
   const records = [...byExercise.values()].sort((a, b) => b.kg - a.kg).slice(0, 10)
-    .map(r => ({ exercise: r.exercise, kg: round1(r.kg), gain: round1(r.kg - r.firstKg), date: r.date }));
+    // isNewThisWeek: the best was set this week (from Monday) and beats the first time it was logged.
+    .map(r => ({ exercise: r.exercise, kg: round1(r.kg), gain: round1(r.kg - r.firstKg), date: r.date, isNewThisWeek: r.date >= mondayOf(today) && r.kg > r.firstKg }));
   return {
     since: first ?? client.created_at.slice(0, 10),
     weight: {
@@ -134,7 +135,7 @@ function challengeOut(db, c, viewer) {
   return {
     id: c.id, title: c.title, detail: c.detail, metric: c.metric, target: c.target, start: c.start, end: c.end,
     daysLeft: Math.max(0, daysBetween(today, c.end)), members: members.length, joined: !!me, mine: me?.value ?? 0,
-    leaderboard: viewer.role === 'coach' ? ranked : top, badges, streak: viewer.role === 'client' ? habitStreak(db, viewer.id) : 0,
+    leaderboard: viewer.role === 'coach' ? ranked : top, badges, streak: viewer.role === 'client' ? minimumStreak(db, viewer) : 0,
   };
 }
 

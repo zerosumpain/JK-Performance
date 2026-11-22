@@ -4,6 +4,8 @@
     <!-- The Outbox sends sets logged offline the moment the network comes back. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The coach records voice notes for letters (LetterComposer); asked for at the moment of recording. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Health Connect: read only (health/HealthSync.kt). -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />

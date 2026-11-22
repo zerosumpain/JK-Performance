@@ -27,6 +27,11 @@ struct Me: Codable, Equatable {
     var onboarded: Bool?
     /// Clients: the first-run answers, null until answered.
     var profile: Profile?
+    /// Plan features plus coach toggles (docs/API.md, Atelier). Missing on an older server: show everything.
+    var features: Features?
+    var preferences: Preferences?
+    /// A coach's own settings; null for clients.
+    var coachSettings: CoachSettings?
 
     var isCoach: Bool { role == "coach" }
     /// A client who hasn't been through onboarding yet. Coaches never are.
@@ -52,6 +57,16 @@ struct PersonRef: Codable, Hashable, Identifiable {
     let id: String
     let name: String
     var initials: String?
+    /// The coach's portrait (GET /api/media/:id). Absent on older servers and for clients.
+    var avatarMediaId: String?
+    var signatureMediaId: String?
+    var replyExpectation: ReplyExpectation?
+    /// The reply line this client sees ("Same-day replies" on plans with 'priority').
+    var replyLine: String?
+    /// Clients in a needs-you item.
+    var firstName: String?
+    var plan: String?
+    var planName: String?
 
     var displayInitials: String { initials ?? Fmt.initials(name) }
 }
@@ -196,6 +211,9 @@ struct Workout: Codable, Identifiable, Hashable {
     var completedAt: Date?
     var createdBy: String?
     var items: [WorkoutItem]
+    var completionNote: String?
+    var feel: Int?
+    var feelWord: String?
 
     var doneCount: Int { items.filter(\.isDone).count }
 }
@@ -348,8 +366,23 @@ struct Habit: Codable, Identifiable, Hashable {
     var value: Double?
     var done: Bool
     var source: String?
+    /// The closed IconKey catalogue name; older servers send only `icon`.
+    var iconKey: String?
+    /// The +/- increment for count habits.
+    var step: Double?
+    var introducedAt: Date?
+    var position: Int?
 
     var isCount: Bool { kind == "count" }
+    var key: IconKey { IconKey(stored: iconKey ?? icon) }
+    /// One tap's worth: the coach's step, else a tenth of the target, at least 1.
+    var increment: Double { step ?? max(1, (target / 10).rounded()) }
+    /// 0...1 of today's target.
+    var fraction: Double {
+        if done { return 1 }
+        guard target > 0, let value else { return 0 }
+        return min(max(value / target, 0), 1)
+    }
     var fromHealth: Bool { source == "health" || healthKind != nil }
 }
 
@@ -398,6 +431,12 @@ struct HabitsResponse: Codable {
     let habits: [Habit]
     let streak: Int
     let nutrition: Nutrition
+    var dayDone: Bool?
+    var doneCount: Int?
+    var dayMinimum: Int?
+    var rest: RestDay?
+    var consistency: Consistency?
+    var missedYesterday: Bool?
 }
 
 struct TargetsInput: Codable {
@@ -430,6 +469,10 @@ struct CheckIn: Codable, Identifiable, Hashable {
     var submittedAt: Date?
     var reviewedAt: Date?
     var reply: String?
+    var stress: Int?
+    var win: String?
+    var struggle: String?
+    var photoIds: [String]?
 }
 
 struct CheckInsResponse: Codable {
@@ -442,6 +485,10 @@ struct CheckInInput: Codable {
     var sleep: Int
     var pain: [String]
     var note: String
+    var stress: Int?
+    var win: String?
+    var struggle: String?
+    var photoIds: [String]?
 }
 
 struct ReplyInput: Codable { var reply: String }
@@ -457,6 +504,12 @@ struct Message: Codable, Identifiable, Hashable {
     var workoutId: String?
     let at: Date
     var readAt: Date?
+    /// text | letter | answer | formCheck | mealPhoto
+    var kind: String?
+    var reportId: String?
+    var exerciseId: String?
+    var mediaId: String?
+    var mediaUrl: String?
 }
 
 struct MessagesResponse: Codable { let messages: [Message] }
@@ -475,6 +528,10 @@ struct MessageInput: Codable {
     var text: String
     var clientId: String?
     var workoutId: String?
+    var reportId: String? = nil
+    var exerciseId: String? = nil
+    var mediaId: String? = nil
+    var kind: String? = nil
 }
 
 // MARK: - Bookings & calendar
@@ -524,6 +581,8 @@ struct Booking: Codable, Identifiable, Hashable {
     var joined: Bool?
     var cancellable: Bool?
     var refundable: Bool?
+    /// The booking's own meeting link, else the coach's default room for video calls.
+    var meetingUrl: String?
 
     var isGroup: Bool { kind == "group" }
     /// Mine to show on a client's calendar: 1:1s, and classes they joined.
@@ -578,6 +637,7 @@ struct PersonalRecord: Codable, Hashable {
     let kg: Double
     var gain: Double?
     var date: String?
+    var isNewThisWeek: Bool?
 }
 
 struct ProgressData: Codable, Hashable {
@@ -771,6 +831,8 @@ struct ClientSummary: Codable, Identifiable, Hashable {
     var unread: Int?
     var lastMessageAt: Date?
     var demand: Demand?
+    /// The seven days ending today: done | notDone | rest.
+    var habitWeek: [HabitWeekDay]?
 
     var displayInitials: String { initials ?? Fmt.initials(name) }
 }
@@ -793,6 +855,11 @@ struct ClientDetail: Codable {
     var healthShared: Bool?
     var health: HealthSummary?
     var nextWorkout: Workout?
+    var goals: [Goal]?
+    var settings: ClientSettings?
+    var restDays: [RestDay]?
+    var latestCheckin: LatestCheckIn?
+    var nextBooking: Booking?
 }
 
 struct PenceSample: Codable, Hashable {
@@ -944,9 +1011,40 @@ struct Report: Codable, Identifiable, Hashable {
     var coachName: String?
     var stats: ReportStats?
     var plan: ReportPlan?
+    // The letter (Atelier). Old servers leave these out; the old fields stand in.
+    var kind: String?
+    var letterStatus: String?
+    var headline: String?
+    var keep: String?
+    var adjust: String?
+    var question: String?
+    var answer: String?
+    var answeredAt: Date?
+    var mediaId: String?
+    var mediaKind: String?
+    var mediaUrl: String?
+    var durationSec: Double?
+    var goalId: String?
+    var deliverAt: Date?
+    var deliveredAt: Date?
+    var focusOverride: String?
+    var todayLine: String?
+    var milestoneKey: String?
+    var weekDots: [LetterDot]?
+    var scoreTrio: [Score]?
+    var context: LetterContext?
 
     var isPublished: Bool { status == "published" }
     var isUnread: Bool { isPublished && readAt == nil }
+    var isMilestone: Bool { kind == "milestone" }
+    /// The headline, or the first sentence of an old report's summary.
+    var displayHeadline: String {
+        if let h = headline, !h.isEmpty { return h }
+        let first = summary.split(whereSeparator: { ".!?".contains($0) }).first.map { String($0) + "." } ?? ""
+        return first.isEmpty ? "Your week" : first
+    }
+    var keepText: String { (keep?.isEmpty == false ? keep : nil) ?? wins }
+    var adjustText: String { (adjust?.isEmpty == false ? adjust : nil) ?? focus }
     var weekLabel: String { "Week of \(Fmt.dayMonth(week))" }
 }
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,10 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -34,7 +31,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
@@ -48,10 +44,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -64,235 +67,175 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
-// MARK: - Schedule (week grid)
-
-/** The week-grid filter chips; `keeps` says whether a booking shows under it. */
-private enum class ScheduleFilter(val label: String) {
-    all("All"), inperson("1:1"), video("Video"), group("Group");
-
-    fun keeps(b: Booking): Boolean = when (this) {
-        all -> true
-        inperson -> b.kind == "inperson"
-        video -> b.kind == "video"
-        group -> b.kind == "group"
-    }
-}
-
-private val scheduleHours = (6..20).toList()
-private val scheduleRowHeight = 34.dp
+// MARK: - Day agenda
 
 /**
- * The coach's week: a grid from 06:00 to 20:00 with each booking a block
- * coloured by its kind, filter chips with counts, and buttons to book a
- * client, create a class or edit weekly availability.
+ * One day of sessions (atelier-spec.md, Coach screens 1): a time column with
+ * a row per session, swipe or step between days, and Book. Replaces the
+ * Schedule week grid; it opens from the strip on Today.
  */
 @Composable
-fun ScheduleView() {
+fun DayAgendaView() {
     val nav = LocalNav.current
     val scope = rememberCoroutineScope()
-    // Saveable, so coming back from a booking's detail keeps the week and filter.
-    var anchor by rememberSaveable { mutableStateOf(LocalDate.now(Day.zone)) }
-    var filter by rememberSaveable { mutableStateOf(ScheduleFilter.all) }
+    var day by rememberSaveable { mutableStateOf(LocalDate.now(Day.zone)) }
     var bookings by remember { mutableStateOf<List<Booking>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var booking by remember { mutableStateOf(false) }
     var editingAvailability by remember { mutableStateOf(false) }
-    val days = Day.week(anchor)
+    val today = LocalDate.now(Day.zone)
+    val sessions = bookings.orEmpty().sortedBy { it.start }
 
     suspend fun load() {
+        val key = Day.string(day)
         try {
-            bookings = APIClient.get<BookingsResponse>(
-                "/api/bookings", mapOf("from" to Day.string(days[0]), "to" to Day.string(days[6])),
-            ).bookings
+            val reply = APIClient.get<BookingsResponse>("/api/bookings", mapOf("from" to key, "to" to key))
+            if (key != Day.string(day)) return
+            bookings = reply.bookings.filter { Day.same(it.start, day) }
             error = null
         } catch (e: Throwable) {
             if (!e.isCancellation) error = e.readable
         }
     }
 
-    // `.navigationDestination(item: $openBooking)`: a 1:1 opens the client, a class its roster.
-    fun open(b: Booking) {
-        val c = b.client
-        if (c != null && !b.isGroup) nav.push { ClientDetailView(clientId = c.id, name = c.name) }
-        else nav.push { ClassDetailView(booking = b) }
+    fun step(days: Int) {
+        day = Day.add(days, day)
     }
 
-    JKRefreshable(onRefresh = { load() }, modifier = Modifier.jkScreen()) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ScreenHeader(eyebrow = "Week of ${Fmt.dayMonth(days[0])}", title = "Schedule") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(30.dp)
-                            .clip(rounded(7.dp))
-                            .clickable { editingAvailability = true }
-                            .border(1.dp, JK.stroke, rounded(7.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) { SystemImage("clock.badge.checkmark", JKType.body, JK.text) }
-                    Row(
-                        Modifier
-                            .clip(CircleShape)
-                            .clickable { booking = true }
-                            .background(JK.chrome, CircleShape)
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Label("Book", systemImage = "plus", style = JKType.caption.semibold(), color = Color.Black)
-                    }
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.clickable { anchor = Day.add(-7, anchor) }.padding(6.dp)) { SystemImage("chevron.left", JKType.body, JK.secondary) }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "This week", style = JKType.caption, color = JK.secondary,
-                    modifier = Modifier.clickable { anchor = LocalDate.now(Day.zone) }.padding(6.dp),
-                )
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.clickable { anchor = Day.add(7, anchor) }.padding(6.dp)) { SystemImage("chevron.right", JKType.body, JK.secondary) }
-            }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ScheduleFilter.entries.forEach { f ->
-                    val count = bookings.orEmpty().count(f::keeps)
-                    Chip(label = "${f.label} · $count", selected = filter == f) { filter = f }
-                }
-            }
-            val currentError = error
-            val list = bookings
-            when {
-                currentError != null && list == null -> ErrorCard(currentError, retry = { load() })
-                list == null -> LoadingCard()
-                else -> {
-                    if (currentError != null) ErrorBanner(currentError)
-                    WeekGrid(days, list.filter(filter::keeps), onOpen = ::open)
-                    ScheduleLegend()
-                    Text(
-                        "Tap a block for details. The clock button edits your weekly availability.",
-                        style = JKType.caption2, color = JK.tertiary,
-                    )
-                }
-            }
-        }
-    }
+    val summary = if (day == today) {
+        val done = sessions.count { it.end < Instant.now() }
+        if (sessions.isEmpty()) "Today · nothing booked" else "Today · $done of ${sessions.size} sessions done"
+    } else if (sessions.isEmpty()) "Nothing booked" else if (sessions.size == 1) "1 session" else "${sessions.size} sessions"
 
-    LaunchedEffect(Day.string(days[0])) { load() }
-    if (booking) {
-        val today = LocalDate.now(Day.zone)
-        Sheet(onDismiss = { booking = false; scope.launch { load() } }) {
-            CoachBookSheet(day = if (anchor == today) today else days[0])
-        }
-    }
-    if (editingAvailability) {
-        Sheet(onDismiss = { editingAvailability = false }) { AvailabilitySheet() }
-    }
-}
-
-@Composable
-private fun WeekGrid(days: List<LocalDate>, shown: List<Booking>, onOpen: (Booking) -> Unit) {
-    val today = LocalDate.now(Day.zone)
-    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Top) {
-        Column(Modifier.width(18.dp)) {
-            Text(" ", style = JKType.system(9), modifier = Modifier.height(24.dp))
-            scheduleHours.forEach { h ->
-                Text("$h", style = JKType.system(9), color = JK.tertiary, modifier = Modifier.height(scheduleRowHeight))
-            }
-        }
-        days.forEach { day ->
-            val isToday = day == today
-            Column(Modifier.weight(1f)) {
+    Column(Modifier.jkScreen()) {
+        TopBar("Agenda") {
+            if (AppSession.studioTools) {
                 Box(
                     Modifier
-                        .padding(bottom = 4.dp)
-                        .fillMaxWidth()
-                        .height(20.dp)
-                        .then(if (isToday) Modifier.background(JK.chrome, rounded(5.dp)) else Modifier),
+                        .size(JKSize.touchTarget)
+                        .clickable { editingAvailability = true }
+                        .semantics { contentDescription = "Availability" },
                     contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${Fmt.weekday(day).take(2)} ${day.dayOfMonth}",
-                        style = JKType.system(9, if (isToday) FontWeight.Bold else FontWeight.Normal),
-                        color = if (isToday) Color.Black else JK.tertiary,
-                        maxLines = 1,
-                        textAlign = TextAlign.Center,
-                    )
+                ) { Glyph(IconKey.alarm, tint = JKColors.text) }
+            }
+            BarButton("Book", bold = true) { booking = true }
+        }
+        JKRefreshable(onRefresh = { load() }, modifier = Modifier.weight(1f)) {
+            var drag by remember { mutableStateOf(0f) }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { drag = 0f },
+                            onDragEnd = {
+                                if (kotlin.math.abs(drag) > 120f) step(if (drag < 0) 1 else -1)
+                                drag = 0f
+                            },
+                        ) { _, amount -> drag += amount }
+                    }
+                    .padding(horizontal = JKSpace.gutter, vertical = JKSpace.l),
+                verticalArrangement = Arrangement.spacedBy(JKSpace.l),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(JKSize.touchTarget).clickable { step(-1) }.semantics { contentDescription = "Previous day" },
+                        contentAlignment = Alignment.Center,
+                    ) { Glyph(IconKey.back, tint = JKColors.textSecondary) }
+                    Column(
+                        Modifier.weight(1f).semantics(mergeDescendants = true) {},
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(Fmt.fullDay(day), style = JKType.headline, color = JKColors.text, textAlign = TextAlign.Center)
+                        Text(summary, style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary, textAlign = TextAlign.Center)
+                    }
+                    Box(
+                        Modifier.size(JKSize.touchTarget).clickable { step(1) }.semantics { contentDescription = "Next day" },
+                        contentAlignment = Alignment.Center,
+                    ) { Glyph(IconKey.chevron, tint = JKColors.textSecondary) }
                 }
-                Box(Modifier.fillMaxWidth().height(scheduleRowHeight * scheduleHours.size).clipToBounds()) {
-                    Column {
-                        scheduleHours.forEach { _ ->
-                            Box(Modifier.fillMaxWidth().height(scheduleRowHeight)) {
-                                Box(Modifier.fillMaxWidth().height(1.dp).background(JK.stroke))
+                val currentError = error
+                when {
+                    currentError != null && bookings == null -> ErrorCard(currentError, retry = { load() })
+                    bookings == null -> LoadingCard()
+                    else -> {
+                        if (currentError != null) ErrorBanner(currentError)
+                        if (sessions.isEmpty()) {
+                            EmptyState("A quiet day.")
+                        } else {
+                            Column(Modifier.jkSurface(SurfaceVariant.Group, padding = JKSpace.xs)) {
+                                sessions.forEachIndexed { i, b ->
+                                    DayAgendaRow(
+                                        b,
+                                        Modifier.clickable {
+                                            val c = b.client
+                                            if (c != null && !b.isGroup) nav.push { ClientDetailView(clientId = c.id, name = c.name) }
+                                            else nav.push { ClassDetailView(booking = b) }
+                                        },
+                                    )
+                                    if (i < sessions.lastIndex) GroupDivider(Modifier.padding(start = JKSpace.l + 52.dp))
+                                }
                             }
                         }
                     }
-                    shown.filter { Day.same(it.start, day) }.forEach { b ->
-                        key(b.id) { GridBlock(b, onClick = { onOpen(b) }) }
-                    }
                 }
             }
         }
     }
-}
 
-/** One booking on the grid: a tinted block with a solid leading edge, placed by its start and sized by its length. */
-@Composable
-private fun GridBlock(b: Booking, onClick: () -> Unit) {
-    val start = hourOf(b.start)
-    val length = maxOf(0.5, Duration.between(b.start, b.end).seconds / 3600.0)
-    val tint = JK.slot(b.kind)
-    val shape = rounded(4.dp)
-    Box(
-        Modifier
-            .offset(y = scheduleRowHeight * (start - scheduleHours[0]).toFloat())
-            .fillMaxWidth()
-            .height(scheduleRowHeight * length.toFloat() - 2.dp)
-            .clip(shape)
-            .clickable(onClick = onClick)
-            .background(tint.copy(alpha = 0.24f), shape)
-            .border(1.dp, tint.copy(alpha = 0.55f), shape),
-    ) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .width(2.dp)
-                .background(tint, RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)),
-        )
-        Text(
-            gridLabel(b),
-            style = JKType.system(8, FontWeight.SemiBold),
-            color = JK.text,
-            modifier = Modifier.fillMaxWidth().padding(3.dp),
-        )
+    LaunchedEffect(Day.string(day)) { load() }
+    if (booking) {
+        Sheet(onDismiss = { booking = false; scope.launch { load() } }) { CoachBookSheet(day = day) }
+    }
+    if (editingAvailability) {
+        Sheet(onDismiss = { editingAvailability = false }) { AvailabilityEditor() }
     }
 }
 
-/** The colour key for the kinds of session on the grid. */
+/** A time, then avatar, name, kind glyph and place. */
 @Composable
-private fun ScheduleLegend() {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        listOf("inperson" to "1:1 in person", "video" to "Video call", "group" to "Group class").forEach { (kind, text) ->
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).background(JK.slot(kind), rounded(2.dp)))
-                Text(text, style = JKType.caption2, color = JK.secondary)
+fun DayAgendaRow(booking: Booking, modifier: Modifier = Modifier) {
+    val done = booking.end < Instant.now()
+    val who = if (booking.isGroup) {
+        val count = booking.attendeeCount ?: booking.attendees?.size ?: 0
+        "${booking.title ?: "Class"} · $count going"
+    } else booking.client?.name ?: booking.title ?: booking.kindLabel
+    val kind = when (booking.kind) {
+        "video" -> IconKey.video
+        "group" -> IconKey.groupSession
+        else -> IconKey.oneToOne
+    }
+    val detail = listOfNotNull(booking.kindLabel, booking.location).joinToString(" · ")
+    Row(
+        modifier
+            .fillMaxWidth()
+            .alpha(if (done) 0.7f else 1f)
+            .padding(horizontal = JKSpace.l, vertical = JKSpace.m)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${Fmt.time(booking.start)} to ${Fmt.time(booking.end)}, $who, $detail" + if (done) ", done" else ""
+            },
+        horizontalArrangement = Arrangement.spacedBy(JKSpace.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.widthIn(min = 44.dp)) {
+            Text(Fmt.time(booking.start), style = JKType.callout.monospacedDigit(), color = JKColors.text)
+            Text(Fmt.time(booking.end), style = JKType.caption.monospacedDigit(), color = JKColors.textSecondary)
+        }
+        Avatar(initials = booking.client?.displayInitials ?: "G", size = JKSize.avatarSmall)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(who, style = JKType.callout, color = JKColors.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.xs), verticalAlignment = Alignment.CenterVertically) {
+                Glyph(kind, size = JKSize.iconSmall, tint = JKColors.textSecondary)
+                Text(detail, style = JKType.caption, color = JKColors.textSecondary)
             }
         }
+        if (done) Glyph(IconKey.done, size = JKSize.iconSmall, tint = JKColors.textSecondary)
     }
-}
-
-private fun hourOf(instant: Instant): Double {
-    val t = instant.atZone(Day.zone)
-    return t.hour + t.minute / 60.0
-}
-
-/** What fits in a narrow block: "Grp", the client's initials (with a phone for video), or the title. */
-private fun gridLabel(b: Booking): String {
-    if (b.isGroup) return "Grp"
-    if (b.kind == "video") return (b.client?.displayInitials ?: "") + " ☎︎"
-    return b.client?.displayInitials ?: (b.title ?: "1:1")
 }
 
 // MARK: - Book: class or client session
@@ -355,7 +298,7 @@ private fun CoachBookSheet(day: LocalDate) {
                 val list = clients
                 val currentError = error
                 when {
-                    list != null -> Column(Modifier.jkCard(padding = 2.dp)) {
+                    list != null -> Column(Modifier.jkSurface(padding = 2.dp)) {
                         list.forEach { c ->
                             Row(
                                 Modifier
@@ -366,8 +309,8 @@ private fun CoachBookSheet(day: LocalDate) {
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Avatar(initials = c.displayInitials, size = 28.dp)
-                                Text(c.name, style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
-                                SystemImage("chevron.right", JKType.caption, JK.tertiary)
+                                Text(c.name, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
+                                Glyph(IconKey.chevron, JKType.caption, JKColors.textTertiary)
                             }
                         }
                     }
@@ -381,20 +324,16 @@ private fun CoachBookSheet(day: LocalDate) {
                 StepperRow("Capacity $capacity", capacity, 1..50) { capacity = it }
                 JKField("Location", location, { location = it })
                 error?.let { ErrorBanner(it) }
-                ChromeButton(onClick = { scope.launch { createClass() } }, enabled = !saving && title.isNotBlank()) {
-                    if (saving) ProgressView(tint = Color.Black) else Text("Create class")
+                PrimaryButton(onClick = { scope.launch { createClass() } }, enabled = !saving && title.isNotBlank()) {
+                    if (saving) ProgressView() else Text("Create class")
                 }
-                Text("Clients see every class you create and join for free.", style = JKType.caption2, color = JK.tertiary)
+                Text("Clients see every class you create and join for free.", style = JKType.caption, color = JKColors.textTertiary)
             }
         }
     }
 }
 
-/** iOS's grey capsule behind a compact picker's value. */
-private val pickerPill = Color(1f, 1f, 1f, 0.12f)
 
-/** SwiftUI's alert/dialog surface in dark mode. */
-private val dialogSurface = Color(0.17f, 0.17f, 0.17f)
 
 /**
  * `DatePicker(label, selection:, in: Date()...)` in its compact style: the
@@ -414,7 +353,7 @@ private fun DateTimeRow(label: String, value: Instant, onChange: (Instant) -> Un
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PickerPill(Fmt.dayMonthYear(value)) { pickingDate = true }
             PickerPill(Fmt.time(value)) { pickingTime = true }
@@ -440,9 +379,9 @@ private fun DateTimeRow(label: String, value: Instant, onChange: (Instant) -> Un
                         commit(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate(), local.toLocalTime())
                     }
                     pickingDate = false
-                }) { Text("Done", style = JKType.body.semibold(), color = JK.text) }
+                }) { Text("Done", style = JKType.body.semibold(), color = JKColors.text) }
             },
-            dismissButton = { TextButton(onClick = { pickingDate = false }) { Text("Cancel", style = JKType.body, color = JK.text) } },
+            dismissButton = { TextButton(onClick = { pickingDate = false }) { Text("Cancel", style = JKType.body, color = JKColors.text) } },
         ) { DatePicker(state) }
     }
     if (pickingTime) {
@@ -453,12 +392,12 @@ private fun DateTimeRow(label: String, value: Instant, onChange: (Instant) -> Un
                 TextButton(onClick = {
                     commit(local.toLocalDate(), LocalTime.of(state.hour, state.minute))
                     pickingTime = false
-                }) { Text("Done", style = JKType.body.semibold(), color = JK.text) }
+                }) { Text("Done", style = JKType.body.semibold(), color = JKColors.text) }
             },
-            dismissButton = { TextButton(onClick = { pickingTime = false }) { Text("Cancel", style = JKType.body, color = JK.text) } },
+            dismissButton = { TextButton(onClick = { pickingTime = false }) { Text("Cancel", style = JKType.body, color = JKColors.text) } },
             text = { TimePicker(state) },
-            containerColor = dialogSurface,
-            shape = rounded(14.dp),
+            containerColor = JKColors.raised,
+            shape = JKShape.card,
         )
     }
 }
@@ -468,11 +407,11 @@ private fun PickerPill(text: String, onClick: () -> Unit) {
     Text(
         text,
         style = JKType.body,
-        color = JK.text,
+        color = JKColors.text,
         modifier = Modifier
-            .clip(rounded(6.dp))
+            .clip(JKShape.chip)
             .clickable(onClick = onClick)
-            .background(pickerPill, rounded(6.dp))
+            .background(JKColors.raised, JKShape.chip)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     )
 }
@@ -481,9 +420,9 @@ private fun PickerPill(text: String, onClick: () -> Unit) {
 @Composable
 private fun StepperRow(label: String, value: Int, range: IntRange, step: Int = 1, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = JKType.subheadline, color = JK.text, modifier = Modifier.weight(1f))
+        Text(label, style = JKType.callout, color = JKColors.text, modifier = Modifier.weight(1f))
         Row(
-            Modifier.height(32.dp).clip(rounded(8.dp)).background(pickerPill, rounded(8.dp)),
+            Modifier.height(32.dp).clip(JKShape.chip).background(JKColors.raised, JKShape.chip),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val canDown = value - step >= range.first
@@ -491,12 +430,12 @@ private fun StepperRow(label: String, value: Int, range: IntRange, step: Int = 1
             Box(
                 Modifier.width(47.dp).fillMaxHeight().clickable(enabled = canDown) { onChange(value - step) },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Remove, "Decrement", tint = if (canDown) JK.text else JK.tertiary, modifier = Modifier.size(18.dp)) }
-            Box(Modifier.width(1.dp).height(18.dp).background(JK.tertiary))
+            ) { Glyph(IconKey.remove, tint = if (canDown) JKColors.text else JKColors.textTertiary, contentDescription = "Decrement") }
+            Box(Modifier.width(1.dp).height(18.dp).background(JKColors.textTertiary))
             Box(
                 Modifier.width(47.dp).fillMaxHeight().clickable(enabled = canUp) { onChange(value + step) },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Add, "Increment", tint = if (canUp) JK.text else JK.tertiary, modifier = Modifier.size(18.dp)) }
+            ) { Glyph(IconKey.add, tint = if (canUp) JKColors.text else JKColors.textTertiary, contentDescription = "Increment") }
         }
     }
 }
@@ -511,7 +450,7 @@ private val availabilityKinds = listOf("inperson", "video")
  * them into bookable slots.
  */
 @Composable
-private fun AvailabilitySheet() {
+fun AvailabilityEditor() {
     val dismiss = LocalDismiss.current
     val scope = rememberCoroutineScope()
     var rules by remember { mutableStateOf<List<AvailabilityRule>?>(null) }
@@ -558,7 +497,7 @@ private fun AvailabilitySheet() {
                 LoadingCard()
             } else {
                 if (list.isEmpty()) {
-                    EmptyCard(systemName = "clock", title = "No availability", detail = "Clients can't book until you add hours.")
+                    EmptyCard(title = "No availability", detail = "Clients can't book until you add hours.")
                 }
                 list.forEach { rule ->
                     key(rule.localId) {
@@ -569,7 +508,7 @@ private fun AvailabilitySheet() {
                         )
                     }
                 }
-                GhostButton(onClick = {
+                SecondaryButton(onClick = {
                     val last = rules?.lastOrNull()
                     rules = rules.orEmpty() + AvailabilityRule(
                         weekday = minOf((last?.weekday ?: 0) + 1, 7),
@@ -579,11 +518,11 @@ private fun AvailabilitySheet() {
                         slotMinutes = last?.slotMinutes ?: 60,
                         location = last?.location,
                     )
-                }) { Label("Add hours", systemImage = "plus", style = JKType.subheadline.semibold()) }
-                ChromeButton(onClick = { scope.launch { save() } }, enabled = !saving) {
-                    if (saving) ProgressView(tint = Color.Black) else Text("Save availability")
+                }) { IconLabel("Add hours", icon = IconKey.add, style = JKType.callout.semibold()) }
+                PrimaryButton(onClick = { scope.launch { save() } }, enabled = !saving) {
+                    if (saving) ProgressView() else Text("Save availability")
                 }
-                Text("Times are Europe/London. Existing bookings stay put.", style = JKType.caption2, color = JK.tertiary)
+                Text("Times are Europe/London. Existing bookings stay put.", style = JKType.caption, color = JKColors.textTertiary)
             }
         }
     }
@@ -591,11 +530,11 @@ private fun AvailabilitySheet() {
 
 @Composable
 private fun RuleCard(rule: AvailabilityRule, onChange: (AvailabilityRule) -> Unit, onDelete: () -> Unit) {
-    Column(Modifier.jkCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             WeekdayMenu(rule.weekday) { onChange(rule.copy(weekday = it)) }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.clickable(onClick = onDelete).padding(6.dp)) { SystemImage("trash", JKType.body, JK.tertiary) }
+            Box(Modifier.clickable(onClick = onDelete).padding(6.dp)) { Glyph(IconKey.delete, JKType.body, JKColors.textTertiary) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             JKField("Start", rule.start, { onChange(rule.copy(start = it)) }, Modifier.weight(1f), prompt = "07:00", keyboard = KeyboardType.Ascii)
@@ -625,14 +564,14 @@ private fun WeekdayMenu(weekday: Int, onSelect: (Int) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(weekdayNames[(weekday - 1).coerceIn(0, 6)], style = JKType.body, color = JK.text)
-            Icon(Icons.Rounded.UnfoldMore, contentDescription = null, tint = JK.text, modifier = Modifier.size(16.dp))
+            Text(weekdayNames[(weekday - 1).coerceIn(0, 6)], style = JKType.body, color = JKColors.text)
+            Glyph(IconKey.unfold, size = JKSize.iconSmall, tint = JKColors.text)
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = dialogSurface) {
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = JKColors.raised) {
             (1..7).forEach { d ->
                 DropdownMenuItem(
-                    text = { Text(weekdayNames[d - 1], style = JKType.body, color = JK.text) },
-                    trailingIcon = if (d == weekday) ({ SystemImage("checkmark", JKType.body, JK.text) }) else null,
+                    text = { Text(weekdayNames[d - 1], style = JKType.body, color = JKColors.text) },
+                    trailingIcon = if (d == weekday) ({ Glyph(IconKey.done, JKType.body, JKColors.text) }) else null,
                     onClick = { onSelect(d); open = false },
                 )
             }

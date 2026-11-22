@@ -310,11 +310,11 @@ describe('Weekly feedback', () => {
     assert.ok(Array.isArray(full.plan.workouts));
     assert.equal((await ok('GET', '/api/reports', { token: sam.token })).unread, 0);
     const msgs = await ok('GET', '/api/messages', { token: sam.token });
-    assert.ok(msgs.messages.some(m => m.text.includes('feedback')));
+    assert.ok(msgs.messages.some(m => m.text.includes('Your letter')));
     // Editing a published report doesn't post a second message.
     await ok('PUT', '/api/reports', { token: coach.token, body: { clientId: sam.me.id, week, summary: 'Solid week!', status: 'published' } });
     const again = await ok('GET', '/api/messages', { token: sam.token });
-    assert.equal(again.messages.filter(m => m.text.includes('feedback')).length, 1);
+    assert.equal(again.messages.filter(m => m.text.includes('Your letter')).length, 1);
   });
   test('nobody else can read or write it', async () => {
     assert.equal((await call('GET', `/api/reports/${report.id}`, { token: kim.token })).status, 404);

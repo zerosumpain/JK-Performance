@@ -1,6 +1,5 @@
 package com.jkperformance.app
 
-import com.jkperformance.app.design.BrandIntro
 
 import android.app.Application
 import android.provider.Settings
@@ -19,15 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.FitnessCenter
-import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,17 +50,17 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.jkperformance.app.design.NavHost
-import com.jkperformance.app.design.NavStack
-import com.jkperformance.app.design.rememberNavStack
 import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Outbox
 import com.jkperformance.app.net.Push
 import com.jkperformance.app.net.TabRouter
+import com.jkperformance.app.net.ClientRoute
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.jkperformance.app.design.*
+import com.jkperformance.app.design.components.*
 
 /**
  * The app process (JKPerformanceApp in Swift). Brings the singletons up in
@@ -96,13 +86,6 @@ class JKApplication : Application() {
     }
 }
 
-// The iPhone palette (Design/Theme.swift `JK`) for the shell's own pieces.
-private val Bg = Color.Black
-private val Card = Color(0xFF121212)
-private val Stroke = Color.White.copy(alpha = 0.09f)
-private val TextColor = Color.White
-private val Secondary = Color.White.copy(alpha = 0.6f)
-private val TabUnselected = Color(0xFF8E8E93)
 
 /**
  * One app, two audiences: a client trains, a coach runs the business. The
@@ -121,7 +104,7 @@ fun RootView() {
     // Once per launch, not again when the activity is recreated (rotation).
     var restored by rememberSaveable { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    Box(Modifier.fillMaxSize().background(JKColors.bg)) {
         when (session.phase) {
             AppSession.Phase.signedOut -> WelcomeView()
             AppSession.Phase.restoring -> RestoringView()
@@ -161,46 +144,35 @@ private fun RestoringView() {
     val session = AppSession
     val scope = rememberCoroutineScope()
     Column(
-        Modifier.fillMaxSize().background(Bg).padding(horizontal = 24.dp),
+        Modifier.fillMaxSize().background(JKColors.bg).padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier.size(76.dp).border(1.dp, Secondary, RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("JK", color = TextColor, fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
-        }
+        Monogram(size = JKSize.avatarLarge, tint = JKColors.accent)
         val error = session.restoreError
         if (error != null) {
-            Text(error, color = Secondary, fontSize = 12.sp, textAlign = TextAlign.Center)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                val shape = RoundedCornerShape(12.dp)
-                val padding = PaddingValues(vertical = 14.dp)
-                Button(
-                    onClick = { scope.launch { session.restore() } },
-                    modifier = Modifier.weight(1f),
-                    shape = shape,
-                    contentPadding = padding,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD6D6D6), contentColor = Color.Black),
-                ) { Text("Try again", fontWeight = FontWeight.SemiBold) }
-                OutlinedButton(
-                    onClick = { session.clear() },
-                    modifier = Modifier.weight(1f),
-                    shape = shape,
-                    contentPadding = padding,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Stroke),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Card, contentColor = TextColor),
-                ) { Text("Sign out", fontWeight = FontWeight.SemiBold) }
+            Text(error, style = JKType.caption, color = JKColors.textSecondary, textAlign = TextAlign.Center)
+            Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+                PrimaryButton("Try again", onClick = { scope.launch { session.restore() } }, modifier = Modifier.weight(1f))
+                SecondaryButton("Sign out", onClick = { session.clear() }, modifier = Modifier.weight(1f))
             }
         } else {
-            CircularProgressIndicator(color = Secondary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+            ProgressView(tint = JKColors.textSecondary)
         }
     }
 }
 
 /** One tab: its bar label and icon, and the root screen of its own navigation stack. */
-private class Tab<T>(val tag: T, val label: String, val icon: ImageVector, val root: @Composable () -> Unit)
+private class Tab<T>(
+    val tag: T,
+    val label: String,
+    val icon: @Composable (selected: Boolean) -> Unit,
+    val root: @Composable () -> Unit,
+) {
+    /** A tab whose glyph is an [IconKey]: outline when idle, filled when selected. */
+    constructor(tag: T, label: String, key: IconKey, root: @Composable () -> Unit) :
+        this(tag, label, { selected -> Glyph(key, size = JKSize.iconTab, filled = selected) }, root)
+}
 
 /**
  * The iPhone's TabView: a black tab bar, each tab with its own NavHost so
@@ -213,24 +185,24 @@ private fun <T> Tabs(tabs: List<Tab<T>>, selected: T, select: (T) -> Unit) {
     val stacks: Map<T, NavStack> = tabs.associate { it.tag to rememberNavStack() }
     val holder = rememberSaveableStateHolder()
     Scaffold(
-        containerColor = Bg,
+        containerColor = JKColors.bg,
         bottomBar = {
             Column {
-                HorizontalDivider(thickness = 0.5.dp, color = Stroke)
-                NavigationBar(containerColor = Bg, tonalElevation = 0.dp) {
+                HorizontalDivider(thickness = JKSize.hairline, color = JKColors.hairline)
+                NavigationBar(containerColor = JKColors.bg, tonalElevation = 0.dp) {
                     tabs.forEach { tab ->
                         NavigationBarItem(
                             selected = tab.tag == selected,
                             onClick = {
                                 if (tab.tag == selected) stacks.getValue(tab.tag).popToRoot() else select(tab.tag)
                             },
-                            icon = { Icon(tab.icon, contentDescription = null) },
-                            label = { Text(tab.label, fontSize = 10.sp) },
+                            icon = { tab.icon(tab.tag == selected) },
+                            label = { Text(tab.label, style = JKType.caption, maxLines = 1) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = TextColor,
-                                selectedTextColor = TextColor,
-                                unselectedIconColor = TabUnselected,
-                                unselectedTextColor = TabUnselected,
+                                selectedIconColor = JKColors.text,
+                                selectedTextColor = JKColors.text,
+                                unselectedIconColor = JKColors.textSecondary,
+                                unselectedTextColor = JKColors.textSecondary,
                                 indicatorColor = Color.Transparent,
                             ),
                         )
@@ -248,37 +220,73 @@ private fun <T> Tabs(tabs: List<Tab<T>>, selected: T, select: (T) -> Unit) {
     }
 }
 
+/**
+ * The client's three tabs (atelier-spec.md, IA): Today, Progress (plans with
+ * 'progress') and JK. Account is the avatar sheet on Today.
+ */
 @Composable
 fun ClientTabs() {
     val session = AppSession
+    val gate = session.gate
+    LaunchedEffect(gate.progress) {
+        if (!gate.progress && TabRouter.client == TabRouter.Client.progress) TabRouter.client = TabRouter.Client.today
+    }
     Tabs(
-        tabs = listOf(
-            Tab(TabRouter.Client.home, "Home", Icons.Outlined.Home) { ClientHomeView() },
-            Tab(TabRouter.Client.plan, "Plan", Icons.Outlined.FitnessCenter) { WorkoutPlanView() },
-            Tab(TabRouter.Client.calendar, "Calendar", Icons.Outlined.CalendarToday) { MyCalendarView() },
-            Tab(TabRouter.Client.messages, "Messages", Icons.Outlined.ChatBubbleOutline) {
-                MessagesThreadView(
-                    clientId = null,
-                    otherName = session.me?.coach?.name ?: "Your coach",
-                    subtitle = "Usually replies within an hour",
-                )
-            },
-            Tab(TabRouter.Client.account, "Account", Icons.Outlined.Person) { AccountView() },
-        ),
+        tabs = buildList {
+            add(Tab(TabRouter.Client.today, "Today", IconKey.today) {
+                RouteDrain(TabRouter.todayRequest) { TabRouter.todayRequest = null }
+                TodayView()
+            })
+            if (gate.progress) add(Tab(TabRouter.Client.progress, "Progress", IconKey.progress) { ProgressTab() })
+            add(Tab(TabRouter.Client.jk, "JK", { selected -> JKTabIcon(session.me?.coach?.avatarMediaId, selected) }) {
+                RouteDrain(TabRouter.jkRequest) { TabRouter.jkRequest = null }
+                JKView()
+            })
+        },
         selected = TabRouter.client,
         select = { TabRouter.client = it },
     )
 }
 
+/** The screen for a client route, pushed on whichever tab asked for it. */
+@Composable
+fun ClientRouteView(route: ClientRoute) {
+    when (route) {
+        is ClientRoute.yourWeek -> YourWeekView(day = route.day)
+        is ClientRoute.session -> WorkoutDetailLoader(workoutId = route.workoutId)
+        is ClientRoute.letter -> LetterView(reportId = route.reportId)
+        ClientRoute.guides -> GuidesList()
+        is ClientRoute.guide -> GuideView(guideId = route.guideId)
+        ClientRoute.challenges -> ChallengesView()
+    }
+}
+
+/** Push a client route on the current tab's stack. */
+fun NavStack.push(route: ClientRoute) = push { ClientRouteView(route) }
+
+/** Drains a TabRouter request (a tapped push, a link from another tab) into this tab's stack. */
+@Composable
+private fun RouteDrain(request: TabRouter.RouteRequest?, consumed: () -> Unit) {
+    val nav = LocalNav.current
+    LaunchedEffect(request?.serial) {
+        val r = request ?: return@LaunchedEffect
+        if (r.reset) nav.popToRoot()
+        r.routes.forEach { nav.push(it) }
+        consumed()
+    }
+}
+
+/**
+ * The coach's three tabs: Today (needs you), Clients and Messages. Schedule
+ * became the day agenda behind Today's strip; Guides moved to Account.
+ */
 @Composable
 fun CoachTabs() {
     Tabs(
         tabs = listOf(
-            Tab(TabRouter.Coach.today, "Today", Icons.Outlined.Schedule) { CoachTodayView() },
-            Tab(TabRouter.Coach.clients, "Clients", Icons.Outlined.Group) { ClientsView() },
-            Tab(TabRouter.Coach.schedule, "Schedule", Icons.Outlined.CalendarToday) { ScheduleView() },
-            Tab(TabRouter.Coach.messages, "Messages", Icons.Outlined.ChatBubbleOutline) { CoachThreadsView() },
-            Tab(TabRouter.Coach.guides, "Guides", Icons.AutoMirrored.Outlined.MenuBook) { GuidesView() },
+            Tab(TabRouter.Coach.today, "Today", IconKey.coachToday) { CoachTodayView() },
+            Tab(TabRouter.Coach.clients, "Clients", IconKey.clients) { ClientsView() },
+            Tab(TabRouter.Coach.messages, "Messages", IconKey.messages) { CoachThreadsView() },
         ),
         selected = TabRouter.coach,
         select = { TabRouter.coach = it },

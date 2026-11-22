@@ -5,8 +5,22 @@ import { credits } from './bookings.mjs';
 import { fail, num, oneOf, raw, str } from './http.mjs';
 import { PLAN_IDS, planOf } from './plans.mjs';
 import { erasePhotos } from './progress.mjs';
-import { hash, nowIso, tx } from './store.mjs';
+import { eraseMedia, mediaForExport } from './media.mjs';
+import { coachSettings, featuresOf, preferencesOf, replyLineFor } from './settings.mjs';
+import { createDraftGoal, hash, nowIso, tx } from './store.mjs';
 import { londonDay, monthBounds } from './time.mjs';
+
+/** The client's coach as the apps show them: portrait and signature (media ids, with fetch paths) and the reply lines. */
+function coachOut(db, client, coach) {
+  const s = coachSettings(db, coach.id);
+  const url = id => (id ? `/api/media/${id}` : null);
+  return {
+    id: coach.id, name: coach.name,
+    avatarMediaId: s.avatarMediaId, avatarUrl: url(s.avatarMediaId),
+    signatureMediaId: s.signatureMediaId, signatureUrl: url(s.signatureMediaId),
+    replyExpectation: s.replyExpectation, replyLine: replyLineFor(db, client),
+  };
+}
 
 export function meOut(db, user) {
   const coach = user.coach_id ? db.prepare('SELECT id, name FROM users WHERE id=?').get(user.coach_id) : null;
@@ -16,7 +30,12 @@ export function meOut(db, user) {
     membership: user.role === 'client'
       ? { plan: plan.id, planName: plan.name, since: user.plan_since, renewsOn: plan.id === 'none' ? null : monthBounds(londonDay()).next, ...credits(db, user) }
       : null,
-    coach: coach ? { id: coach.id, name: coach.name } : null,
+    coach: coach ? coachOut(db, user, coach) : null,
+    // What the app may show: plan features, the coach's toggles, and whether macro targets are set (see settings.mjs).
+    features: featuresOf(db, user),
+    preferences: preferencesOf(user),
+    // A coach's own settings (studioTools hides the desk editors on the phone; default off).
+    coachSettings: user.role === 'coach' ? coachSettings(db, user.id) : null,
     healthSharing: user.role === 'client' ? !!user.health_share : null,
     // Clients answer a few first-run questions in the app (demo clients are built already answered).
     onboarded: user.role !== 'client' || !!user.onboarded_at,
@@ -56,6 +75,10 @@ function putOnboarding(_req, ctx) {
   // Skipping every question leaves no profile, so the coach sees "hasn't answered" rather than an empty card.
   const answered = profile.goals.length || profile.experience || profile.daysPerWeek || profile.preferredTime || profile.injuries;
   ctx.db.prepare('UPDATE users SET profile=?, onboarded_at=COALESCE(onboarded_at, ?) WHERE id=?').run(answered ? JSON.stringify(profile) : null, done ? nowIso() : null, ctx.user.id);
+  // The goals step is a draft for JK: "JK will turn this into your goal at your first session."
+  if (answered && !ctx.db.prepare('SELECT 1 FROM goals WHERE client_id=?').get(ctx.user.id)) {
+    createDraftGoal(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
+  }
   return meOut(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
 }
 
@@ -162,6 +185,7 @@ async function deleteMe(_req, ctx) {
     fail(409, 'A coach with clients cannot delete their account here; contact support');
   }
   erasePhotos(ctx.db, ctx.config, u.id);
+  eraseMedia(ctx.db, ctx.config, u.id);
   tx(ctx.db, () => {
     ctx.db.prepare('DELETE FROM workouts WHERE created_by=? AND client_id<>?').run(u.id, u.id);
     ctx.db.prepare('DELETE FROM users WHERE id=?').run(u.id);
@@ -187,8 +211,8 @@ function exportMe(_req, ctx) {
     habits: all('SELECT * FROM habits WHERE client_id=?', user.id).map(h => ({ ...h, days: all('SELECT date, value, done FROM habit_days WHERE habit_id=? ORDER BY date', h.id) })),
     nutritionTargets: all('SELECT kcal, protein, carbs, fat FROM nutrition_targets WHERE client_id=?', user.id),
     nutritionEntries: all('SELECT date, name, kcal, protein, carbs, fat, at FROM nutrition_entries WHERE client_id=? ORDER BY at', user.id),
-    checkins: all('SELECT week, energy, sleep, pain, note, submitted_at, reply FROM checkins WHERE client_id=? ORDER BY week', user.id),
-    messages: all('SELECT from_role, text, at FROM messages WHERE client_id=? ORDER BY at', user.id),
+    checkins: all('SELECT week, energy, sleep, stress, pain, note, win, struggle, photo_ids, submitted_at, reply FROM checkins WHERE client_id=? ORDER BY week', user.id),
+    messages: all('SELECT from_role, kind, text, at, report_id, exercise_id, media_id FROM messages WHERE client_id=? ORDER BY at', user.id),
     bookings: all('SELECT kind, start, end, location, title, cancelled_at FROM bookings WHERE client_id=? ORDER BY start', user.id),
     classes: all('SELECT b.title, b.start, b.end FROM class_attendees a JOIN bookings b ON b.id=a.booking_id WHERE a.user_id=?', user.id),
     measurements: all('SELECT date, kind, value FROM measurements WHERE user_id=? ORDER BY date', user.id),
@@ -196,7 +220,12 @@ function exportMe(_req, ctx) {
     healthSharing: { sharedWithCoach: !!user.health_share, since: user.health_share_at },
     healthSamples: all('SELECT kind, date, start, end, value FROM health_samples WHERE user_id=? ORDER BY start', user.id),
     healthActivities: all('SELECT type, date, start, end, minutes, kcal, distance_km, avg_hr, source FROM health_activities WHERE user_id=? ORDER BY start', user.id),
-    weeklyFeedback: all('SELECT week, summary, wins, focus, published_at FROM reports WHERE client_id=? AND published_at IS NOT NULL ORDER BY week', user.id),
+    weeklyFeedback: all(`SELECT week, kind, headline, keep, adjust, question, answer, answered_at, summary, wins, focus, media_id, published_at, deliver_at, read_at
+      FROM reports WHERE client_id=? AND published_at IS NOT NULL AND (deliver_at IS NULL OR deliver_at<=?) ORDER BY week`, user.id, nowIso()),
+    goals: all('SELECT title, metric, unit, baseline, target, current_value, start_date, target_date, why, status, chapter_name, created_at, updated_at FROM goals WHERE client_id=? ORDER BY created_at', user.id),
+    restDays: all('SELECT date, reason FROM rest_days WHERE client_id=? ORDER BY date', user.id),
+    media: mediaForExport(db, user.id),
+    preferences: { notificationsOn: user.notifications_on !== 0, eveningReminderTime: user.evening_reminder ?? null },
     notificationDevices: all('SELECT platform, env, created_at, updated_at FROM push_tokens WHERE user_id=?', user.id),
     challenges: all('SELECT c.title, m.joined_at FROM challenge_members m JOIN challenges c ON c.id=m.challenge_id WHERE m.user_id=?', user.id),
   };

@@ -50,7 +50,7 @@ function ico(name, size = 16) {
 const iconTile = (name, size = 34) => h('span', { class: 'pg-tile', style: { width: `${size}px`, height: `${size}px` } }, ico(name, Math.round(size * 0.48)));
 
 /** The iPhone's CheckCircle. */
-const checkCircle = on => h('span', { class: 'pg-check' + (on ? ' on' : '') }, on ? icon('check', 13) : null);
+const checkCircle = on => h('span', { class: 'pg-check' + (on ? ' on' : '') }, on ? icon('check', 18) : null);
 
 /** The iPhone's ThinBar. */
 const thinBar = fraction => h('div', { class: 'pg-bar' }, h('div', { style: { width: `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%` } }));
@@ -195,7 +195,7 @@ function renderScreen(el, tabParam, openId, view) {
   const tab = tabParam || 'programs';
   let reload = () => {};
   const actions = tab === 'programs'
-    ? [h('button', { type: 'button', class: 'btn primary small pg-new', onclick: () => editProgram(null, reload) }, icon('plus', 14), 'New')]
+    ? [h('button', { type: 'button', class: 'btn primary small pg-new', onclick: () => editProgram(null, reload) }, icon('plus', 18), 'New')]
     : [];
   const body = h('div', { class: 'pg-body' });
   fill(el,
@@ -298,11 +298,11 @@ function editProgram(program, reload) {
             dayStep),
           itemsEl,
           h('div', { class: 'spread mt' },
-            button(h('span', { class: 'row gap4' }, icon('plus', 14), 'Add exercise'), () => pickExercise(ex => {
+            button(h('span', { class: 'row gap4' }, icon('plus', 18), 'Add exercise'), () => pickExercise(ex => {
               w.items.push({ localId: uid(), exerciseId: ex.id, exerciseName: ex.name, sets: 3, reps: '10', load: '', rpe: null, note: null });
               drawItems();
             }), { small: true }),
-            button(h('span', { class: 'row gap4' }, icon('trash', 14), 'Remove workout'), () => {
+            button(h('span', { class: 'row gap4' }, icon('trash', 18), 'Remove workout'), () => {
               d.workouts = d.workouts.filter(x => x.localId !== w.localId);
               drawWorkouts();
             }, { small: true, kind: 'danger' })));
@@ -319,7 +319,7 @@ function editProgram(program, reload) {
         stepper(v => `${v} wk`, () => d.weeks, v => { d.weeks = v; }, 1, () => 52, { onchange: () => steppers.forEach(s => s.redraw()) })),
       eyebrow('Workouts', 'Day offset from the start date'),
       workoutsEl,
-      button(h('span', { class: 'row gap4' }, icon('plus', 14), 'Add workout'), () => {
+      button(h('span', { class: 'row gap4' }, icon('plus', 18), 'Add workout'), () => {
         const next = Math.max(-1, ...d.workouts.map(w => w.dayOffset)) + 1;
         d.workouts.push({ localId: uid(), dayOffset: Math.min(next, maxDay()), title: `Workout ${d.workouts.length + 1}`, items: [] });
         drawWorkouts();
@@ -436,7 +436,7 @@ function assignProgram(program, reload) {
       try {
         const out = await api('POST', `/api/programs/${encodeURIComponent(program.id)}/assign`, { clientId, startDate: start });
         created = out.created;
-        fill(status, h('p', { class: 'small muted row gap4' }, icon('check', 14), `Created ${created} draft workouts. Publish them from the client's Plan tab.`));
+        fill(status, h('p', { class: 'small muted row gap4' }, icon('check', 18), `Created ${created} draft workouts. Publish them from the client's Plan tab.`));
         go_.textContent = 'Done';
       } catch (err) {
         fill(status, errorLine(err));
@@ -527,7 +527,7 @@ function autoflowsTab(el, view, openId) {
     }
   };
   el.append(
-    button(h('span', { class: 'row gap4' }, icon('plus', 15), 'New autoflow'), () => editAutoflow(null, load), { kind: 'pg-ghost' }),
+    button(h('span', { class: 'row gap4' }, icon('plus', 18), 'New autoflow'), () => editAutoflow(null, load), { kind: 'pg-ghost' }),
     list);
   load();
   return load;
@@ -566,7 +566,7 @@ function autoflowCard(flow, reload) {
       ])),
     h('div', { class: 'pg-steps' }, flow.steps.map(s => h('div', { class: 'pg-step' },
       h('span', { class: 'pg-step-day' }, `Day ${s.day}`),
-      h('span', { class: 'faint' }, icon(STEP_ICON[s.action] || 'dumbbell', 13)),
+      h('span', { class: 'faint' }, icon(STEP_ICON[s.action] || 'dumbbell', 18)),
       h('span', { class: 'small clamp1' }, s.label || capitalised(s.action))))),
     runs.length ? [toggleRuns, runsEl] : null);
 }
@@ -649,7 +649,7 @@ function editAutoflow(flow, reload) {
     };
     const drawSteps = () => fill(stepsEl, d.steps.map(stepEditor));
 
-    const add = (title, iconName, action) => button(h('span', { class: 'row gap4' }, icon(iconName, 14), title), () => {
+    const add = (title, iconName, action) => button(h('span', { class: 'row gap4' }, icon(iconName, 18), title), () => {
       const day = Math.max(0, Math.max(-1, ...d.steps.map(s => s.day)) + 1);
       const step = { id: uid(), day, action };
       if (action === 'form') step.formId = forms[0]?.id;
@@ -791,7 +791,7 @@ export function formRequestRow(r, { showClient = false } = {}) {
       h('div', { class: 'strong clamp1' }, showClient ? `${r.client?.name || 'Client'} · ${r.name}` : r.name),
       h('div', { class: 'tiny', style: { color: urgent ? 'var(--urgent)' : 'var(--faint)' } }, status)),
     r.submittedAt && !r.reviewedAt ? dot(isFlagged(r) ? 'var(--urgent)' : 'var(--waiting)') : null,
-    icon('chevron', 14));
+    icon('chevron', 18));
 }
 
 /** One answer as the iPhone shows it: text, "4 / 5", Yes or No. */
@@ -827,7 +827,7 @@ async function renderResponse(el, id, view) {
             ` · sent ${dayMonth(r.sentAt)}${r.fromAutoflow ? ' by an autoflow' : ''}`)),
         status,
         isFlagged(r) ? h('div', { class: 'card pg-flagged' },
-          h('div', { class: 'row gap4 small strong', style: { color: 'var(--urgent)' } }, icon('warning', 15), 'Answered yes to'),
+          h('div', { class: 'row gap4 small strong', style: { color: 'var(--urgent)' } }, icon('warning', 18), 'Answered yes to'),
           h('ul', { class: 'pg-flag-list' }, r.flagged.map(q => h('li', { class: 'small' }, q))),
           h('div', { class: 'tiny faint' }, 'Talk to them before the next hard session.')) : null,
         r.submittedAt ? [
@@ -838,8 +838,8 @@ async function renderResponse(el, id, view) {
               h('div', { class: 'strong pg-answer-text', style: q.flag && a === true ? { color: 'var(--urgent)' } : null }, answerText(a)));
           })),
           r.client ? h('div', { class: 'row mt' },
-            link(`/messages/${encodeURIComponent(r.client.id)}`, { class: 'btn' }, icon('bubble', 15), `Message ${first}`),
-            link(`/clients/${encodeURIComponent(r.client.id)}/feedback`, { class: 'btn' }, icon('clients', 15), `${first}'s page`)) : null,
+            link(`/messages/${encodeURIComponent(r.client.id)}`, { class: 'btn' }, icon('bubble', 18), `Message ${first}`),
+            link(`/clients/${encodeURIComponent(r.client.id)}/feedback`, { class: 'btn' }, icon('clients', 18), `${first}'s page`)) : null,
         ] : [
           emptyCard('clock', 'Not answered yet', `Sent ${fmtRelative(r.sentAt)}.`),
           h('div', { class: 'row' }, button('Withdraw form', async () => {
@@ -934,7 +934,7 @@ function editForm(src, reload) {
         field('Intro (shown at the top)', textInput(d, 'intro', { placeholder: 'A few questions before we start' }))),
       h('div', { class: 'eyebrow spread' }, h('span', null, 'Questions'), h('span', { class: 'eyebrow-trailing' }, count)),
       questionsEl,
-      menu(h('span', { class: 'row gap4' }, icon('plus', 14), 'Add question'), KINDS.map(([kind, label]) => ({
+      menu(h('span', { class: 'row gap4' }, icon('plus', 18), 'Add question'), KINDS.map(([kind, label]) => ({
         label, onclick: () => {
           d.questions.push({ id: nextQuestionId(d), kind, label: '', options: kind === 'choice' ? ['Option 1', 'Option 2'] : undefined, localId: uid() });
           draw();

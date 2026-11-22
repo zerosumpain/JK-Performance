@@ -45,6 +45,6 @@ class MainActivity : ComponentActivity() {
         if (SignIn.isAppleReturn(link) && link != null) {
             lifecycleScope.launch { SignIn.finishApple(this@MainActivity, link) }
         }
-        intent.getStringExtra(Push.KIND_EXTRA)?.let(TabRouter::open)
+        intent.getStringExtra(Push.KIND_EXTRA)?.let { TabRouter.open(it, intent.getStringExtra(Push.ID_EXTRA)) }
     }
 }

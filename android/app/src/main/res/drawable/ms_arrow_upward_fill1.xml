@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "arrow_upward" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M452.12-664.27 247.77-459.92q-8.62 8.42-19.87 8.46-11.25.04-19.86-8.77-8.69-8.62-8.75-19.77-.06-11.15 8.75-19.96L456-747.92q5.12-5.12 11.1-7.67 5.98-2.56 12.9-2.56t12.9 2.56q5.98 2.55 11.29 7.67l247.96 247.96q8.12 8.31 8.31 19.71.19 11.4-8.31 20.02-8.8 8.81-20.02 8.81-11.21 0-20.01-8.81L508.08-664.27v448.12q0 11.65-8.22 19.86-8.21 8.21-19.86 8.21-11.65 0-19.77-8.21-8.11-8.21-8.11-19.86v-448.12Z" />
+    </group>
+</vector>

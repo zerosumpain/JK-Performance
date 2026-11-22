@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded "credit_card" (Apache 2.0), exported by scripts/export-symbols.mjs. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="false">
+    <group android:translateY="960">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M851.92-704.54v449.08q0 28.36-19.91 48.27-19.92 19.92-48.27 19.92H176.26q-28.35 0-48.27-19.92-19.91-19.91-19.91-48.27v-449.08q0-28.36 19.91-48.27 19.92-19.92 48.27-19.92h607.48q28.35 0 48.27 19.92 19.91 19.91 19.91 48.27Zm-687.88 84.73h631.92v-84.65q0-4.62-3.84-8.46-3.85-3.85-8.47-3.85h-607.3q-4.62 0-8.47 3.85-3.84 3.84-3.84 8.46v84.65Zm0 121.23v243.04q0 4.62 3.84 8.46 3.85 3.85 8.47 3.85h607.3q4.62 0 8.47-3.85 3.84-3.84 3.84-8.46v-243.04H164.04Zm0 255.35v-473.54 473.54Z" />
+    </group>
+</vector>
