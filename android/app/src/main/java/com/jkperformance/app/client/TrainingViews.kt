@@ -55,6 +55,10 @@ import com.jkperformance.app.net.Exercise
 import com.jkperformance.app.net.ExercisesResponse
 import com.jkperformance.app.net.LoggedSet
 import com.jkperformance.app.net.NoteInput
+import com.jkperformance.app.net.CompleteInput
+import com.jkperformance.app.net.Feel
+import com.jkperformance.app.net.PersonalRecord
+import com.jkperformance.app.net.ProgressData
 import com.jkperformance.app.net.Outbox
 import com.jkperformance.app.net.SetInput
 import com.jkperformance.app.net.Workout
@@ -71,137 +75,13 @@ import java.time.LocalDate
 import com.jkperformance.app.design.*
 import com.jkperformance.app.design.components.*
 
-// MARK: - Workout plan (Plan tab root)
+// MARK: - Session (detail, logger and complete, one flow)
 
 /**
- * The Plan tab's state. It lives in a ViewModel, not `remember`, because the
- * NavHost disposes a covered screen: the logger pushed on top hands each
- * logged set back here, and an offline set must still be on screen when the
- * person comes back (SwiftUI keeps the covered view's @State alive). Keyed
- * by person so a different account on this phone starts clean.
+ * [WorkoutDetailLoader]'s state. It lives in a ViewModel, not `remember`, so the
+ * logger pushed on top can hand each logged set back here, and an offline set is
+ * still on screen when the person comes back. Keyed by person and workout.
  */
-private class WorkoutPlanState : ViewModel() {
-    var selected by mutableStateOf(LocalDate.now(Day.zone))
-    var week by mutableStateOf<List<WorkoutSummary>?>(null)
-    var weekKey by mutableStateOf("")
-    var workout by mutableStateOf<Workout?>(null)
-    var chosenId by mutableStateOf<String?>(null)
-    var error by mutableStateOf<String?>(null)
-    var loadingDetail by mutableStateOf(false)
-
-    val days: List<LocalDate> get() = Day.week(selected)
-
-    val dayWorkouts: List<WorkoutSummary>
-        get() = (week ?: emptyList()).filter { it.date == Day.string(selected) }.sortedBy { it.startsAt ?: "" }
-
-    suspend fun loadWeek(force: Boolean) {
-        val key = Day.string(days[0])
-        if (!force && key == weekKey && week != null) return
-        try {
-            val reply: WorkoutsResponse = APIClient.get("/api/workouts", mapOf("from" to key, "to" to Day.string(days[6])))
-            week = reply.workouts
-            weekKey = key
-            error = null
-            if (force) loadDetail()
-        } catch (e: Exception) {
-            if (e.isCancellation) throw e
-            error = e.readable
-        }
-    }
-
-    suspend fun loadDetail() {
-        if (week == null) return
-        val options = dayWorkouts
-        val target = options.firstOrNull { it.id == chosenId }
-            ?: options.firstOrNull { it.completedAt == null }
-            ?: options.firstOrNull()
-        if (target == null) {
-            workout = null
-            return
-        }
-        if (workout?.id != target.id) workout = null
-        loadingDetail = true
-        try {
-            workout = APIClient.get<Workout>("/api/workouts/${seg(target.id)}")
-        } catch (e: Exception) {
-            if (e.isCancellation) throw e
-            error = e.readable
-        } finally {
-            loadingDetail = false
-        }
-    }
-}
-
-/**
- * The week's day strip, the selected day's workout and its exercises with
- * the coach's prescription. Only published workouts reach a client.
- */
-@Composable
-fun WorkoutPlanView() {
-    val s = viewModel(key = "WorkoutPlanView.${AppSession.me?.id}") { WorkoutPlanState() }
-    val days = s.days
-
-    LaunchedEffect(Day.string(days[0])) { s.loadWeek(force = false) }
-    LaunchedEffect("${Day.string(s.selected)}|${s.chosenId ?: ""}|${s.week?.size ?: -1}") { s.loadDetail() }
-
-    JKRefreshable(onRefresh = { s.loadWeek(force = true) }, modifier = Modifier.jkScreen()) {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            ScreenHeader(eyebrow = "Week of ${Fmt.dayMonth(days[0])}", title = "Workout plan") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeaderIcon("chevron.left", Modifier.clickable { s.selected = Day.add(-7, s.selected) })
-                    HeaderIcon("chevron.right", Modifier.clickable { s.selected = Day.add(7, s.selected) })
-                    HeaderIcon("plus", Modifier.navLink { ExercisesView() })
-                }
-            }
-            DayStrip(
-                days = days,
-                selected = s.selected,
-                onSelect = { s.selected = it },
-                marked = (s.week ?: emptyList()).map { it.date }.toSet(),
-            )
-
-            val error = s.error
-            val dayWorkouts = s.dayWorkouts
-            when {
-                error != null && s.week == null -> ErrorCard(error, retry = { s.loadWeek(force = true) })
-                s.week == null -> LoadingCard()
-                dayWorkouts.isEmpty() -> EmptyCard(title = "Nothing planned", detail = "No workout from your coach on ${Fmt.longDay(s.selected)}.")
-                else -> {
-                    if (error != null) ErrorBanner(error)
-                    if (dayWorkouts.size > 1) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            dayWorkouts.forEach { w ->
-                                Chip(label = w.title, selected = w.id == s.workout?.id) { s.chosenId = w.id }
-                            }
-                        }
-                    }
-                    val workout = s.workout
-                    if (workout != null) {
-                        WorkoutBody(workout) { s.workout = it }
-                    } else if (s.loadingDetail) {
-                        LoadingCard()
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** A header action: an unboxed glyph in a 48dp target. */
-@Composable
-private fun HeaderIcon(name: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier.size(JKSize.touchTarget),
-        contentAlignment = Alignment.Center,
-    ) {
-        Glyph(IconKey.fromSymbol(name), JKType.body, JKColors.text)
-    }
-}
-
-/** [WorkoutDetailLoader]'s state, kept across the logger being pushed on top (see [WorkoutPlanState]). */
 private class WorkoutLoaderState : ViewModel() {
     var workout by mutableStateOf<Workout?>(null)
     var error by mutableStateOf<String?>(null)
@@ -242,44 +122,25 @@ fun WorkoutDetailLoader(workoutId: String) {
 }
 
 /**
- * A workout's summary card, its exercises and "Complete workout". Emits its
- * pieces straight into the caller's column, as the SwiftUI body does into the
- * parent VStack. `onChange` is the binding's setter: every change made here or
- * in the logger goes back through it.
+ * A workout's summary, its exercises and "Finish session", which opens the
+ * session-complete page (feel word and note) before anything is sent. Emits
+ * its pieces into the caller's column; `onChange` is the binding's setter.
  */
 @Composable
 fun WorkoutBody(workout: Workout, onChange: (Workout) -> Unit) {
-    var completing by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    var finishing by remember { mutableStateOf(false) }
 
-    Column(Modifier.jkSurface(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(workout.title, style = JKType.headline, color = JKColors.text, modifier = Modifier.weight(1f))
-            val editedAt = workout.editedAt
-            if (workout.editedBy == "coach" && editedAt != null) {
-                IconLabel("Coach · ${Fmt.relative(editedAt)}", icon = IconKey.clients, style = JKType.caption, color = JKColors.textTertiary)
-            } else {
-                IconLabel("Shared with Coach", icon = IconKey.clients, style = JKType.caption, color = JKColors.textTertiary)
-            }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        Text(workout.title, style = JKType.display, color = JKColors.text)
         Text(
-            (listOfNotNull(workout.startsAt, workout.location).filter { it.isNotEmpty() } + "${workout.items.size} exercises")
+            (listOfNotNull(workout.startsAt, workout.location).filter { it.isNotEmpty() } +
+                listOf("${workout.items.size} exercises", "${workout.doneCount} of ${workout.items.size} done"))
                 .joinToString(" · "),
-            style = JKType.caption,
-            color = JKColors.textTertiary,
+            style = JKType.caption.monospacedDigit(),
+            color = JKColors.textSecondary,
         )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThinBar(
-                fraction = if (workout.items.isEmpty()) 0.0 else workout.doneCount.toDouble() / workout.items.size,
-                modifier = Modifier.weight(1f),
-            )
-            Text("${workout.doneCount} of ${workout.items.size} done", style = JKType.caption, color = JKColors.textTertiary)
-        }
         val notes = workout.notes
-        if (!notes.isNullOrEmpty()) {
-            IconLabel(notes, icon = IconKey.messages, style = JKType.caption, color = JKColors.textSecondary)
-        }
+        if (!notes.isNullOrEmpty()) Text(notes, style = quoteStyle(inSheet = true), color = JKColors.text)
     }
 
     workout.items.sortedBy { it.order }.forEach { item ->
@@ -287,44 +148,134 @@ fun WorkoutBody(workout: Workout, onChange: (Workout) -> Unit) {
     }
 
     OfflineBanner()
-    error?.let { ErrorBanner(it) }
     val done = workout.completedAt
     if (done != null) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-            IconLabel("Completed ${Fmt.relative(done)}", icon = IconKey.verified, style = JKType.callout.semibold(), color = JKColors.textSecondary)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+            Text("Done ${Fmt.relative(done)}", style = JKType.callout, color = JKColors.textSecondary)
+            (workout.feelWord ?: Feel.word(workout.feel))?.let {
+                Text("Felt ${it.lowercase()}", style = JKType.caption, color = JKColors.textSecondary)
+            }
         }
     } else if (workout.items.isNotEmpty()) {
-        PrimaryButton(
-            onClick = {
-                scope.launch {
-                    completing = true
-                    val path = "/api/workouts/${seg(workout.id)}/complete"
-                    try {
-                        onChange(APIClient.send<Workout, NoteInput>("POST", path, NoteInput(note = null)))
-                        error = null
-                    } catch (e: Exception) {
-                        when {
-                            e.isCancellation -> throw e
-                            Outbox.isOffline(e) -> {
-                                // Queued after the sets logged offline, so the server sees them first.
-                                Outbox.enqueue("POST", path, NoteInput(note = null))
-                                onChange(workout.copy(completedAt = Instant.now()))
-                                error = null
-                            }
-                            else -> error = e.readable
-                        }
-                    } finally {
-                        completing = false
-                    }
+        PrimaryButton("Finish session", onClick = { finishing = true })
+    }
+
+    if (finishing) {
+        Sheet(onDismiss = { finishing = false }) {
+            SessionCompleteView(workout) { onChange(it) }
+        }
+    }
+}
+
+/**
+ * The session-complete page, the most considered page in the app: the serif
+ * "Done.", the session in figures, any new bests, how it felt in one word, an
+ * optional note, and "JK will see this." Shown in a [Sheet].
+ */
+@Composable
+fun SessionCompleteView(workout: Workout, onDone: (Workout) -> Unit) {
+    val dismiss = LocalDismiss.current
+    val scope = rememberCoroutineScope()
+    var feel by remember { mutableStateOf<Int?>(null) }
+    var note by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var records by remember { mutableStateOf<List<PersonalRecord>>(emptyList()) }
+
+    val sets = workout.items.flatMap { it.logged }
+    val volume = sets.sumOf { (parseNumber(it.load) ?: 0.0) * it.reps }
+    val times = sets.mapNotNull { it.at }.sorted()
+    val minutes = if (times.size >= 2 && times.last() > times.first()) (times.last().epochSecond - times.first().epochSecond) / 60.0 else null
+
+    LaunchedEffect(Unit) {
+        val p = runCatching { APIClient.get<ProgressData>("/api/progress") }.getOrNull() ?: return@LaunchedEffect
+        val names = workout.items.map { it.exercise.name }.toSet()
+        records = p.records.filter { it.date == Day.today && it.exercise in names }
+    }
+
+    suspend fun finish() {
+        saving = true
+        val path = "/api/workouts/${seg(workout.id)}/complete"
+        val input = CompleteInput(note = note.trim().ifEmpty { null }, feel = feel)
+        try {
+            onDone(APIClient.send<Workout, CompleteInput>("POST", path, input))
+            dismiss()
+        } catch (e: Exception) {
+            when {
+                e.isCancellation -> throw e
+                Outbox.isOffline(e) -> {
+                    // Queued after the sets logged offline, so the server sees them first.
+                    Outbox.enqueue("POST", path, input)
+                    onDone(workout.copy(completedAt = Instant.now(), feel = feel))
+                    dismiss()
                 }
-            },
-            enabled = !completing,
-        ) {
-            if (completing) {
-                ProgressView()
-            } else {
-                IconLabel("Complete workout", icon = IconKey.done, style = LocalTextStyle.current, color = LocalContentColor.current)
+                else -> error = e.readable
             }
+        } finally {
+            saving = false
+        }
+    }
+
+    Column(Modifier.jkScreen()) {
+        TopBar(leading = { BarButton("Back") { dismiss() } })
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(JKSpace.gutter),
+            verticalArrangement = Arrangement.spacedBy(JKSpace.xxl),
+        ) {
+            Text("Done. ${workout.title}.", style = JKType.letterHeadline, color = JKColors.text)
+            val figure: @Composable (String, String, Modifier) -> Unit = { value, label, m ->
+                Column(m.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+                    Text(value, style = JKType.numberTile, color = JKColors.text, maxLines = 1)
+                    Text(label, style = JKType.caption, color = JKColors.textSecondary)
+                }
+            }
+            val figures = listOf(
+                "${sets.size}" to "Sets",
+                (if (volume > 0) "${Fmt.number(volume, digits = 0)} kg" else "–") to "Volume",
+                (minutes?.let { Fmt.duration(it) } ?: "–") to "Duration",
+            )
+            if (isAccessibilityFontScale()) {
+                Column(verticalArrangement = Arrangement.spacedBy(JKSpace.l)) { figures.forEach { (v, l) -> figure(v, l, Modifier) } }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.xl)) { figures.forEach { (v, l) -> figure(v, l, Modifier.weight(1f)) } }
+            }
+            if (records.isNotEmpty()) FlowChips(records.map { "New best · ${it.exercise} ${Fmt.number(it.kg)} kg" })
+            Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+                Text("How did that feel?", style = JKType.headline, color = JKColors.text)
+                FeelRow(feel) { feel = it }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+                JKField(label = "A note (optional)", text = note, onTextChange = { note = it }, prompt = "Knee felt fine on the last set")
+                Text("JK will see this.", style = JKType.caption, color = JKColors.textSecondary)
+            }
+            OfflineBanner()
+            error?.let { ErrorBanner(it) }
+            PrimaryButton(onClick = { scope.launch { finish() } }, enabled = !saving) {
+                if (saving) ProgressView() else Text("Done")
+            }
+        }
+    }
+}
+
+/** "How did that feel?": five words in one quiet row, each at least 48dp high. No numbers, no emoji, no animation. */
+@Composable
+fun FeelRow(selection: Int?, onSelect: (Int?) -> Unit) {
+    WordChoices(Feel.words, selected = selection?.let { it - 1 }, onSelect = { i -> onSelect(if (selection == i + 1) null else i + 1) }, title = "Feel")
+}
+
+/** Hairline pills in champagne text: "New best · Squat 102.5 kg". */
+@Composable
+fun FlowChips(texts: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        texts.forEach { t ->
+            Text(
+                t,
+                style = JKType.caption,
+                color = JKColors.accent,
+                modifier = Modifier
+                    .border(JKSize.hairline, JKColors.hairline, CircleShape)
+                    .padding(horizontal = JKSpace.m, vertical = JKSpace.xs),
+            )
         }
     }
 }
@@ -653,7 +604,7 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (item != null) {
-                LoggerDemo(item) { url -> runCatching { uriHandler.openUri(url) } }
+                LoggerDemo(item, current.id) { url -> runCatching { uriHandler.openUri(url) } }
                 SetTable(
                     item = item,
                     logged = ::logged,
@@ -712,47 +663,30 @@ fun WorkoutLoggerView(workout: Workout, itemId: String, onChange: (Workout) -> U
 
 /** The coach demo card: a play button when the exercise has a video, then the prescription and note. */
 @Composable
-private fun LoggerDemo(item: WorkoutItem, openVideo: (String) -> Unit) {
-    val shape = JKShape.card
-    Column(Modifier.fillMaxWidth().clip(shape).background(JKColors.surface).border(1.dp, JKColors.hairline, shape)) {
-        Box(Modifier.fillMaxWidth().height(150.dp).background(JKColors.raised)) {
+private fun LoggerDemo(item: WorkoutItem, workoutId: String, openVideo: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+        Text(item.exercise.name, style = JKType.display, color = JKColors.text)
+        Text(
+            listOfNotNull("${item.sets} × ${item.reps}", item.load.ifEmpty { null }, item.rpe?.let { "RPE $it" }).joinToString(" · "),
+            style = JKType.callout.monospacedDigit(),
+            color = JKColors.textSecondary,
+        )
+        val note = item.note
+        if (!note.isNullOrEmpty()) Text(note, style = quoteStyle(inSheet = true), color = JKColors.text)
+        Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s), verticalAlignment = Alignment.CenterVertically) {
             val url = item.exercise.videoUrl
             if (url != null) {
-                Box(
-                    Modifier
-                        .align(Alignment.Center)
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(JKColors.surface)
-                        .clickable { openVideo(url) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Glyph(IconKey.playArrow, JKType.body, JKColors.text)
+                TextButton(onClick = { openVideo(url) }) {
+                    IconLabel("How to do this", icon = IconKey.play, style = JKType.callout, color = JKColors.text)
                 }
-                Text(
-                    "Coach demo",
-                    style = JKType.caption,
-                    color = JKColors.textSecondary,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(10.dp)
-                        .background(JKColors.surface, CircleShape)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                )
             } else {
-                Glyph(IconKey.workout, JKType.display, JKColors.textTertiary, Modifier.align(Alignment.Center))
+                val nav = LocalNav.current
+                TextButton(onClick = { nav.push { ExercisesView() } }) {
+                    IconLabel("How to do this", icon = IconKey.guide, style = JKType.callout, color = JKColors.text)
+                }
             }
-        }
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(item.exercise.name, style = JKType.headline, color = JKColors.text)
-            Text(
-                listOfNotNull("${item.sets} × ${item.reps}", item.load.ifEmpty { null }, item.rpe?.let { "RPE $it" }).joinToString(" · "),
-                style = JKType.caption,
-                color = JKColors.textTertiary,
-            )
-            val note = item.note
-            if (!note.isNullOrEmpty()) {
-                Text(note, style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.padding(top = 4.dp))
+            if (AppSession.gate.formChecks) {
+                FormCheckButton(exerciseId = item.exercise.id, exerciseName = item.exercise.name, workoutId = workoutId)
             }
         }
     }
