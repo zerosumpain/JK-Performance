@@ -2,7 +2,7 @@ import { clientFor, requireCoach, requireMember } from './access.mjs';
 import { healthDay, healthVisible } from './health.mjs';
 import { day, fail, num, oneOf, str } from './http.mjs';
 import { notify } from './push.mjs';
-import { defaultMinimum } from './settings.mjs';
+import { defaultMinimum, requireFeature } from './settings.mjs';
 import { iconKeyFor, newId, nowIso, tx } from './store.mjs';
 import { FEEL_WORDS } from './training.mjs';
 import { addDays, daysBetween, londonDay, mondayOf } from './time.mjs';
@@ -170,6 +170,7 @@ function rangeOf(query, defFrom, defTo) {
 
 /** The week dots: one call, each day done / rest / today under the day rule. Defaults to this Monday to Sunday. */
 function habitWeek(_req, ctx) {
+  requireFeature(ctx, 'habits');
   const client = clientFor(ctx, ctx.query.clientId);
   const today = londonDay();
   const { from, to } = rangeOf(ctx.query, mondayOf(today), addDays(mondayOf(today), 6));
@@ -179,6 +180,7 @@ function habitWeek(_req, ctx) {
 
 /** Per habit and per day, for Progress level 3 and the coach's HabitWeekGrid. Defaults to the last 28 days. */
 function habitHistory(_req, ctx) {
+  requireFeature(ctx, 'habits');
   const client = clientFor(ctx, ctx.query.clientId);
   const today = londonDay();
   const { from, to } = rangeOf(ctx.query, addDays(today, -27), today);
@@ -388,6 +390,7 @@ export function checkinDraft(db, viewer, client, week) {
 }
 
 function draftCheckin(_req, ctx) {
+  requireFeature(ctx, 'checkin');
   const client = clientFor(ctx, ctx.query.clientId);
   return checkinDraft(ctx.db, ctx.user, client, ctx.query.week ? day(ctx.query.week, 'week') : dueWeek());
 }

@@ -6,7 +6,7 @@ import { day, fail, instant, num, oneOf, str } from './http.mjs';
 import { attachableMedia } from './media.mjs';
 import { milestoneSuggestions } from './milestones.mjs';
 import { notify } from './push.mjs';
-import { rhythmOf } from './settings.mjs';
+import { requireFeature, rhythmOf } from './settings.mjs';
 import { firstSentence, newId, nowIso, tx } from './store.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, mondayOf, weekday } from './time.mjs';
 import { workoutOut } from './training.mjs';
@@ -217,6 +217,7 @@ function markRead(_req, ctx) {
 /** The client answers the letter's question inline; the answer also goes into the thread, quoting the letter. */
 function answer(_req, ctx) {
   if (ctx.user.role !== 'client') fail(403, 'Clients only');
+  requireFeature(ctx, 'checkin');
   const { r, client } = visibleReport(ctx, ctx.params.id);
   const text = str(ctx.body.answer, 'answer', { max: 2000 });
   const now = nowIso();

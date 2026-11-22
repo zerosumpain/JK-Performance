@@ -379,7 +379,8 @@ Everything below is additive (docs/design/atelier-spec.md, "Server and data chan
 working for old app builds. New client routes are never gated in a way that 403s what Today or the JK tab call: those
 return a reduced payload instead. Other new client routes use one helper (`requireFeature`, settings.mjs): like
 `requireMember` it is off while `GATE_SERVICES=false`; when on, a client whose plan lacks the feature gets 403
-`{"error":"feature_not_in_plan"}`.
+`{"error":"feature_not_in_plan"}`. It guards `/api/habits/week` and `/api/habits/history` ('habits'),
+`/api/checkins/draft` and `POST /api/reports/:id/answer` ('checkin').
 
 ### Features, coach, preferences on `Me` (items 1, 15, 17; phase 5)
 
