@@ -5,7 +5,7 @@ import { runDue, startJoinFlows } from '../autoflows.mjs';
 import { issueSession } from '../auth.mjs';
 import { exerciseId, seedCatalogue } from '../catalogue.mjs';
 import { FORM_TEMPLATES } from '../forms.mjs';
-import { newId, nowIso, openStore } from '../store.mjs';
+import { newId, nowIso, openStore, setCoachPref } from '../store.mjs';
 import { addDays, londonDay } from '../time.mjs';
 
 const sent = [];
@@ -41,6 +41,8 @@ before(async () => {
   coach = user('Coach JK', 'coach');
   other = user('Other Coach', 'coach');
   sam = user('Sam Client', 'client', coach.id);
+  // Autoflow messages are governed (desk v2, 3.5): with the default quiet hours they would be held when this runs at night.
+  setCoachPref(db, coach.id, 'outreach.quietHours', null);
 });
 after(() => server.close());
 
