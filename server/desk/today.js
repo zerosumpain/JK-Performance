@@ -3,11 +3,16 @@
  * letters-due line and one Needs-you list ranked by severity, from
  * GET /api/coach/needs-you; it ends "All caught up". (The old summary cards,
  * the "No training lately" list and the Autoflows card are gone.)
+ *
+ * Desk v2, wave 0: under that, a plain bento grid draws every registerWidget
+ * tile (in the saved desk.today.layout order when there is one). WP1 turns
+ * the whole screen into the Command Centre.
  */
 import {
   MONTHS_LONG, api, avatar, card, emptyCard, emptyState, errorLine, eyebrow, fill, firstName, fmtCountdown, fmtDay, fmtMoney,
-  fmtTime, h, icon, link, loading, parseDay, personRow, q, route, screenHeader, segmented, stat, svgEl, todayLondon,
+  fmtTime, h, icon, link, loading, parseDay, personRow, prefs, q, registered, route, screenHeader, segmented, stat, svgEl, todayLondon,
 } from './core.js';
+import { bento, tile } from './ui.js';
 
 const enc = encodeURIComponent;
 const kindLabel = kind => (kind === 'video' ? 'Video call' : kind === 'group' ? 'Class' : '1:1');
@@ -38,7 +43,27 @@ route('/today', async (el, _params, view) => {
   await load();
   const timer = setInterval(() => { if (!document.hidden) load(true); }, 60_000);
   view.onLeave(() => clearInterval(timer));
+  if (view.fresh()) el.append(await widgetGrid(view));
 });
+
+/** Every registered widget as a tile, in the coach's saved order; nothing when none are registered. */
+export async function widgetGrid(view, { all = false } = {}) {
+  const widgets = registered.widgets().filter(w => all || w.defaultOn !== false);
+  const box = h('section', { class: 'reg-widgets', 'aria-label': 'Widgets' });
+  if (!widgets.length) return box;
+  const grid = h('div');
+  box.append(grid);
+  const tiles = widgets.map(w => {
+    const t = tile({ id: w.id, title: w.title, icon: w.icon, size: w.size, tall: w.tall, hero: w.hero, loading: true });
+    Promise.resolve().then(() => { t.body.replaceChildren(); return w.render(t.body, view); })
+      .catch(err => { if (view.fresh()) t.body.replaceChildren(errorLine(err)); });
+    return t;
+  });
+  const b = bento(grid, tiles);
+  const saved = await prefs.get('desk.today.layout', null).catch(() => null);
+  if (Array.isArray(saved) && !all) b.apply(saved);
+  return box;
+}
 
 function todayBody(n, lettersOnly, setLettersOnly) {
   const out = [nextStrip(n.sessionsToday)];

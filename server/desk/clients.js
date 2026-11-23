@@ -5,12 +5,18 @@
  * studio's tabs beside it: Plan (write and publish workouts, assign a
  * programme), Letters (letters, check-ins, forms and autoflows), Sessions,
  * Progress and Health.
+ *
+ * Desk v2 registry hosts (wave 0; WP2 restyles them in wave 1 and keeps them
+ * drawing every registration): the tabs are registerClientTab entries (the
+ * six existing ones register here), the client header draws
+ * registerClientAction buttons, and the list draws registerBulkAction items
+ * in a floating bar once rows are selected.
  */
 import {
   COLOR, DAYS, MONTHS, addDays, api, apiBlob, avatar, busy, button, card, chip, clientById, clients, confirmBox, dot,
   emptyCard, errorLine, eyebrow, field, fill, firstName, fmtRelative, fmtShort, fmtTime, fmtWeekday, h, icon, link, loading, londonParts,
   mondayOf, parseDay, q, route, screenHeader, segmented, sheet, svgEl, toast, todayLondon, weekDots,
-  planName, plans,
+  planName, plans, registerClientTab, registered, setCrumbs,
 } from './core.js';
 import { overviewTab, statusPills } from './overview.js';
 import { lettersSection } from './letters.js';
@@ -136,14 +142,34 @@ const checkCircle = on => h('span', { class: 'cl-check' + (on ? ' on' : '') }, o
 
 route('/clients', async (el, _params, view) => {
   await plans().catch(() => null); // the coach's plan names
+  // Bulk actions (registerBulkAction): rows get a checkbox and a bar floats up while any are chosen.
+  const bulk = registered.bulkActions('clients');
+  const chosen = new Set();
+  const bulkBar = h('div', { class: 'ui-bulk', hidden: true, role: 'toolbar', 'aria-label': 'Bulk actions' });
+  const drawBulk = () => {
+    bulkBar.hidden = !chosen.size;
+    fill(bulkBar, h('span', { class: 'ui-bulk-count' }, `${chosen.size} selected`),
+      bulk.map(a => h('button', { type: 'button', class: 'btn small', onclick: async e => {
+        const b = e.currentTarget;
+        b.disabled = true;
+        try { await a.run([...chosen]); } catch (err) { toast(err.message || String(err), { error: true }); } finally { b.disabled = false; }
+      } }, a.icon ? icon(a.icon, 16) : null, a.label)),
+      h('button', { type: 'button', class: 'btn small text', onclick: () => { chosen.clear(); draw(); } }, 'Clear'));
+  };
   const search = h('input', { type: 'search', placeholder: 'Search clients', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Search clients' });
   const listBox = h('div');
   el.append(
     screenHeader(null, 'Clients'),
     h('label', { class: 'cl-search' }, icon('search', 20), search),
-    listBox);
+    listBox, bulkBar);
 
   const row = (c, withReason) => {
+    const inner = rowLink(c, withReason);
+    if (!bulk.length) return inner;
+    return h('div', { class: 'reg-row' }, h('label', { class: 'reg-select' }, h('input', { type: 'checkbox', checked: chosen.has(c.id), 'aria-label': `Select ${c.name}`,
+      onchange: e => { if (e.target.checked) chosen.add(c.id); else chosen.delete(c.id); drawBulk(); } })), inner);
+  };
+  const rowLink = (c, withReason) => {
     const line = withReason ? reasonOf(c) : planName(c.plan);
     return link(`/clients/${enc(c.id)}`, { class: 'cl-row' },
       avatar(c.initials || c.name, 36),
@@ -173,6 +199,7 @@ route('/clients', async (el, _params, view) => {
     } else {
       fill(listBox, group(null, shown, true));
     }
+    drawBulk();
   };
   search.addEventListener('input', draw);
   await loadInto(listBox, view, () => clients(true), list => { all = list; draw(); });
@@ -180,7 +207,16 @@ route('/clients', async (el, _params, view) => {
 
 // MARK: - One client
 
-const TABS = [['overview', 'Overview'], ['plan', 'Plan'], ['letters', 'Letters'], ['sessions', 'Sessions'], ['progress', 'Progress'], ['health', 'Health']];
+// The six existing tabs; packages add theirs with registerClientTab({key, label, order, render}).
+// render(box, {client, detail, view}) also gets {ctx, anchor} here, which the built-in tabs use.
+for (const [key, label, order, draw] of [
+  ['overview', 'Overview', 10, (box, { ctx, openLetter }) => overviewTab(box, ctx, { openLetter })],
+  ['plan', 'Plan', 30, (box, { ctx, anchor }) => planTab(box, ctx, { anchor })],
+  ['letters', 'Letters', 40, (box, { ctx, anchor }) => lettersTab(box, ctx, { anchor })],
+  ['sessions', 'Sessions', 50, (box, { ctx, anchor }) => sessionsTab(box, ctx, { anchor })],
+  ['progress', 'Progress', 60, (box, { ctx, anchor }) => progressTab(box, ctx, { anchor })],
+  ['health', 'Health', 70, (box, { ctx, anchor }) => healthTab(box, ctx, { anchor })],
+]) registerClientTab({ key, label, order, render: draw }, { fallback: true });
 /** Old and deep-link names: Feedback became Letters, Habits moved into the Overview. */
 const ALIASES = { feedback: 'letters', habits: 'overview', letter: 'overview', checkins: 'letters', forms: 'letters', autoflows: 'letters' };
 /** Sections of the Letters tab other screens may link to: #/clients/<id>/forms scrolls there. */
@@ -191,7 +227,8 @@ route('/clients/:id/:tab?', async (el, params, view) => {
   plans().catch(() => null);
   const id = params.id;
   const anchor = LETTERS_SECTIONS.includes(params.tab) ? params.tab : null;
-  const tab = TABS.some(([k]) => k === params.tab) ? params.tab : ALIASES[params.tab] ?? 'overview';
+  const tabs = registered.clientTabs();
+  const tab = tabs.some(t => t.key === params.tab) ? params.tab : ALIASES[params.tab] ?? 'overview';
   const summary = clientById(id);
   const head = h('div');
   const body = h('div', { class: 'cl-tab' });
@@ -205,16 +242,20 @@ route('/clients/:id/:tab?', async (el, params, view) => {
     const c = detail?.client;
     if (c) { ctx.name = c.name; ctx.planName = planName(c.plan); }
     const sub = c ? [c.name, planName(c.plan), c.since ? `since ${monthYear(c.since)}` : null].filter(Boolean).join(' · ') : ' ';
+    const who = { id, name: ctx.name, ...(summary || {}), ...(c || {}) };
+    setCrumbs([{ label: 'Clients', path: '/clients' }, { label: ctx.name, path: `/clients/${enc(id)}` }, ...(tab === 'overview' ? [] : [{ label: tabs.find(t => t.key === tab)?.label || tab }])]);
     fill(head,
       h('div', { class: 'cl-crumb' }, link('/clients', { class: 'small muted' }, icon('back', 16), 'Clients')),
       h('div', { class: 'cl-head' },
         avatar(c?.initials || ctx.name, 48),
         h('div', { class: 'grow' }, h('h1', null, ctx.first()), h('div', { class: 'small muted' }, sub)),
         detail ? h('div', { class: 'row gap4' }, statusPills(detail)) : null,
-        link(`/messages/${enc(id)}`, { class: 'btn', title: `Message ${ctx.first()}` }, icon('reply', 18), 'Message')),
+        h('div', { class: 'reg-actions' },
+          link(`/messages/${enc(id)}`, { class: 'btn', title: `Message ${ctx.first()}` }, icon('reply', 18), 'Message'),
+          registered.clientActions().map(a => h('button', { type: 'button', class: 'btn', onclick: () => a.run(who) }, a.icon ? icon(a.icon, 18) : null, a.label)))),
       error ? errorLine(error) : null,
-      h('nav', { class: 'tabs', 'aria-label': 'Client' }, TABS.map(([k, label]) =>
-        link(`/clients/${enc(id)}/${k}`, { class: 'tab' + (k === tab ? ' sel' : ''), 'aria-current': k === tab ? 'page' : null }, label))));
+      h('nav', { class: 'tabs', 'aria-label': 'Client' }, tabs.map(t =>
+        link(`/clients/${enc(id)}/${t.key}`, { class: 'tab' + (t.key === tab ? ' sel' : ''), 'aria-current': t.key === tab ? 'page' : null }, t.label))));
   };
   drawHead(details.get(id) || null);
   el.append(head, body);
@@ -233,9 +274,13 @@ route('/clients/:id/:tab?', async (el, params, view) => {
   ctx.detail = () => pending;
   ctx.reloadDetail();
 
-  if (tab === 'overview') { await overviewTab(body, ctx, { openLetter: params.tab === 'letter' }); return; }
-  const draw = { plan: planTab, letters: lettersTab, health: healthTab, sessions: sessionsTab, progress: progressTab }[tab];
-  await draw(body, ctx, { anchor });
+  const entry = tabs.find(t => t.key === tab);
+  const client = { id, name: ctx.name, ...(summary || {}) };
+  // Built-in tabs load their own data beside the header; a package's tab gets the detail once it is in.
+  const builtIn = ['overview', 'plan', 'letters', 'sessions', 'progress', 'health'].includes(tab);
+  const detail = details.get(id) || (builtIn ? null : await ctx.detail()?.catch(() => null));
+  if (!view.fresh()) return;
+  await entry.render(body, { client: { ...client, ...(detail?.client || {}) }, detail, view, ctx, anchor, openLetter: params.tab === 'letter' });
 });
 
 /** Send one of the coach's forms to this client. */

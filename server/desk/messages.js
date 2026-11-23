@@ -4,23 +4,23 @@
  *
  * Wide screens: the thread list on the left, the conversation on the right.
  * Phone width: the list at #/messages, the thread at #/messages/<clientId>.
- * Both poll every 15 seconds while on screen, as the iPhone app does.
+ *
+ * threadPane(el, clientId, view, {compact}) draws one conversation with the
+ * shared composer (composer.js), so composer tools and send guards run; the
+ * Inbox (WP1) mounts it too. It polls every 15 seconds and refreshes at once
+ * on a live event for this client. It tells its host what happened through
+ * DOM events on `el`: 'thread-read' and 'thread-sent' (detail: the message).
  */
 import {
-  api, avatar, clearDraft, clients, emptyCard, errorLine, fill, fmtShort, fmtTime, h, icon, link, loading, londonParts,
-  q, readDraft, refreshBadges, route, screenHeader, state, todayLondon, writeDraft, DAYS, MONTHS, parseDay,
+  api, avatar, clients, emptyCard, errorLine, fill, fmtShort, fmtTime, h, icon, link, live, londonParts,
+  q, refreshBadges, route, screenHeader, setCrumbs, state, todayLondon, DAYS, MONTHS, parseDay,
 } from './core.js';
+import { composer } from './composer.js';
+import { skeleton } from './ui.js';
 
 const POLL_MS = 15_000;
 /** The last thread list, so moving between conversations draws at once. */
 let threadsCache = null;
-
-/** A paper plane for the send button (core.js has no such icon): the core icon with its path swapped. */
-function planeIcon(size) {
-  const svg = icon('chevron', size);
-  svg.firstChild.setAttribute('d', 'M21 3L10 14M21 3l-7 18-4-7-7-4z');
-  return svg;
-}
 
 const draftKey = id => `jk.desk.msgdraft.${id}`;
 const fmtShortDay = s => { const d = parseDay(s); return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
@@ -31,7 +31,7 @@ route('/messages/:id?', async (el, { id }, view) => {
   const listBox = h('div', { class: 'thread-list' });
   const pane = h('section', { class: 'thread-pane' });
   const layout = h('div', { class: 'msg-layout' + (id ? ' has-thread' : '') },
-    h('div', { class: 'msg-side' }, screenHeader('Coach', 'Messages'), listBox), pane);
+    h('div', { class: 'msg-side' }, screenHeader('Engage', 'Messages'), listBox), pane);
   el.append(layout);
 
   // MARK: Thread list
@@ -39,7 +39,7 @@ route('/messages/:id?', async (el, { id }, view) => {
   let threads = threadsCache;
   let listError = null;
   const drawList = () => {
-    if (!threads) { fill(listBox, listError ? errorLine(listError) : loading()); return; }
+    if (!threads) { fill(listBox, listError ? errorLine(listError) : skeleton('table', { rows: 6 })); return; }
     if (!threads.length) { fill(listBox, emptyCard('messages', 'No conversations yet')); return; }
     fill(listBox, listError ? errorLine(listError) : null, h('div', { class: 'card flush' }, threads.map(t => {
       const at = t.last?.at;
@@ -72,6 +72,7 @@ route('/messages/:id?', async (el, { id }, view) => {
   loadList();
   const listTimer = setInterval(() => { if (view.fresh()) loadList(); }, POLL_MS);
   view.onLeave(() => clearInterval(listTimer));
+  view.onLeave(live.on('message.received', () => { if (view.fresh()) loadList(); }));
 
   // MARK: Conversation
 
@@ -79,48 +80,55 @@ route('/messages/:id?', async (el, { id }, view) => {
     fill(pane, h('div', { class: 'pane-empty' }, emptyCard('bubble', 'Choose a conversation', 'Pick a client on the left to read and reply.')));
     return;
   }
-  const known = threads?.find(t => t.client.id === id)?.client || state.clients?.find(c => c.id === id) || null;
-  await openThread(pane, id, known?.name, view, () => {
+  pane.addEventListener('thread-read', () => {
     const t = threads?.find(x => x.client.id === id);
     if (t && t.unread) { t.unread = 0; drawList(); }
     refreshBadges();
-  }, m => {
+  });
+  pane.addEventListener('thread-sent', e => {
     // Keep the list's preview in step with what was just sent.
     const t = threads?.find(x => x.client.id === id);
-    if (t) { t.last = m; threads.sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? '')); drawList(); }
+    if (t) { t.last = e.detail; threads.sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? '')); drawList(); }
   });
+  pane.addEventListener('thread-name', e => setCrumbs([{ label: 'Messages', path: '/messages' }, { label: e.detail }]));
+  await threadPane(pane, id, view);
 });
 
-/** The conversation with one client: bubbles by day, a composer, and polling for new messages. */
-async function openThread(pane, clientId, knownName, view, onRead, onSent) {
-  let name = knownName || '';
+/**
+ * One client's conversation: bubbles by day, the shared composer, polling and
+ * live refresh. `compact` drops the back link and tightens the head (Inbox).
+ * Returns {reload(), composer} once the first load is done.
+ */
+export async function threadPane(el, clientId, view, { compact = false } = {}) {
+  const known = threadsCache?.find(t => t.client.id === clientId)?.client || state.clients?.find(c => c.id === clientId) || null;
+  let name = known?.name || '';
   const title = h('div', { class: 'strong' }, name || 'Client');
+  const avatarSlot = h('span', null, avatar(name || '?', 30));
   const head = h('header', { class: 'thread-head' },
-    link('/messages', { class: 'icon-btn thread-back', 'aria-label': 'All conversations' }, icon('back', 16)),
-    avatar(name || '?', 30),
+    compact ? null : link('/messages', { class: 'icon-btn thread-back', 'aria-label': 'All conversations' }, icon('back', 16)),
+    avatarSlot,
     h('div', { class: 'grow' }, title, h('div', { class: 'tiny faint' }, 'Client')),
     link(`/clients/${encodeURIComponent(clientId)}`, { class: 'btn small' }, 'Open client'));
-  const log = h('div', { class: 'thread-log', role: 'log', 'aria-live': 'polite', 'aria-label': 'Messages' }, loading());
-  const sendError = h('div', { class: 'thread-error' });
-  const input = h('textarea', { class: 'composer', rows: '1', maxlength: '4000', placeholder: 'Message', 'aria-label': 'Message' });
-  const sendBtn = h('button', { class: 'send-btn', type: 'button', 'aria-label': 'Send', title: 'Send (Enter)', onclick: () => send() }, planeIcon(17));
-  fill(pane, head, log, sendError, h('div', { class: 'compose-row' }, input, sendBtn));
-
-  let messages = null;
+  const log = h('div', { class: 'thread-log', role: 'log', 'aria-live': 'polite', 'aria-label': 'Messages' }, skeleton('lines', { rows: 4 }));
   const me = state.me?.id;
+  let messages = null;
 
-  const draft = readDraft(draftKey(clientId));
-  if (typeof draft === 'string') input.value = draft;
-  const sizeInput = () => { input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 140)}px`; };
-  const syncSend = () => { sendBtn.disabled = !input.value.trim(); };
-  input.addEventListener('input', () => {
-    sizeInput(); syncSend();
-    if (input.value) writeDraft(draftKey(clientId), input.value); else clearDraft(draftKey(clientId));
+  const box = composer({
+    clientId, draftKey: draftKey(clientId), compact, placeholder: 'Message', label: 'Message',
+    onSend: async ({ text, mediaId, kind }) => {
+      const body = { clientId, text };
+      if (mediaId) { body.mediaId = mediaId; if (kind && kind !== 'text') body.kind = kind; }
+      const m = await api('POST', '/api/messages', body);
+      if (!view.fresh()) return;
+      if (!messages.some(x => x.id === m.id)) messages.push(m);
+      draw.first = true;
+      draw();
+      el.dispatchEvent(new CustomEvent('thread-sent', { detail: m }));
+    },
   });
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
-  });
-  syncSend();
+  fill(el, head, log, h('div', { class: 'thread-compose' }, box.el));
+  el.classList.add('thread-pane');
+  if (compact) el.classList.add('compact');
 
   function draw() {
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
@@ -134,7 +142,7 @@ async function openThread(pane, clientId, knownName, view, onRead, onSent) {
       const { day, time } = londonParts(m.at);
       if (day !== lastDay) { out.push(h('div', { class: 'day-sep' }, dayLabel(m.at))); lastDay = day; }
       const mine = me ? m.fromId === me : m.fromRole === 'coach';
-      out.push(h('div', { class: 'bubble ' + (mine ? 'me' : 'them') },
+      out.push(h('div', { class: 'bubble ' + (mine ? 'me' : 'them'), 'data-id': m.id },
         m.workoutId ? h('div', { class: 'bubble-workout' }, h('span', { class: 'tile' }, icon('dumbbell', 18)),
           h('div', null, h('div', { class: 'small strong' }, 'Workout'), h('div', { class: 'tiny sub' }, 'Plan updated · see your Plan tab'))) : null,
         m.text ? h('div', { class: 'text' }, m.text) : null,
@@ -154,56 +162,38 @@ async function openThread(pane, clientId, knownName, view, onRead, onSent) {
     if (!messages) {
       messages = out.messages;
       draw();
-      onRead();
+      el.dispatchEvent(new CustomEvent('thread-read'));
       return;
     }
     const seen = new Set(messages.map(m => m.id));
     const fresh = out.messages.filter(m => !seen.has(m.id));
-    if (fresh.length) { messages.push(...fresh); draw(); onRead(); }
-  }
-
-  async function send() {
-    const text = input.value.trim();
-    if (!text || sendBtn.disabled) return;
-    sendBtn.disabled = true;
-    fill(sendError);
-    try {
-      const m = await api('POST', '/api/messages', { clientId, text });
-      if (!view.fresh()) return;
-      if (!messages.some(x => x.id === m.id)) messages.push(m);
-      input.value = '';
-      clearDraft(draftKey(clientId));
-      sizeInput();
-      draw.first = true;
-      draw();
-      onSent(m);
-    } catch (err) {
-      fill(sendError, errorLine(err));
-    } finally {
-      syncSend();
-    }
+    if (fresh.length) { messages.push(...fresh); draw(); el.dispatchEvent(new CustomEvent('thread-read')); }
   }
 
   try {
     await load();
   } catch (err) {
     if (view.fresh()) fill(log, errorLine(err.status === 404 ? 'That client isn’t one of yours.' : err));
-    return;
+    return null;
   }
-  if (!view.fresh()) return;
+  if (!view.fresh()) return null;
   if (!name) {
     // Opened straight from a link before the list arrived: find the name.
     let found = threadsCache?.find(x => x.client.id === clientId)?.client;
     if (!found) { try { found = (await clients()).find(c => c.id === clientId); } catch { found = null; } }
-    if (!view.fresh()) return;
+    if (!view.fresh()) return null;
     if (found) {
       name = found.name;
       fill(title, name);
-      head.replaceChild(avatar(name, 30), head.children[1]);
+      fill(avatarSlot, avatar(name, 30));
       if (!messages.length) draw();
     }
   }
-  if (matchMedia('(pointer: fine)').matches) input.focus({ preventScroll: true });
-  const timer = setInterval(() => { if (view.fresh()) load().catch(() => { /* try again next tick */ }); }, POLL_MS);
+  if (name) el.dispatchEvent(new CustomEvent('thread-name', { detail: name }));
+  if (matchMedia('(pointer: fine)').matches) box.focus();
+  const reload = () => load().catch(() => { /* try again next tick */ });
+  const timer = setInterval(() => { if (view.fresh()) reload(); }, POLL_MS);
   view.onLeave(() => clearInterval(timer));
+  view.onLeave(live.on('message.received', ev => { if (view.fresh() && ev.clientId === clientId) reload(); }));
+  return { reload, composer: box };
 }
