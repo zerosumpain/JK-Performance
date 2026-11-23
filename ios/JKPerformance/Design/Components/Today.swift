@@ -24,7 +24,7 @@ struct GoalLine: View {
             case .reached(let sentence):
                 Text(sentence).jkText(.title).foregroundStyle(JK.text)
                 rule(1)
-                Text("Reached. JK will set the next one with you").font(.jkCaption).foregroundStyle(JK.accent)
+                Text("Reached. JK will set the next one with you").font(.jkCaption).foregroundStyle(JK.silver)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,7 +35,7 @@ struct GoalLine: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Rectangle().fill(JK.track)
-                Rectangle().fill(JK.accent).frame(width: geo.size.width * min(max(fraction, 0), 1))
+                Rectangle().fill(JK.silver).frame(width: geo.size.width * min(max(fraction, 0), 1))
             }
         }
         .frame(height: JK.Size.rule)
@@ -176,7 +176,7 @@ struct LetterCard: View {
                     Text(caption).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     Spacer()
                     if unread {
-                        Circle().fill(JK.accent).frame(width: 8, height: 8).accessibilityHidden(true)
+                        Circle().fill(JK.silver).frame(width: 8, height: 8).accessibilityHidden(true)
                     }
                 }
                 Text(headline)

@@ -99,9 +99,7 @@ fun WelcomeView() {
         }
     }
     LaunchedEffect(Unit) {
-        // The controls follow the brand animation in, as on the iPhone.
-        if (!reduceMotion) delay((BrandIntro.duration * 1000).toLong())
-        shown.animateTo(1f, tween(450, easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)))
+        shown.animateTo(1f, tween(if (reduceMotion) 0 else JKMotion.FADE * 2, easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)))
     }
 
     fun startAttempt(kind: String) {
@@ -143,79 +141,87 @@ fun WelcomeView() {
     }
 
     Box(Modifier.fillMaxSize().background(JKColors.bg)) {
-        BrandIntro()
-        Column(Modifier.fillMaxSize().systemBarsPadding()) {
+        FaintRings(centerY = 0.36f)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(horizontal = JKSpace.xxl)
+                .padding(bottom = JKSpace.l)
+                .graphicsLayer { alpha = shown.value },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Spacer(Modifier.weight(1f))
+            JKMarkLarge()
+            Spacer(Modifier.height(JKSpace.huge))
+            ParTitle("Plan. *Act.* Review.", style = JKType.parDisplay, align = TextAlign.Center)
+            Spacer(Modifier.height(JKSpace.m))
+            Text(
+                "One-to-one coaching with JK, in a simple rhythm you can keep.",
+                style = JKType.parBody, color = JKColors.textSecondary, textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.weight(1.2f))
             Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 24.dp)
-                    .graphicsLayer {
-                        alpha = shown.value
-                        translationY = (1f - shown.value) * 16.dp.toPx()
-                    },
+                Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(JKSpace.m),
             ) {
                 if (message != null) {
-                    Text(message, style = JKType.caption, color = JKColors.textSecondary, textAlign = TextAlign.Center)
+                    Text(message, style = JKType.meta, color = JKColors.textSecondary, textAlign = TextAlign.Center)
                 }
                 val c = config
+                val googleId = c?.googleClientId?.takeIf { c.google }
                 when {
                     c != null -> {
-                        val googleId = c.googleClientId
-                        if (c.google && googleId != null) {
-                            SignInButton(
-                                text = "Continue with Google",
-                                filled = false,
-                                enabled = !busy,
-                                // The code sign-in shows its spinner on the top button, as the iPhone's does on its only one.
-                                spinning = pending == "google" || pending == "code",
-                                onClick = { signInWithGoogle(googleId) },
-                            ) { Text("G", style = JKType.headline, color = JKColors.text) }
+                        if (googleId != null) {
+                            PrimaryButton(onClick = { signInWithGoogle(googleId) }, enabled = !busy) {
+                                if (pending == "google") ProgressView(tint = JKColors.onChrome) else Text("Continue with Google")
+                            }
+                            SecondaryButton(onClick = { showCode = true }, enabled = !busy) {
+                                if (pending == "code") ProgressView(tint = JKColors.text) else Text("Continue with a code")
+                            }
+                        } else {
+                            // No Google on this server: the code is the one way in, so it is the primary.
+                            PrimaryButton(onClick = { showCode = true }, enabled = !busy) {
+                                if (pending == "code") ProgressView(tint = JKColors.onChrome) else Text("Continue with a code")
+                            }
                         }
                         if (c.apple) {
-                            SignInButton(
-                                text = "Continue with Apple",
-                                filled = true,
-                                enabled = !busy,
-                                spinning = SignIn.busy || (pending == "code" && !(c.google && googleId != null)),
+                            TextButton(
                                 onClick = {
                                     error = null
                                     SignIn.startApple(context)
                                 },
+                                enabled = !busy,
                             ) {
-                                Icon(AppleMark, contentDescription = null, tint = JKColors.primaryLabel, modifier = Modifier.size(18.dp))
+                                if (SignIn.busy) {
+                                    ProgressView(tint = JKColors.text)
+                                } else {
+                                    Icon(AppleMark, contentDescription = null, tint = JKColors.text, modifier = Modifier.size(JKSize.iconSmall))
+                                    Text("Continue with Apple", style = JKType.buttonSmall, color = JKColors.text)
+                                }
                             }
                         }
                     }
-                    configError != null -> TextButton("Try again", onClick = { configAttempt += 1 })
-                    else -> Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                    configError != null -> {
+                        Text(configError!!, style = JKType.meta, color = JKColors.textSecondary, textAlign = TextAlign.Center)
+                        SecondaryButton("Try again", onClick = { configAttempt += 1 })
+                        TextButton("Continue with a code", onClick = { showCode = true }, enabled = !busy)
+                    }
+                    else -> Box(Modifier.fillMaxWidth().heightIn(min = JKSize.primaryHeight), contentAlignment = Alignment.Center) {
                         ProgressView(tint = JKColors.textSecondary)
                     }
                 }
-                if (configError != null && message == null) {
-                    Text(configError!!, style = JKType.caption, color = JKColors.textSecondary, textAlign = TextAlign.Center)
-                }
-
-                Text(
-                    "I have a code",
-                    style = JKType.caption.semibold(),
-                    color = JKColors.textSecondary,
-                    modifier = Modifier.padding(top = 4.dp).clickable(enabled = !busy) { showCode = true },
-                )
-
                 Text(
                     "New here? Signing in creates your client account. By continuing you agree to the Terms and Privacy Policy.",
-                    style = JKType.caption,
+                    style = JKType.meta,
                     color = JKColors.textTertiary,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
+                    modifier = Modifier.padding(top = JKSpace.xs),
                 )
                 Text(
                     "Privacy Policy",
-                    style = JKType.caption,
+                    style = JKType.meta,
                     color = JKColors.textSecondary,
                     modifier = Modifier.clickable { uriHandler.openUri(APIClient.privacyURL) },
                 )
@@ -236,43 +242,6 @@ fun WelcomeView() {
                 signInWithCode()
             },
         )
-    }
-}
-
-/**
- * The sign-in buttons, shaped like the iPhone's Sign in with Apple button:
- * 48 tall, 12 corner. Apple's is the white one, as the iPhone shows it;
- * Google's is outlined so the two read as a pair.
- */
-@Composable
-private fun SignInButton(
-    text: String,
-    filled: Boolean,
-    enabled: Boolean,
-    spinning: Boolean,
-    onClick: () -> Unit,
-    mark: @Composable () -> Unit,
-) {
-    val shape = JKShape.card
-    val ink = if (filled) JKColors.primaryLabel else JKColors.text
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clip(shape)
-            .then(if (filled) Modifier.background(JKColors.primaryFill, shape) else Modifier.border(1.dp, JKColors.text, shape))
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            Modifier.alpha(if (enabled || spinning) 1f else 0.6f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            mark()
-            Text(text, style = JKType.body.medium(), color = ink)
-        }
-        if (spinning) ProgressView(tint = ink)
     }
 }
 
@@ -331,7 +300,7 @@ private val AppleMark: ImageVector by lazy {
                     "1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 " +
                     "2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701",
             ),
-            fill = SolidColor(JKColors.primaryLabel),
+            fill = SolidColor(JKColors.text),
         )
         .build()
 }

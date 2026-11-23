@@ -41,7 +41,11 @@ struct CoachAvatar: View {
     var body: some View {
         ZStack {
             Circle().fill(JK.raised)
-            Monogram(size: size * 0.62)
+            Text(coach.map { $0.initials ?? Fmt.initials($0.name) } ?? "JK")
+                .font(.system(size: size * 0.34, weight: .semibold))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .foregroundStyle(JK.textSecondary)
             if let id = coach?.avatarMediaId {
                 PortraitImage(mediaId: id)
             }
@@ -49,10 +53,10 @@ struct CoachAvatar: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .padding(2.5)
-        .overlay(Circle().strokeBorder(JK.accent, lineWidth: 1.5))
+        .overlay(Circle().strokeBorder(JK.hairline, lineWidth: JK.Size.hairline))
         .overlay(alignment: .topTrailing) {
             if unread {
-                Circle().fill(JK.accent)
+                Circle().fill(JK.silver)
                     .frame(width: 8, height: 8)
                     .overlay(Circle().stroke(JK.bg, lineWidth: 2))
             }
@@ -63,7 +67,7 @@ struct CoachAvatar: View {
 }
 
 /// A cached portrait filling its circle; empty until loaded so the fallback beneath shows.
-private struct PortraitImage: View {
+struct PortraitImage: View {
     let mediaId: String
     @State private var image: UIImage?
 

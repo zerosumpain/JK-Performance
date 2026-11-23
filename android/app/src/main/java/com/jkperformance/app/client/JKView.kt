@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -92,28 +93,47 @@ fun JKView() {
     if (gate.messaging || gate.checkin) JKTimelineView() else FreeJKView()
 }
 
-/** JK's name, the reply line his plan sets, and two quiet links. */
+/**
+ * The JK sheet (plan-act-review.md, Screens 9): JK's thread, restyled, with
+ * the quiet More list one tap away. Opened from JK's avatar on every tab.
+ */
+@Composable
+fun JKSheet() = JKView()
+
+/**
+ * The sheet's header: a grabber, JK's portrait at 56dp, his name and the reply
+ * line his plan sets, then quiet links (past letters, More).
+ */
 @Composable
 fun JKHeader(lettersOnly: Boolean, onLettersOnly: (Boolean) -> Unit) {
     val session = AppSession
     val gate = session.gate
     val nav = LocalNav.current
+    val dismiss = LocalDismiss.current
     val coach = session.me?.coach
     val replyLine = coach?.replyLine
         ?: (if (gate.priority) coach?.replyExpectation?.priority else coach?.replyExpectation?.standard)
         ?: (if (gate.priority) "Same-day replies" else "JK replies most evenings")
 
     Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(width = JKSpace.xxxl + JKSpace.s, height = JKSpace.xs)
+                    .background(JKColors.trackStrong, CircleShape)
+                    .clickable(onClickLabel = "Close", onClick = dismiss),
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.m), verticalAlignment = Alignment.CenterVertically) {
-            CoachAvatar(coach?.avatarMediaId, size = JKSize.avatar + JKSpace.m)
-            Column(verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
-                Text(coach?.name ?: "JK", style = JKType.headline, color = JKColors.text, modifier = Modifier.semantics { heading() })
-                Text(replyLine, style = JKType.caption, color = JKColors.textSecondary)
+            JKAvatar(coach?.avatarMediaId, size = JKSize.sheetPortrait)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(JKSpace.xs)) {
+                Text(coach?.name ?: "JK", style = JKType.parCardTitle, color = JKColors.text, modifier = Modifier.semantics { heading() })
+                Text(replyLine, style = JKType.meta, color = JKColors.textTertiary)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.l)) {
             if (gate.checkin) TextButton(if (lettersOnly) "All of it" else "Past letters", onClick = { onLettersOnly(!lettersOnly) })
-            if (gate.guides) TextButton("Guides", onClick = { nav.push(ClientRoute.guides) })
+            TextButton("More", onClick = { nav.push { JKMoreView() } })
         }
     }
 }
@@ -332,7 +352,8 @@ fun MessageBubble(message: Message, mine: Boolean, coachAvatarMediaId: String? =
             Column(
                 Modifier
                     .widthIn(max = widest)
-                    .background(if (mine) JKColors.raised else JKColors.surface, JKShape.card)
+                    .background(if (mine) JKColors.raised else JKColors.surface, JKShape.parCard)
+                    .then(if (mine) Modifier else Modifier.border(JKSize.hairline, JKColors.hairline, JKShape.parCard))
                     .padding(JKSpace.m),
                 verticalArrangement = Arrangement.spacedBy(JKSpace.xs),
             ) {
@@ -619,16 +640,13 @@ private fun FreeJKView() {
         verticalArrangement = Arrangement.spacedBy(JKSpace.xxl),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
-            CoachAvatar(coach?.avatarMediaId, size = JKSize.avatar * 2)
+            JKAvatar(coach?.avatarMediaId, size = JKSize.sheetPortrait)
             Text(coach?.name ?: "JK", style = JKType.display, color = JKColors.text, modifier = Modifier.semantics { heading() })
             Text("New guides from JK appear here.", style = quoteStyle(), color = JKColors.text)
         }
         GuidesListContent()
-        SecondaryButton("See what coaching includes", onClick = {
-            TabRouter.showMembership = true
-            TabRouter.client = TabRouter.Client.today
-            TabRouter.showAccount = true
-        })
+        SecondaryButton("See what coaching includes", onClick = { TabRouter.openMembership() })
+        JKMoreList()
     }
 }
 

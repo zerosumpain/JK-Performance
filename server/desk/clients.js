@@ -264,7 +264,7 @@ function workoutDraft(w) {
   return {
     id: w.id, date: w.date, title: w.title, startsAt: w.startsAt || '', location: w.location || '', notes: w.notes || '',
     items: w.items.slice().sort((a, b) => a.order - b.order).map(i => ({
-      id: i.id, exerciseId: i.exercise.id, exerciseName: i.exercise.name, sets: i.sets, reps: i.reps, load: i.load || '', rpe: i.rpe || '', note: i.note || '',
+      id: i.id, exerciseId: i.exercise.id, exerciseName: i.exercise.name, sets: i.sets, reps: i.reps, load: i.load || '', rpe: i.rpe || '', note: i.note || '', tempo: i.tempo || '',
     })),
     published: w.published, editedBy: w.editedBy, editedAt: w.editedAt, completedAt: w.completedAt,
     loggedSets: w.items.reduce((n, i) => n + i.logged.length, 0),
@@ -272,13 +272,13 @@ function workoutDraft(w) {
 }
 const newDraft = date => ({ id: null, date, title: '', startsAt: '', location: '', notes: '', items: [], published: false, editedBy: null, editedAt: null, completedAt: null, loggedSets: 0 });
 /** The fields that are saved, to tell a changed draft from the saved one. */
-const draftShape = d => JSON.stringify([d.date, d.title, d.startsAt, d.location, d.notes, d.items.map(i => [i.id, i.exerciseId, Number(i.sets), i.reps, i.load, i.rpe, i.note])]);
+const draftShape = d => JSON.stringify([d.date, d.title, d.startsAt, d.location, d.notes, d.items.map(i => [i.id, i.exerciseId, Number(i.sets), i.reps, i.load, i.rpe, i.note, i.tempo])]);
 function workoutInput(d, clientId) {
   return {
     date: d.date, title: d.title.trim(), startsAt: d.startsAt.trim() || null, location: d.location.trim() || null, notes: d.notes,
     items: d.items.map(i => ({
       ...(i.id ? { id: i.id } : {}), exerciseId: i.exerciseId, sets: Number(i.sets), reps: String(i.reps).trim(), load: String(i.load).trim(),
-      rpe: String(i.rpe).trim() || null, note: String(i.note).trim() || null,
+      rpe: String(i.rpe).trim() || null, note: String(i.note).trim() || null, tempo: String(i.tempo ?? '').trim() || null,
     })),
     clientId: d.id ? undefined : clientId,
   };
@@ -431,7 +431,8 @@ async function planTab(box, ctx) {
           input('Reps', 'reps', { placeholder: '10', maxlength: '30' }),
           input('Load', 'load', { placeholder: '60 kg', maxlength: '30' }),
           input('RPE', 'rpe', { placeholder: '7–8', maxlength: '10' }, 'narrow'),
-          input('Note', 'note', { placeholder: 'Cue for the client', maxlength: '300' }, 'wide')));
+          input('Note', 'note', { placeholder: 'Cue for the client', maxlength: '300' }, 'cl-f-note'),
+          input('Tempo', 'tempo', { placeholder: '3-1-1', maxlength: '7', title: 'Down, pause, drive in seconds (3-1-1); optional' }, 'narrow')));
     }));
   }
 
@@ -471,7 +472,7 @@ async function planTab(box, ctx) {
           dashed('Add exercise from the library', async () => {
             const ex = await exercisePicker();
             if (!ex || draft !== d) return;
-            d.items.push({ id: null, exerciseId: ex.id, exerciseName: ex.name, sets: 3, reps: '10', load: '', rpe: '', note: '' });
+            d.items.push({ id: null, exerciseId: ex.id, exerciseName: ex.name, sets: 3, reps: '10', load: '', rpe: '', note: '', tempo: '' });
             itemsEditor(itemsBox);
             syncButtons();
           }))),

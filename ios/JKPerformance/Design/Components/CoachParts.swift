@@ -140,7 +140,7 @@ struct GoalCard: View {
                 }
             }
             Spacer(minLength: 0)
-            Ring(fraction: goal.fraction, sweep: 300, lineWidth: 4, fill: JK.accent)
+            Ring(fraction: goal.fraction, sweep: 300, lineWidth: 4, fill: JK.silver)
                 .frame(width: 44, height: 44)
         }
         .accessibilityElement(children: .combine)

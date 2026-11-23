@@ -15,7 +15,7 @@ import { addDays, daysBetween, londonDay, londonToUtc, weekday } from './time.mj
  *   2 unread message from a client on a plan with 'priority'
  *   3 other unread message
  *   4 check-in in, letter due
- *   5 form answers to read
+ *   5 form answers to read; thoughts shared before a planning session
  *   6 gone quiet 4+ days (no message, set, workout or check-in from the client)
  *   7 no training 7+ days
  *   8 milestone reached, letter suggested
@@ -28,9 +28,9 @@ const URGENT_WORDS = /\b(pain|painful|injur\w*|hurt\w*|sharp|swollen|swelling|nu
 const QUIET_DAYS = 4;
 const NO_TRAINING_DAYS = 7;
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-export const REASON_RANK = { pain: 1, priorityUnread: 2, unread: 3, checkinLetterDue: 4, formAnswers: 5, quiet: 6, noTraining: 7, milestone: 8 };
-const ICON = { pain: 'pain', priorityUnread: 'priority', unread: 'unread', checkinLetterDue: 'checkIn', formAnswers: 'form', quiet: 'quiet', noTraining: 'noTraining', milestone: 'milestone' };
-const ACTIONS = { reply: 'Reply', writeLetter: 'Write letter', nudge: 'Nudge', readAnswers: 'Read answers' };
+export const REASON_RANK = { pain: 1, priorityUnread: 2, unread: 3, checkinLetterDue: 4, formAnswers: 5, prepShared: 5, quiet: 6, noTraining: 7, milestone: 8 };
+const ICON = { pain: 'pain', priorityUnread: 'priority', unread: 'unread', checkinLetterDue: 'checkIn', formAnswers: 'form', prepShared: 'form', quiet: 'quiet', noTraining: 'noTraining', milestone: 'milestone' };
+const ACTIONS = { reply: 'Reply', writeLetter: 'Write letter', nudge: 'Nudge', readAnswers: 'Read answers', readThoughts: 'Read thoughts' };
 
 /** Is this client's letter for the week still to write, at their rhythm? Returns the rhythm when due, else null. */
 export function letterDue(db, client, week = feedbackWeek()) {
@@ -70,6 +70,10 @@ function reasonsFor(db, c, today) {
     add('checkinLetterDue', `${checkedIn} · letter due`, checkin.submitted_at, { week: checkin.week });
   }
   const unflagged = forms.filter(f => f !== flagged);
+  // Thoughts shared before a planning session, since the last one, that JK hasn't opened yet (a shared reflection is a check-in, above).
+  const prep = db.prepare('SELECT * FROM preps WHERE client_id=? AND shared_at IS NOT NULL AND seen_at IS NULL ORDER BY shared_at DESC LIMIT 1').get(c.id);
+  const lastPlanning = db.prepare("SELECT MAX(start) s FROM bookings WHERE client_id=? AND purpose='planning' AND cancelled_at IS NULL AND start<=?").get(c.id, new Date().toISOString()).s;
+  if (prep && (!lastPlanning || prep.shared_at > lastPlanning)) add('prepShared', 'Shared thoughts for planning', prep.shared_at);
   if (unflagged.length) add('formAnswers', unflagged.length === 1 ? `Filled in ${unflagged[0].name}` : `Filled in ${unflagged.length} forms`, unflagged[0].submitted_at, { formRequestId: unflagged[0].id });
 
   const lastActive = db.prepare(`SELECT MAX(at) at FROM (
@@ -94,6 +98,7 @@ function actionFor(top, c, db) {
   if (top.kind === 'priorityUnread' || top.kind === 'unread') return 'reply';
   if (top.kind === 'checkinLetterDue' || top.kind === 'milestone') return 'writeLetter';
   if (top.kind === 'formAnswers') return 'readAnswers';
+  if (top.kind === 'prepShared') return 'readThoughts';
   return 'nudge';
 }
 

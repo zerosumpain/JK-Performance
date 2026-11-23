@@ -80,7 +80,7 @@ struct CheckCircle: View {
     var body: some View {
         Image(systemName: on ? "checkmark.circle.fill" : "circle")
             .font(.system(size: JK.Size.iconHabit, weight: .regular))
-            .foregroundStyle(on ? JK.accent : JK.trackStrong)
+            .foregroundStyle(on ? JK.silver : JK.trackStrong)
             .frame(width: JK.Size.iconHabit, height: JK.Size.iconHabit)
             .accessibilityHidden(true)
     }

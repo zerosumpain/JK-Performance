@@ -1,9 +1,12 @@
 import AuthenticationServices
 import SwiftUI
+import UIKit
 
-/// First launch. Sign-up is open: Sign in with Apple creates a client
-/// account; coaches are designated server-side. "I have a code" is the App
-/// Review demo login (POST /api/auth/code).
+/// Welcome (plan-act-review.md, screen 1): the faint rings, the silver
+/// mark, "Plan. Act. Review." and one line; Sign in with Apple and
+/// "Continue with a code" at the foot. Sign-up is open: Sign in with Apple
+/// creates a client account; coaches are designated server-side. The code is
+/// the App Review demo login (POST /api/auth/code).
 struct WelcomeView: View {
     @Environment(AppSession.self) private var session
     @State private var busy = false
@@ -11,67 +14,85 @@ struct WelcomeView: View {
     @State private var showCode = false
     @State private var code = ""
     @State private var controlsShown = false
+    @State private var apple = AppleSignIn()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-        BrandIntro()
-        VStack(spacing: 0) {
-            Spacer()
-            VStack(spacing: 10) {
-                if let error {
-                    Text(error)
-                        .font(.jkCaption)
-                        .foregroundStyle(JK.textSecondary)
-                        .multilineTextAlignment(.center)
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: JK.Space.huge)
+                    VStack(spacing: 0) {
+                        WelcomeMark()
+                        SerifText("Plan. *Act.* Review.", size: .hero)
+                            .foregroundStyle(JK.text)
+                            .multilineTextAlignment(.center)
+                            .accessibilityAddTraits(.isHeader)
+                            .padding(.top, JK.Space.huge)
+                        Text("One-to-one coaching with JK, in a simple rhythm you can keep.")
+                            .font(.jkBodySmall)
+                            .foregroundStyle(JK.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, JK.Space.m)
+                            .padding(.horizontal, JK.Space.xxl)
+                    }
+                    Spacer(minLength: JK.Space.huge)
+                    controls
+                        .opacity(controlsShown ? 1 : 0)
                 }
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { result in
-                    handle(result)
-                }
-                .signInWithAppleButtonStyle(.white)
-                .frame(height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
-                .disabled(busy)
-                .overlay {
-                    if busy { ProgressView().tint(JK.onPrimary) }
-                }
-
-                Button("I have a code") { showCode = true }
-                    .font(.jkCaption.weight(.semibold))
-                    .foregroundStyle(JK.textSecondary)
-                    .padding(.top, 4)
-
-                Text("New here? Signing in creates your client account. By continuing you agree to the Terms and Privacy Policy.")
-                    .font(.jkCaption)
-                    .foregroundStyle(JK.textTertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 6)
-                Link("Privacy Policy", destination: APIClient.shared.privacyURL)
-                    .font(.jkCaption)
-                    .foregroundStyle(JK.textSecondary)
+                .padding(.horizontal, JK.Space.xxl)
+                .padding(.bottom, JK.Space.l)
+                .frame(minHeight: geo.size.height)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .opacity(controlsShown ? 1 : 0)
-            .offset(y: controlsShown ? 0 : 16)
+            .scrollBounceBehavior(.basedOnSize)
         }
+        .background {
+            ZStack {
+                JK.bg
+                FaintRings(center: UnitPoint(x: 0.5, y: 0.34))
+            }
+            .ignoresSafeArea()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(JK.bg.ignoresSafeArea())
         .task {
-            if !reduceMotion { try? await Task.sleep(for: .seconds(BrandIntro.duration)) }
-            withAnimation(.easeOut(duration: 0.45)) { controlsShown = true }
+            if !reduceMotion { try? await Task.sleep(for: .seconds(0.3)) }
+            withAnimation(JK.Motion.respecting(reduceMotion, .easeOut(duration: 0.45))) { controlsShown = true }
         }
-        .alert("Sign in with a code", isPresented: $showCode) {
+        .alert("Continue with a code", isPresented: $showCode) {
             TextField("Code", text: $code)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             Button("Cancel", role: .cancel) { code = "" }
-            Button("Sign in") { signInWithCode() }
+            Button("Continue") { signInWithCode() }
         } message: {
             Text("For demo and review accounts.")
+        }
+    }
+
+    private var controls: some View {
+        VStack(spacing: JK.Space.m) {
+            if let error {
+                Text(error)
+                    .font(.jkCaption)
+                    .foregroundStyle(JK.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            PrimaryButton("Sign in with Apple", busy: busy, leadingSymbol: "apple.logo") {
+                error = nil
+                apple.start { handle($0) }
+            }
+            SecondaryButton("Continue with a code") { showCode = true }
+                .disabled(busy)
+            Text("New here? Signing in creates your client account. By continuing you agree to the Terms and Privacy Policy.")
+                .font(.jkMeta)
+                .foregroundStyle(JK.textTertiary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, JK.Space.xs)
+            Link("Privacy Policy", destination: APIClient.shared.privacyURL)
+                .font(.jkMeta)
+                .foregroundStyle(JK.textSecondary)
+                .frame(minHeight: JK.Size.touch)
         }
     }
 
@@ -117,5 +138,45 @@ struct WelcomeView: View {
                 self.error = (error as? APIError)?.status == 404 ? "That code isn't valid." : error.readable
             }
         }
+    }
+}
+
+/// Sign in with Apple behind our own chrome button: the system sheet, with
+/// the result handed back on the main thread.
+final class AppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private var completion: ((Result<ASAuthorization, Error>) -> Void)?
+    private var controller: ASAuthorizationController?
+
+    func start(_ completion: @escaping (Result<ASAuthorization, Error>) -> Void) {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        self.completion = completion
+        self.controller = controller
+        controller.performRequests()
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        finish(.success(authorization))
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        finish(.failure(error))
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            return windows.first(where: \.isKeyWindow) ?? windows.first ?? ASPresentationAnchor()
+        }
+    }
+
+    private func finish(_ result: Result<ASAuthorization, Error>) {
+        let done = completion
+        completion = nil
+        controller = nil
+        DispatchQueue.main.async { done?(result) }
     }
 }

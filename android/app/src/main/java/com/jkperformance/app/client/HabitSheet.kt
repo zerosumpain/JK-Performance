@@ -169,8 +169,8 @@ fun HabitSheet(focus: String? = null) {
                     } else if (gate.messaging) {
                         TextButton("Ask JK for a rest day", onClick = {
                             TabRouter.composerDraft = "Could I take a rest day on "
-                            TabRouter.client = TabRouter.Client.jk
                             dismiss()
+                            TabRouter.openJK()
                         })
                     }
                 }
@@ -425,5 +425,18 @@ fun FoodLogSheet(save: suspend (FoodInput) -> Unit) {
                 if (saving) ProgressView() else Text("Log food")
             }
         }
+    }
+}
+
+/** Words for a habit's value. */
+object HabitText {
+    fun value(h: Habit): String {
+        val v = h.value
+        if (h.healthKind == "sleep" && v != null) return "${Fmt.minutes(v * 60)} of ${Fmt.number(h.target)} h"
+        if (h.isCount) {
+            val unit = if (h.unit.isEmpty()) "" else " ${h.unit}"
+            return "${Fmt.number(v ?: 0.0)} of ${Fmt.number(h.target)}$unit"
+        }
+        return if (h.done) "Done" else "Not yet"
     }
 }

@@ -91,7 +91,7 @@ private enum class AccountRoute { membership, health, notifications, privacy }
  * here. Shown in a [Sheet]; TabRouter.showMembership opens it at Membership.
  */
 @Composable
-fun AccountSheet() {
+fun AccountSheet(openMembership: Boolean = false) {
     val session = AppSession
     val context = LocalContext.current
     val dismiss = LocalDismiss.current
@@ -116,10 +116,7 @@ fun AccountSheet() {
     }
 
     LaunchedEffect(Unit) {
-        if (TabRouter.showMembership) {
-            TabRouter.showMembership = false
-            open(AccountRoute.membership)
-        }
+        if (openMembership) open(AccountRoute.membership)
     }
 
     val healthDetail = when {
@@ -474,8 +471,8 @@ private fun ConfirmationDialog(title: String, message: String, destructive: Stri
         onDismissRequest = onDismiss,
         title = { Text(title, style = JKType.headline, color = JKColors.text) },
         text = { Text(message, style = JKType.caption, color = JKColors.textSecondary) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(destructive, style = JKType.body, color = JKColors.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body.semibold(), color = JKColors.text) } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(destructive, style = JKType.body.semibold(), color = JKColors.text) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = JKType.body, color = JKColors.textSecondary) } },
         containerColor = JKColors.raised,
         shape = JKShape.card,
     )

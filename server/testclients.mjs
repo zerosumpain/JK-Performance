@@ -327,13 +327,13 @@ export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [
     const adjust = own?.adjust ?? (rich ? FOCUS[w % FOCUS.length] : FOCUS[(w + idx) % FOCUS.length]);
     const question = own?.question ?? QUESTIONS[(w + idx) % QUESTIONS.length];
     // Answered and read, except the newest rich one; delivered the Monday after the week at 07:00.
-    const unreadNewest = w === 1 && rich;
+    const unreadNewest = w === 1 && rich && !own?.read;
     const answer = own?.answer !== undefined ? own.answer : !unreadNewest && w % 2 === 0 ? ANSWERS[(w + idx) % ANSWERS.length] : null;
     const deliverAt = at(addDays(week, 7), '07:00');
     const readAt = unreadNewest ? null : w === 3 || rich ? at(addDays(week, 7), '12:00') : null;
     db.prepare(`INSERT INTO reports (id, client_id, coach_id, week, summary, wins, focus, published_at, read_at, created_at, updated_at,
       kind, headline, keep, adjust, question, answer, answered_at, deliver_at, delivered_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'weekly',?,?,?,?,?,?,?,?)`).run(
-      newId('r'), id, coachId, week, `${headline} ${keep}`, keep, adjust,
+      newId('r'), id, coachId, week, own?.summary ?? `${headline} ${keep}`, keep, adjust,
       at(addDays(week, 6), '20:00'), readAt, at(addDays(week, 6), '19:30'), at(addDays(week, 6), '20:00'),
       headline, keep, adjust, question, answer, answer ? at(addDays(week, 7), '12:30') : null, deliverAt, deliverAt);
     db.prepare("UPDATE checkins SET reviewed_at=COALESCE(reviewed_at, ?), reply=COALESCE(reply, ?) WHERE client_id=? AND week=?").run(at(addDays(week, 6), '20:00'), headline, id, week);
@@ -385,6 +385,107 @@ export function buildPerson(db, { id, coach, p, idx, today, joined, classIds = [
   }
   if (['hybrid', 'fatLoss', 'running'].includes(p.routine) && !p.quiet) {
     for (const c of classIds) db.prepare('INSERT INTO class_attendees (booking_id, user_id) VALUES (?,?)').run(c, id);
+  }
+  if (p.par) buildPar(db, { id, coach, p, today });
+}
+
+/** The next London day on or after `today` with this weekday (1 = Monday) whose `time` is still ahead. */
+function nextWeekday(today, wd, time) {
+  for (let i = 0; i < 8; i++) {
+    const d = addDays(today, i);
+    if (new Date(d + 'T12:00:00Z').getUTCDay() === wd % 7 && londonToUtc(d, time).getTime() > Date.now()) return d;
+  }
+  return addDays(today, 7);
+}
+
+/**
+ * Plan. Act. Review. for one person, as the board draws it (docs/design/
+ * plan-act-review.md, "Demo data"): the season's aim and three priorities, a
+ * planning session this Thursday 07:30 with a prep draft, accountability
+ * sessions on Sundays at 18:00, four weeks of reflections, last week's
+ * commitments rated and this week's agreed but not yet accepted, three
+ * habits and today's "Lower body strength" with a tempo and a cue.
+ * "Last week" is the week the review looks back on (feedbackWeek).
+ */
+export function buildPar(db, { id, coach, p, today }) {
+  const coachId = coach.id;
+  const at = (d, t = '09:00') => londonToUtc(d, t).toISOString();
+  const prefix = p.bookingPrefix ?? 'bt';
+  const par = p.par === true ? {} : p.par;
+  const week = today >= addDays(mondayOf(today), 4) ? mondayOf(today) : addDays(mondayOf(today), -7);
+
+  // The season: planned about 19 days ago, ending about ten weeks out.
+  const plannedOn = addDays(today, -19);
+  db.prepare("UPDATE goals SET aim=?, planned_on=?, target_date=?, start_date=COALESCE(start_date, ?) WHERE client_id=? AND status='active'")
+    .run(par.aim ?? 'Get strong enough that the hills stop mattering.', plannedOn, addDays(today, 69), plannedOn, id);
+  db.prepare('DELETE FROM priorities WHERE client_id=?').run(id);
+  (par.priorities ?? [['Strength', 'building'], ['Sleep', 'settling'], ['Joyful runs', 'notyet']]).forEach(([title, status], i) =>
+    db.prepare('INSERT INTO priorities (id, client_id, position, title, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?)').run(newId('pri'), id, i, title, status, at(plannedOn), at(plannedOn)));
+
+  // Sessions with a purpose: the last planning one, this Thursday's, and Sunday accountability sessions.
+  const booking = (date, time, purpose, title) => {
+    const bid = newId(prefix);
+    const start = londonToUtc(date, time);
+    db.prepare("INSERT INTO bookings (id, coach_id, client_id, kind, start, end, location, title, uses_credit, created_at, purpose) VALUES (?,?,?,'inperson',?,?,'Studio 2',?,1,?,?)")
+      .run(bid, coachId, id, start.toISOString(), new Date(start.getTime() + 3_600_000).toISOString(), title ?? `1:1 with ${coach.name}`, nowIso(), purpose);
+    return { id: bid, start: start.toISOString() };
+  };
+  booking(plannedOn, '07:30', 'planning');
+  const planning = booking(nextWeekday(today, 4, '07:30'), '07:30', 'planning');
+  const nextSunday = nextWeekday(today, 7, '18:00');
+  booking(nextSunday, '18:00', 'review');
+  const lastReview = booking(addDays(nextSunday, -7), '18:00', 'review');
+  for (let w = 2; w <= 4; w++) booking(addDays(nextSunday, -7 * w), '18:00', 'review');
+
+  // Four weeks of reflections (a reflection is a check-in): Flat, Stretched, Steady, Steady.
+  const noticed = ['Everything felt heavy, work was relentless.', 'Busy, but I got the sessions in.', 'The walk after lunch helps more than I thought.', 'Sleep slipped when I skipped the walk'];
+  [1, 2, 3, 3].forEach((feeling, i) => {
+    const w = addDays(week, -7 * (3 - i));
+    const c = db.prepare('SELECT id FROM checkins WHERE client_id=? AND week=?').get(id, w);
+    if (c) db.prepare('UPDATE checkins SET feeling=?, energy=?, sleep=?, noticed=?, note=? WHERE id=?').run(feeling, feeling, feeling, noticed[i], noticed[i], c.id);
+    else {
+      db.prepare("INSERT INTO checkins (id, client_id, week, energy, sleep, pain, note, submitted_at, feeling, noticed, photo_ids) VALUES (?,?,?,?,?,'[]',?,?,?,?,'[]')")
+        .run(newId('c'), id, w, feeling, feeling, noticed[i], at(addDays(w, 6), '17:00') > nowIso() ? nowIso() : at(addDays(w, 6), '17:00'), feeling, noticed[i]);
+    }
+  });
+
+  // Commitments: last week's rated, this week's agreed in Sunday's session and not yet accepted.
+  db.prepare('DELETE FROM commitments WHERE client_id=? AND week IN (?, ?)').run(id, week, addDays(week, 7));
+  const agreedAt = lastReview ? new Date(Date.parse(lastReview.start) + 3_600_000).toISOString() : nowIso();
+  const commit = (w, i, text, outcome, created, accepted) => db.prepare(`INSERT INTO commitments (id, client_id, week, position, text, outcome, created_by, created_at, accepted_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(newId('cm'), id, w, i, text, outcome, coachId, created, accepted, created);
+  [['Three sessions', 'kept'], ['Lights out by eleven', 'mostly'], ['A run for joy', 'missed']]
+    .forEach(([text, outcome], i) => commit(week, i, text, outcome, at(addDays(week, -1), '19:00'), at(addDays(week, -1), '20:00')));
+  ['Walk after lunch, every weekday', 'Twenty minute run, any pace'].forEach((text, i) => commit(addDays(week, 7), i, text, null, agreedAt, null));
+
+  // Honest thoughts for Thursday, started and not yet shared.
+  db.prepare('DELETE FROM preps WHERE client_id=?').run(id);
+  db.prepare("INSERT INTO preps (id, client_id, booking_id, feeling, easier, in_the_way, created_at, updated_at) VALUES (?,?,?,70,?,?,?,?)")
+    .run(newId('pr'), id, planning.id, 'The mornings. Getting to sessions is a habit now.', 'Late nights at work midweek', nowIso(), nowIso());
+
+  // Today: Lower body strength, warmed up and ready to squat.
+  for (const w of db.prepare('SELECT id FROM workouts WHERE client_id=? AND date=?').all(id, today)) db.prepare('DELETE FROM workouts WHERE id=?').run(w.id);
+  const wid = newId('w');
+  db.prepare(`INSERT INTO workouts (id, client_id, date, title, starts_at, location, notes, published, published_at, edited_at, edited_by, created_by)
+    VALUES (?,?,?,?,?,?,'',1,?,?,'coach',?)`).run(wid, id, today, 'Lower body strength', p.time ?? '07:00', 'Studio 2', at(addDays(today, -3)), at(addDays(today, -3)), coachId);
+  const items = [
+    ['Warm-up', 1, '5 min', '', null, null],
+    ['Goblet Squat', 3, '8', '20 kg', '3-1-1', 'Sit into the bottom and breathe before you stand.'],
+    ['Romanian Deadlift', 3, '8', '60 kg', null, null],
+    ['Farmer Carry', 3, '40 m', '2×24 kg', null, null],
+    ['Ease-out', 1, '5 min', '', null, null],
+  ];
+  items.forEach(([name, sets, reps, load, tempo, note], position) => {
+    const itemId = newId('i');
+    db.prepare('INSERT INTO workout_items (id, workout_id, position, exercise_id, sets, reps, load, note, tempo) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(itemId, wid, position, exerciseId(name), sets, reps, load, note, tempo);
+    if (position === 0) db.prepare('INSERT INTO set_logs (item_id, number, load, reps, at) VALUES (?,1,?,5,?)').run(itemId, '', nowIso());
+  });
+
+  // Today's habits: the walk done, the other two still to do.
+  for (const h of db.prepare('SELECT id, name FROM habits WHERE client_id=?').all(id)) {
+    db.prepare('DELETE FROM habit_days WHERE habit_id=? AND date=?').run(h.id, today);
+    if (/walk/i.test(h.name)) db.prepare('INSERT INTO habit_days (habit_id, date, value, done) VALUES (?,?,1,1)').run(h.id, today);
   }
 }
 
@@ -552,6 +653,12 @@ export function addTestExtras(db, coachId, today = londonDay()) {
       thread.forEach((m, i) => db.prepare('UPDATE messages SET at=?, read_at=? WHERE id=?').run(ago(24 * days - i * 3), ago(24 * days - i * 3), m.id));
       const c = db.prepare('SELECT id, submitted_at FROM checkins WHERE client_id=? AND reviewed_at IS NULL').get(id);
       if (c) db.prepare('UPDATE checkins SET reviewed_at=?, reply=? WHERE id=?').run(new Date(Date.parse(c.submitted_at) + 2 * 3_600_000).toISOString(), 'Great week, noted. Same again.', c.id);
+      // Answered check-ins and letters count as contact too: hold back any after that day (on a Monday this
+      // week's letter has just gone out, which made this test fail on Mondays).
+      db.prepare('UPDATE checkins SET submitted_at=MIN(submitted_at, ?), reviewed_at=? WHERE client_id=? AND reviewed_at>?').run(ago(24 * days + 2), ago(24 * days), id, ago(24 * days));
+      // Letters likewise.
+      db.prepare('UPDATE reports SET published_at=?, delivered_at=CASE WHEN delivered_at IS NULL THEN NULL ELSE ? END WHERE client_id=? AND published_at>?')
+        .run(ago(24 * days), ago(24 * days), id, ago(24 * days));
     }
     return { programs: PROGRAMS.length, forms: FORM_TEMPLATES.length, autoflows: 3 };
   });

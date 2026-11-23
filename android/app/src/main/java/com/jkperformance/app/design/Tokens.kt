@@ -13,10 +13,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
 /*
- * Atelier tokens (docs/design/atelier-spec.md, Tokens). The only place colours,
- * radii, spacing, sizes and motion are written as literals; screens read these.
- * Dark is the signature and ships; light ("paper") is defined and measured
- * (scripts/contrast-check.mjs) so it can follow as a pure token swap.
+ * Tokens: Plan. Act. Review. (docs/design/plan-act-review.md, Look), monochrome
+ * silver on near-black. The only place colours, radii, spacing, sizes and
+ * motion are written as literals; screens read these. Dark ships; light is the
+ * Atelier "paper" set, kept measured (scripts/contrast-check.mjs) but out of
+ * scope for this batch. The coach screens inherit the same tokens.
  */
 
 /** Every semantic colour, as one pair member. [JKColors] is the one the app uses. */
@@ -63,6 +64,18 @@ data class JKPalette(
     val inPerson: Color,
     val video: Color,
     val group: Color,
+    // Plan. Act. Review.: the silver and the chrome primary button.
+    /** Filled ring progress, done marks, the selected dot. */
+    val silver: Color,
+    /** The primary button's gradient, top to bottom, and its 1dp top highlight. */
+    val chromeTop: Color,
+    val chromeMid: Color,
+    val chromeBottom: Color,
+    val chromeHighlight: Color,
+    /** The primary button's label. */
+    val onChrome: Color,
+    /** The secondary button's outline (decorative: the label names the action). */
+    val buttonBorder: Color,
 ) {
     /** The muted dot for a booking kind (`inperson`, `video`, `group`). */
     fun slot(kind: String): Color = when (kind) {
@@ -73,33 +86,40 @@ data class JKPalette(
 
     companion object {
         val Dark = JKPalette(
-            bg = Color(0xFF0E0D0C),
-            surface = Color(0xFF171614),
-            raised = Color(0xFF211F1C),
-            paper = Color(0xFF1A1815),
-            hairline = Color(0xFF2E2B27),
-            inputBorder = Color(0xFF6B655C),
-            track = Color(0x1AF2EEE7),
-            trackStrong = Color(0x66F2EEE7),
-            scrim = Color(0x990E0D0C),
-            text = Color(0xFFF2EEE7),
-            textSecondary = Color(0xFFA39D94),
-            textTertiary = Color(0xFF8A847B),
-            accent = Color(0xFFC8A970),
-            accentPressed = Color(0xFFB08F52),
-            accentWash = Color(0x29C8A970),
-            accentControl = Color(0xFFF2EEE7),
-            primaryFill = Color(0xFFF2EEE7),
-            primaryLabel = Color(0xFF0E0D0C),
-            primaryPressed = Color(0xFFDCD6CC),
+            bg = Color(0xFF0A0A0A),
+            surface = Color(0xFF121212),
+            raised = Color(0xFF1A1A1A),
+            paper = Color(0xFF121212),
+            hairline = Color(0xFF262626),
+            inputBorder = Color(0xFF6B6B6B),
+            track = Color(0x1AFFFFFF),
+            trackStrong = Color(0xFF6B6B6B),
+            scrim = Color(0x99000000),
+            text = Color(0xFFF2F2F2),
+            textSecondary = Color(0xFFA3A3A3),
+            textTertiary = Color(0xFF8A8A8A),
+            accent = Color(0xFFD9D9D9),
+            accentPressed = Color(0xFFBEBEBE),
+            accentWash = Color(0x1FD9D9D9),
+            accentControl = Color(0xFFF2F2F2),
+            primaryFill = Color(0xFFE8E8E8),
+            primaryLabel = Color(0xFF0A0A0A),
+            primaryPressed = Color(0xFFBEBEBE),
             onTrack = Color(0xFF9FB39A),
             attention = Color(0xFFD98E5B),
-            data = Color(0xFF8FA3B3),
+            data = Color(0xFFB0B0B0),
             error = Color(0xFFC9735F),
             urgent = Color(0xFFE8816F),
-            inPerson = Color(0xFF8FA3B3),
-            video = Color(0xFFA898C4),
-            group = Color(0xFF9FB39A),
+            inPerson = Color(0xFFD9D9D9),
+            video = Color(0xFFA3A3A3),
+            group = Color(0xFF8C8C8C),
+            silver = Color(0xFFD9D9D9),
+            chromeTop = Color(0xFFFAFAFA),
+            chromeMid = Color(0xFFBEBEBE),
+            chromeBottom = Color(0xFFE8E8E8),
+            chromeHighlight = Color(0x99FFFFFF),
+            onChrome = Color(0xFF0A0A0A),
+            buttonBorder = Color(0xFF3A3A3A),
         )
 
         val Light = JKPalette(
@@ -130,6 +150,13 @@ data class JKPalette(
             inPerson = Color(0xFF4A6072),
             video = Color(0xFF6A5A8E),
             group = Color(0xFF4F6B4A),
+            silver = Color(0xFF3A3A3A),
+            chromeTop = Color(0xFF2A2A2A),
+            chromeMid = Color(0xFF0A0A0A),
+            chromeBottom = Color(0xFF1C1C1C),
+            chromeHighlight = Color(0x66FFFFFF),
+            onChrome = Color(0xFFFAFAFA),
+            buttonBorder = Color(0xFF8F887E),
         )
     }
 }
@@ -202,6 +229,9 @@ object JKRadius {
     val control = 10.dp
     val button = 12.dp
     val card = 12.dp
+    /** Plan. Act. Review. cards (radius 16) and the 28dp JK. mark. */
+    val parCard = 16.dp
+    val mark = 7.dp
     val sheet = 20.dp
 }
 
@@ -212,6 +242,8 @@ object JKShape {
     val card: Shape = RoundedCornerShape(JKRadius.card)
     val sheet: Shape = RoundedCornerShape(topStart = JKRadius.sheet, topEnd = JKRadius.sheet)
     val sheetAll: Shape = RoundedCornerShape(JKRadius.sheet)
+    val parCard: Shape = RoundedCornerShape(JKRadius.parCard)
+    val mark: Shape = RoundedCornerShape(JKRadius.mark)
     val pill: Shape = CircleShape
 }
 
@@ -234,6 +266,22 @@ object JKSize {
     val outline = 1.5.dp
     val rule = 2.dp
     val ring = 1.5.dp
+
+    // Plan. Act. Review. (spec, Shapes and components).
+    val primaryHeight = 52.dp
+    val smallButtonHeight = 32.dp
+    val ringIcon = 28.dp
+    val ringHabit = 44.dp
+    val ringCommitment = 56.dp
+    val weekDot = 5.dp
+    val tabDot = 4.dp
+    val markSmall = 28.dp
+    val markLarge = 120.dp
+    val topAvatar = 30.dp
+    val sessionAvatar = 32.dp
+    val sheetPortrait = 56.dp
+    val setCircle = 40.dp
+    val dial = 220.dp
 }
 
 /** Durations (ms) and the one curve. No overshoot, no sheen, no confetti. */
@@ -246,4 +294,9 @@ object JKMotion {
     const val LETTER_OPEN = 280
     const val FILL_FADE = 240
     const val TOAST = 4000
+    /** Plan. Act. Review.: fades and ring fills. */
+    const val FADE = 200
+    const val RING_FILL = 400
+    /** Autosave debounce on Before the session and Look back. */
+    const val AUTOSAVE = 800L
 }

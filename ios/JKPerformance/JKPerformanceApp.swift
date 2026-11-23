@@ -93,42 +93,38 @@ private struct RestoringView: View {
     }
 }
 
-/// The client's three tabs (atelier-spec.md, IA): Today, Progress (plans with
-/// 'progress') and JK. Account is the avatar sheet on Today.
+/// The client's three tabs (plan-act-review.md, "Navigation"): PLAN · ACT ·
+/// REVIEW in words, default Act. Each tab keeps its own stack (all three stay
+/// alive so switching back keeps your place); JK's avatar on each root opens
+/// the JK sheet with the thread and More.
 struct ClientTabs: View {
-    @Environment(AppSession.self) private var session
-    /// JK's portrait, or the monogram until it loads or if there is none.
-    @State private var jkTabImage = JKTabImage.monogram
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var gate: Gate { session.me?.gate ?? Gate(features: nil) }
+    private var router: TabRouter { TabRouter.shared }
 
     var body: some View {
-        TabView(selection: Bindable(TabRouter.shared).client) {
-            TodayView()
-                .tabItem { Label("Today", systemImage: IconKey.today.symbol) }
-                .tag(TabRouter.Client.today)
-            if gate.progress {
-                ProgressTab()
-                    .tabItem { Label("Progress", systemImage: IconKey.progress.symbol) }
-                    .tag(TabRouter.Client.progress)
-            }
-            JKView()
-                .tabItem {
-                    Label {
-                        Text("JK")
-                    } icon: {
-                        Image(uiImage: jkTabImage)
-                    }
-                    .accessibilityLabel("JK, your coach")
-                }
-                .tag(TabRouter.Client.jk)
+        ZStack {
+            PlanRoot().tabLayer(router.client == .plan)
+            ActRoot().tabLayer(router.client == .act)
+            ReviewRoot().tabLayer(router.client == .review)
         }
-        .task(id: session.me?.coach?.avatarMediaId) {
-            jkTabImage = await JKTabImage.load(for: session.me?.coach)
+        .animation(JK.Motion.respecting(reduceMotion, JK.Motion.fade), value: router.client)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ParTabBar(selection: Bindable(TabRouter.shared).client)
         }
-        .onChange(of: gate.progress, initial: true) { _, has in
-            if !has && TabRouter.shared.client == .progress { TabRouter.shared.client = .today }
-        }
+        .background(JK.bg.ignoresSafeArea())
+        .sheet(isPresented: Bindable(TabRouter.shared).showJK) { JKSheet() }
+    }
+}
+
+private extension View {
+    /// One tab's stack: shown, or kept alive out of sight and out of VoiceOver.
+    func tabLayer(_ on: Bool) -> some View {
+        self
+            .opacity(on ? 1 : 0)
+            .allowsHitTesting(on)
+            .accessibilityHidden(!on)
+            .zIndex(on ? 1 : 0)
     }
 }
 

@@ -97,11 +97,11 @@ the client logs sets against its items. A client may also create their own (alwa
 ```jsonc
 // WorkoutInput
 {"date":"2026-11-20","title":"Lower Body Strength","startsAt":"11:00","location":"Studio 2","notes":"",
- "items":[{"id":"optional-existing-id","exerciseId":"ex_…","sets":3,"reps":"10 / leg","load":"2×20 kg","rpe":"7–8","note":"…"}]}
+ "items":[{"id":"optional-existing-id","exerciseId":"ex_…","sets":3,"reps":"10 / leg","load":"2×20 kg","rpe":"7–8","note":"…","tempo":"3-1-1"}]}
 // Workout
 {"id":"w_…","clientId":"u_…","date":"2026-11-20","title":"…","startsAt":"11:00","location":"…","notes":"…",
  "published":true,"publishedAt":"…","editedAt":"…","editedBy":"coach","completedAt":null,"completionNote":null,"createdBy":"u_…",
- "items":[{"id":"i_…","order":0,"exercise":Exercise,"sets":3,"reps":"10 / leg","load":"2×20 kg","rpe":"7–8","note":"…",
+ "items":[{"id":"i_…","order":0,"exercise":Exercise,"sets":3,"reps":"10 / leg","load":"2×20 kg","rpe":"7–8","note":"…","tempo":"3-1-1",
            "logged":[{"number":1,"load":"2×20","reps":10,"rpe":null,"at":"…"}],
            "previous":"2×18 × 10"}]}       // last time this exercise was logged, best set; null if never
 // WorkoutSummary = Workout without items, plus {"itemCount":5,"doneCount":2}
@@ -171,7 +171,7 @@ and cancelling 24 h or more ahead refunds it. A group class is coach-created wit
 | PUT | `/api/availability` (coach) | `{rules:[Rule]}` | `{rules:[Rule]}` |
 | GET | `/api/slots?from=&to=&kind=` | – | `{slots:[{start,end,kind,location,open}]}` |
 | GET | `/api/bookings?from=&to=&clientId=` | – | `{bookings:[Booking]}` (coach: all clients unless filtered) |
-| POST | `/api/bookings` | `{start, kind, clientId?}` | `Booking` |
+| POST | `/api/bookings` | `{start, kind, clientId?, purpose?}` | `Booking` |
 | DELETE | `/api/bookings/:id` | – | `{ok:true, refunded:true}` |
 | POST | `/api/classes` (coach) | `{title, start, end, capacity, location}` | `Booking` (kind `group`) |
 | POST | `/api/classes/:id/join` / `leave` | – | `Booking` |
@@ -180,7 +180,7 @@ and cancelling 24 h or more ahead refunds it. A group class is coach-created wit
 // Rule: weekday 1=Mon…7=Sun, local times
 {"weekday":3,"start":"07:00","end":"19:00","kind":"inperson","slotMinutes":60,"location":"Studio 2"}
 // Booking
-{"id":"b_…","kind":"inperson|video|group","start":"…","end":"…","location":"Studio 2","title":"1:1 with Coach JK",
+{"id":"b_…","kind":"inperson|video|group","start":"…","end":"…","location":"Studio 2","title":"1:1 with Coach JK","purpose":"planning|review|null",
  "client":{"id","name"},"attendees":[{"id","name"}],"attendeeCount":0,"capacity":null,"usesCredit":true,
  "joined":true,"cancellable":true,"refundable":true}   // a client sees every group class of their coach; joined says if they're in it
 ```
@@ -686,12 +686,13 @@ on (`features.formChecks` / `features.mealPhotos`), else 403 `not_enabled`. `Mes
      {"kind":"milestone","text":"Sam: twelve weeks on plan","at":null,"rank":8,"iconKey":"milestone",
       "milestoneKey":"twelveWeeks","suggestedHeadline":"Twelve weeks. You train like an athlete now."}],
    "reasonLine":"Checked in Friday · knee sore · Sam: twelve weeks on plan",
-   "primaryAction":{"kind":"writeLetter","label":"Write letter"}}],   // reply | writeLetter | nudge | readAnswers
+   "primaryAction":{"kind":"writeLetter","label":"Write letter"}}],   // reply | writeLetter | nudge | readAnswers | readThoughts
  "allCaughtUp":false}
 ```
 Reason kinds by rank: 1 `pain` (an unread message mentioning pain or injury, a check-in listing pain, a "yes" to a
 flagged form question), 2 `priorityUnread` ("Elite · same-day reply"), 3 `unread`, 4 `checkinLetterDue`, 5
-`formAnswers`, 6 `quiet` (nothing from the client for 4+ days: message, set, workout or check-in), 7 `noTraining`
+`formAnswers` and `prepShared` ("Shared thoughts for planning": a prep shared since the last planning session that the
+coach has not opened yet; action `readThoughts` → the client's overview), 6 `quiet` (nothing from the client for 4+ days: message, set, workout or check-in), 7 `noTraining`
 (7+ days), 8 `milestone` (goal reached, a first personal best, four weeks at the minimum, twelve weeks on plan; only on
 plans with 'checkin', each key suggested until a letter with that `milestoneKey` exists). Within a rank, whoever has
 waited longest comes first. `GET /api/coach/today` is unchanged for old builds.
@@ -705,3 +706,94 @@ days skipped).
 
 The engine keeps running existing runs. The phones hide the builders behind `CoachSettings.studioTools` (default off);
 the desk keeps them.
+
+## Plan. Act. Review. (client app v2)
+
+From `docs/design/plan-act-review.md`. The client app's three tabs each read one payload; every word is made here so
+iOS and Android agree. Dates are `YYYY-MM-DD` in Europe/London, times ISO instants. A client whose plan lacks the
+feature gets **200 `{locked:true, feature}`**, never a 403 (reads and writes alike). A coach may read `/api/week`,
+`/api/direction` and `/api/review` for one of their own clients with `?clientId=` (a preview); the writes are the
+client's own (a coach gets 403).
+
+| | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/week` | – | `Week` (always; habits need 'habits', the workout 'programme') |
+| GET | `/api/direction` | – | `Direction` (needs 'progress') |
+| PUT | `/api/direction/prep` | `{feeling?: 0-100, easier?, inTheWay?, share?: true}` | `Prep` |
+| GET | `/api/review` | – | `Review` (needs 'checkin') |
+| POST | `/api/review/reflection` | `{feeling?: 1-5, noticed?, outcomes?: {commitmentId: "kept"\|"mostly"\|"missed"\|null}, share?: true}` | `Review` |
+| POST | `/api/review/accept` | `{week}` (a Monday) | `Review` |
+| GET | `/api/coach/clients/:id/par` (coach) | – | `CoachPar` (also marks a shared prep seen) |
+| PUT | `/api/coach/clients/:id/aim` (coach) | `{aim?: ≤140 chars\|null, plannedOn?: day\|null}` | `CoachPar`; 404 when the client has no active goal |
+| PUT | `/api/coach/clients/:id/priorities` (coach) | `{priorities:[{title ≤40, status}]}` (0-3, replaces all) | `CoachPar` |
+| PUT | `/api/coach/clients/:id/commitments` (coach) | `{week, items:[string ≤120]}` (0-3, replaces that week's) | `CoachPar` |
+| PATCH | `/api/bookings/:id` (coach) | `{purpose: "planning"\|"review"\|null, meetingUrl?}` | `Booking` |
+
+```jsonc
+// Week. mark: today | plan | review | null (today wins). done: the day's habit minimum met or its workout completed.
+{"date":"2026-11-23","dateLabel":"Monday 23 November","dayName":"Monday","greeting":"Good morning","firstName":"Sam",
+ "days":[{"date":"2026-11-23","letter":"M","today":true,"mark":"today","done":false}],          // Monday..Sunday
+ "today":{"title":"Lower body strength, and three habits.","progress":0.21,                        // "Rest, and three habits." without a workout
+   "workout":{"id":"w_…","title":"Lower body strength","minutes":45,"completed":false,             // minutes: about 3 a set plus 10, to the nearest 5
+     "blocks":[{"itemId":"i_…","label":"Warm","done":true}]},                                     // label: Warm-up→Warm, Ease-out→Ease, squat/hinge/lunge/carry pattern, else the last word
+   "habits":[{"id":"h_…","name":"A walk after lunch","iconKey":"steps","kind":"check","doneToday":true,"progress":1,
+     "target":1,"value":1,"unit":"","week":[true,false,null,null,null,null,null]}],                // true done, false missed (past), null today-not-yet, future, or before the habit
+   "restDay":false,"coachLine":null},                                                              // coachLine: JK's line, on a rest day only
+ "plan":{"bookingId":"b_…","title":"Plan December with JK","when":"Thursday, 7:30am","start":"…","dayIndex":3},
+ "review":{"bookingId":"b_…","title":"Accountability with JK","when":"Sunday, 6pm","start":"…","dayIndex":6},
+ "footer":"Planning with JK on Thursday","unread":0}
+// plan/review: the next booking with that purpose in the next 14 days, else null. Title: the coach's own title, else
+// "Plan {month} with JK" (the month two weeks after the session) / "Accountability with JK". dayIndex null outside this week.
+// today.progress: workout (1 when completed, else logged / prescribed sets) and habits (done / all) weighted equally.
+// habits[].progress: 1 when done today; a count habit part-way, value / target; else the share of this week's past days done.
+
+// Direction
+{"locked":false,"aim":"Get strong enough that the hills stop mattering.","plannedOn":"2026-11-04",
+ "plannedLabel":"Planned together with JK, 4 November",
+ "season":{"start":"2026-11-04","end":"2027-01-31","today":"2026-11-23","next":"2026-11-26",
+   "labels":{"start":"4 Nov","next":"26 Nov","end":"Jan"},"progress":0.22,"phaseWord":"early days, building"},
+ "priorities":[{"id":"pri_…","title":"Strength","status":"building","statusWord":"Building","progress":0.66}],
+ "planning":{"bookingId":"b_…","when":"Thursday, 7:30am","whenShort":"Thursday","start":"…"},
+ "prep":Prep|null}
+// aim: the active goal's aim, else its title; null without a goal (then season and priorities are empty).
+// season: planned_on ?? start_date to target_date, null if either is missing. phaseWord < 0.34 "early days, building",
+// < 0.67 "finding the rhythm", else "the home stretch". Status words: Not yet / Settling in / Building / Strong (0/0.33/0.66/1).
+// planning: the next planning booking in the next 92 days.
+
+// Prep: one per upcoming planning booking (one started before a booking exists is tied to it on the next write).
+{"id":"pr_…","feeling":70,"feelingWord":"Mostly good","easier":"…","inTheWay":"…","sharedAt":null}
+// feelingWord: 0-19 Hard going, 20-39 Up and down, 40-59 Okay, 60-79 Mostly good, 80-100 Flowing.
+// share: sets sharedAt (again after an edit, which puts it back in Needs you). Nothing is posted to the thread.
+
+// Review. week: the week being looked back on (last week until Friday, then this one, as check-ins).
+{"locked":false,"week":"2026-11-16","label":"REVIEW · BEFORE YOUR SESSION",                       // "REVIEW · THIS WEEK" with no review booked
+ "booking":{"bookingId":"b_…","when":"Sunday, 6pm","start":"…"}|null,
+ "reflection":{"feeling":3,"feelingWord":"Steady","noticed":"…","sharedAt":"…"|null}|null,
+ "commitments":[{"id":"cm_…","text":"Three sessions","outcome":"kept|mostly|missed|null"}],       // the week's, with the client's outcomes
+ "session":{"pending":true,"with":"With JK · Sunday, 6pm",
+   "notes":"Steady is exactly right, Sam. …","letterId":"r_…",                                     // latest delivered letter; "" and null without one
+   "shape":{"weeks":[{"week":"2026-10-26","feeling":1,"word":"Flat"}],"trend":"trending steadier"},
+   "agreed":[{"id":"cm_…","text":"Walk after lunch, every weekday"}],"agreedWeek":"2026-11-23","acceptedAt":null}|null}
+// Feeling words 1-5: Flat, Stretched, Steady, Good, Strong. Old check-ins read energy as the feeling and note as noticed.
+// session: when a letter was delivered or commitments agreed since the last review session (or, with none in the last
+// fortnight, in the last 7 days), or agreed commitments wait to be accepted. pending: next week's commitments not all accepted.
+// shape.weeks: the last 4 filed weeks, oldest first. trend: the latest against the average of the weeks before:
+// "trending steadier" (up), "holding steady", "a harder stretch" (down); null with fewer than two.
+// notes: the headline and summary; when the summary only repeats the headline, the headline, keep and adjust.
+
+// CoachPar
+{"clientId":"u_…","goalId":"g_…","aim":"…"|null,"aimFallback":"<goal title>","plannedOn":"2026-11-04","season":…,
+ "priorities":[Priority],"prep":Prep&{"bookingId","updatedAt"}|null,                              // the latest prep, shared or not
+ "reflection":{"week","feeling","feelingWord","noticed","sharedAt"}|null,                          // the latest filed week
+ "commitments":{"currentWeek":"2026-11-16","nextWeek":"2026-11-23",
+   "current":[{"id","week","text","outcome","acceptedAt"}],"next":[…]},
+ "planning":{"bookingId","when","whenShort","start"}|null,"review":{…}|null}
+```
+
+A reflection is a check-in. Saving without `share` keeps an unshared draft (`reflection_drafts`) the coach does not
+see; `share: true` files it as the week's check-in (`energy = sleep = feeling`, `pain = []`, `note = noticed`,
+`submitted_at` now; the draft is cleared) and pushes "Sent their weekly check-in." (or "Updated …" when re-shared) to the
+coach, so every existing coach view keeps working. Outcomes save straight onto the commitments. Changing a week's
+commitments keeps the outcome and acceptance of texts that did not change. Workout items (workouts and programs) gain
+`tempo` (`^\d-\d-\d(-\d)?$`, "down-pause-drive"; empty clears it; an item written without the field keeps its tempo).
+Bookings gain `purpose` (`planning` | `review` | null) on create, `PATCH` and every output.

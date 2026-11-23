@@ -93,6 +93,7 @@ final class AppSession {
     }
 
     private func adopt(_ session: Session) {
+        TabRouter.shared.reset()
         api.setToken(session.token)
         Outbox.shared.adopt(userId: session.me.id)
         me = session.me
@@ -146,6 +147,7 @@ final class AppSession {
     }
 
     func clear() {
+        TabRouter.shared.reset()
         Reminders.shared.clearPending()
         PortraitStore.shared.clear()
         api.setToken(nil)

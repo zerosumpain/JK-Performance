@@ -288,6 +288,13 @@ route('/schedule/class/:id/:day?', async (el, { id, day }, view) => {
         h('h1', null, b.title || kindLabel(b)),
         h('div', { class: 'small muted' }, `${fmtLongDay(s.day)} · ${fmtTime(b.start)}–${fmtTime(b.end)}`),
         b.location ? h('div', { class: 'small faint' }, b.location) : null)),
+    isGroup(b) ? null : h('div', { class: 'mt sched-purpose' }, field('Purpose', purposeSelect(b.purpose, async v => {
+      await busy(null, status, async () => {
+        const out = await api('PATCH', `/api/bookings/${encodeURIComponent(b.id)}`, { purpose: v });
+        b.purpose = out.purpose;
+        toast(v ? `Marked as ${PURPOSES.find(x => x[0] === v)[1].toLowerCase()}` : 'Purpose cleared');
+      });
+    }), 'Planning and accountability sessions appear on the client’s Plan and Review.')),
     eyebrow('Attendees', b.capacity ? `${count} of ${b.capacity}` : null),
     people.length
       ? h('div', { class: 'card flush' }, people.map(p => link(`/clients/${encodeURIComponent(p.id)}`, { class: 'person-row' },
@@ -366,11 +373,16 @@ function bookSheet(day) {
 // MARK: - Book a client into a slot (BookSessionView, coach side)
 
 const SLOT_KINDS = [['inperson', '1:1 · in person'], ['video', 'Video call']];
+/** What a 1:1 is for: the client app shows planning sessions on Plan and accountability sessions on Review. */
+const PURPOSES = [['', 'None'], ['planning', 'Planning session'], ['review', 'Accountability session']];
+const purposeSelect = (value, onchange) => h('select', { onchange: e => onchange(e.target.value || null) },
+  PURPOSES.map(([v, l]) => h('option', { value: v, selected: v === (value || '') }, l)));
 
 function bookSession(client, initialDay, onBack, close) {
   const today = todayLondon();
   let day = initialDay < today ? today : initialDay;
   let kind = 'inperson';
+  let purpose = null;
   let chosen = null;
   let slots = null;
   let loadSeq = 0;
@@ -382,7 +394,7 @@ function bookSession(client, initialDay, onBack, close) {
   const confirm = button('Confirm booking', async () => {
     if (!chosen) return;
     await busy(confirm, status, async () => {
-      await api('POST', '/api/bookings', { start: chosen.start, kind, clientId: client.id });
+      await api('POST', '/api/bookings', { start: chosen.start, kind, clientId: client.id, purpose });
       close(true);
     });
   }, { kind: 'primary' });
@@ -436,6 +448,7 @@ function bookSession(client, initialDay, onBack, close) {
           h('span', { class: 'tiny' }, DAYS[p.getUTCDay()]), h('span', { class: 'strong' }, String(p.getUTCDate())));
       })),
       h('div', { class: 'mt' }, segmented(SLOT_KINDS, kind, v => { kind = v; draw(); })),
+      h('div', { class: 'mt' }, field('Purpose', purposeSelect(purpose, v => { purpose = v; }), 'Planning and accountability sessions appear on the client’s Plan and Review.')),
       h('div', { class: 'mt' }, slotBox),
       summary, status, confirm,
       h('p', { class: 'tiny faint center' }, 'Free cancellation up to 24h before'));

@@ -77,7 +77,7 @@ export function workoutOut(db, w, { withItems = true } = {}) {
     items: items.map(i => ({
       id: i.id, order: i.position,
       exercise: { id: i.exercise_id, name: i.e_name, equipment: i.e_equipment, pattern: i.e_pattern, category: i.e_category, videoUrl: i.e_video ?? null },
-      sets: i.sets, reps: i.reps, load: i.load, rpe: i.rpe, note: i.note,
+      sets: i.sets, reps: i.reps, load: i.load, rpe: i.rpe, note: i.note, tempo: i.tempo ?? null,
       logged: logsOf.all(i.id).map(s => ({ number: s.number, load: s.load, reps: s.reps, rpe: s.rpe, at: s.at })),
       previous: previousFor(db, w.client_id, i.exercise_id, w.date),
     })),
@@ -113,8 +113,18 @@ function cleanItems(db, items) {
       load: str(it.load ?? '', `items[${i}].load`, { max: 30, min: 0 }),
       rpe: str(it.rpe, `items[${i}].rpe`, { max: 10, optional: true }),
       note: str(it.note, `items[${i}].note`, { max: 300, optional: true, min: 0 }),
+      // Left out (an older app build): an existing item keeps its tempo.
+      tempo: it.tempo === undefined ? undefined : tempoOf(it.tempo, `items[${i}].tempo`),
     };
   });
+}
+
+/** "3-1-1" (down, pause, drive) or "3-1-1-0"; empty means none. */
+export const TEMPO = /^\d-\d-\d(-\d)?$/;
+function tempoOf(value, name) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !TEMPO.test(value.trim())) fail(400, `${name} must look like 3-1-1`);
+  return value.trim();
 }
 
 /** Replace a workout's items. Items keeping their id keep their logged sets. */
@@ -124,11 +134,11 @@ function writeItems(db, workoutId, items) {
   for (const id of current) if (!keep.has(id)) db.prepare('DELETE FROM workout_items WHERE id=?').run(id);
   items.forEach((it, position) => {
     if (it.id && current.includes(it.id)) {
-      db.prepare('UPDATE workout_items SET position=?, exercise_id=?, sets=?, reps=?, load=?, rpe=?, note=? WHERE id=?')
-        .run(position, it.exerciseId, it.sets, it.reps, it.load, it.rpe, it.note, it.id);
+      db.prepare('UPDATE workout_items SET position=?, exercise_id=?, sets=?, reps=?, load=?, rpe=?, note=?, tempo=CASE WHEN ? THEN tempo ELSE ? END WHERE id=?')
+        .run(position, it.exerciseId, it.sets, it.reps, it.load, it.rpe, it.note, it.tempo === undefined ? 1 : 0, it.tempo ?? null, it.id);
     } else {
-      db.prepare('INSERT INTO workout_items (id, workout_id, position, exercise_id, sets, reps, load, rpe, note) VALUES (?,?,?,?,?,?,?,?,?)')
-        .run(newId('i'), workoutId, position, it.exerciseId, it.sets, it.reps, it.load, it.rpe, it.note);
+      db.prepare('INSERT INTO workout_items (id, workout_id, position, exercise_id, sets, reps, load, rpe, note, tempo) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        .run(newId('i'), workoutId, position, it.exerciseId, it.sets, it.reps, it.load, it.rpe ?? null, it.note ?? null, it.tempo ?? null);
     }
   });
 }
@@ -249,7 +259,7 @@ function programOut(db, p) {
   const clientCount = db.prepare('SELECT COUNT(DISTINCT client_id) n FROM workouts WHERE program_id=?').get(p.id).n;
   // Items are stored by exercise id; the reply carries the exercise itself, as a workout's items do.
   const byId = db.prepare('SELECT * FROM exercises WHERE id=?');
-  const workouts = body.workouts.map(w => ({ ...w, items: w.items.map(i => { const e = byId.get(i.exerciseId); return { ...i, exercise: e ? exerciseOut(e) : null }; }) }));
+  const workouts = body.workouts.map(w => ({ ...w, items: w.items.map(i => { const e = byId.get(i.exerciseId); return { ...i, tempo: i.tempo ?? null, exercise: e ? exerciseOut(e) : null }; }) }));
   return { id: p.id, name: p.name, detail: p.detail, daysPerWeek: p.days_per_week, weeks: p.weeks, workouts, clientCount, updatedAt: p.updated_at };
 }
 
