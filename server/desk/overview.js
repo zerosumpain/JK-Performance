@@ -11,6 +11,7 @@ import {
   sheet, sparkline, state, toast, todayLondon, weekDots,
 } from './core.js';
 import { letterComposer } from './letters.js';
+import { parSection } from './par.js';
 
 const enc = encodeURIComponent;
 const fmtN = (v, digits = 1) => (v === null || v === undefined ? '–' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: digits }));
@@ -62,12 +63,14 @@ export async function overviewTab(box, ctx, { openLetter = false } = {}) {
   const writeLetter = async opts => { const changed = await letterComposer(ctx, opts); if (changed && ctx.view.fresh()) reload(); };
 
   const goalBox = h('section', { class: 'ov-sec' });
+  const parBox = h('section', { class: 'ov-sec' });
   const habitBox = h('section', { class: 'ov-sec' });
   const checkinBox = h('section', { class: 'ov-sec' });
   const healthBox = h('section', { class: 'ov-sec' });
   fill(box, h('div', { class: 'ov-grid' },
     h('div', { class: 'ov-main' },
       has(features, 'progress') ? goalBox : null,
+      has(features, 'progress') || has(features, 'checkin') ? parBox : null,
       has(features, 'habits') ? habitBox : null,
       has(features, 'checkin') ? checkinBox : null),
     h('div', { class: 'ov-side' },
@@ -77,6 +80,7 @@ export async function overviewTab(box, ctx, { openLetter = false } = {}) {
       aboutSection(detail.profile, ctx.first()))));
 
   goalSection(goalBox, ctx, detail, reload);
+  if (has(features, 'progress') || has(features, 'checkin')) parSection(parBox, ctx, sectionHead);
   if (has(features, 'checkin')) checkinSection(checkinBox, ctx, detail, writeLetter);
   if (detail.healthShared) healthSection(healthBox, ctx);
   if (has(features, 'habits')) await habitSection(habitBox, ctx, detail, features, reload);

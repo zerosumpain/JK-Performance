@@ -258,12 +258,12 @@ function programDraft(p) {
     programId: p.id, name: p.name, detail: p.detail ?? '', daysPerWeek: p.daysPerWeek, weeks: p.weeks,
     workouts: p.workouts.map(w => ({
       localId: uid(), dayOffset: w.dayOffset, title: w.title,
-      items: w.items.map(i => ({ localId: uid(), exerciseId: i.exerciseId, exerciseName: i.exercise?.name || i.exerciseId, sets: i.sets, reps: i.reps ?? '', load: i.load ?? '', rpe: i.rpe ?? null, note: i.note ?? null })),
+      items: w.items.map(i => ({ localId: uid(), exerciseId: i.exerciseId, exerciseName: i.exercise?.name || i.exerciseId, sets: i.sets, reps: i.reps ?? '', load: i.load ?? '', rpe: i.rpe ?? null, note: i.note ?? null, tempo: i.tempo ?? null })),
     })),
   };
 }
 
-const itemInput = i => ({ exerciseId: i.exerciseId, sets: i.sets, reps: i.reps, load: i.load ?? '', rpe: i.rpe || null, note: i.note || null });
+const itemInput = i => ({ exerciseId: i.exerciseId, sets: i.sets, reps: i.reps, load: i.load ?? '', rpe: i.rpe || null, note: i.note || null, tempo: (i.tempo || '').trim() || null });
 
 function programInput(d) {
   return {
@@ -299,7 +299,7 @@ function editProgram(program, reload) {
           itemsEl,
           h('div', { class: 'spread mt' },
             button(h('span', { class: 'row gap4' }, icon('plus', 18), 'Add exercise'), () => pickExercise(ex => {
-              w.items.push({ localId: uid(), exerciseId: ex.id, exerciseName: ex.name, sets: 3, reps: '10', load: '', rpe: null, note: null });
+              w.items.push({ localId: uid(), exerciseId: ex.id, exerciseName: ex.name, sets: 3, reps: '10', load: '', rpe: null, note: null, tempo: null });
               drawItems();
             }), { small: true }),
             button(h('span', { class: 'row gap4' }, icon('trash', 18), 'Remove workout'), () => {
@@ -349,7 +349,7 @@ function editProgram(program, reload) {
 }
 
 /**
- * ItemsEditor: rows of exercise prescriptions (sets, reps, load, RPE, note),
+ * ItemsEditor: rows of exercise prescriptions (sets, reps, load, RPE, tempo, note),
  * reorder and delete. `redraw` rebuilds the list after a move or removal.
  */
 function itemsEditor(items, redraw) {
@@ -372,6 +372,7 @@ function itemsEditor(items, redraw) {
         h('div', { class: 'field pg-f-reps' }, h('label', null, 'Reps'), textInput(item, 'reps', { placeholder: '10', label: 'Reps' })),
         h('div', { class: 'field pg-f-load' }, h('label', null, 'Load'), textInput(item, 'load', { placeholder: '60 kg', label: 'Load' })),
         h('div', { class: 'field pg-f-rpe' }, h('label', null, 'RPE'), textInput(item, 'rpe', { placeholder: '7–8', label: 'RPE' })),
+        h('div', { class: 'field pg-f-tempo' }, h('label', null, 'Tempo'), textInput(item, 'tempo', { placeholder: '3-1-1', label: 'Tempo: down, pause, drive' })),
         h('div', { class: 'field pg-f-note' }, h('label', null, 'Note'), textInput(item, 'note', { placeholder: 'Cue for the client', label: 'Note' }))));
   });
 }
