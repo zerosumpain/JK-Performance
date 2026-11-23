@@ -35,6 +35,7 @@ const LIBRARY = [
   ['Sled Push', 'Sled', 'Cardio', 'Conditioning'], ['Burpee', 'Bodyweight', 'Cardio', 'Conditioning'],
   ['Kettlebell Clean', 'Kettlebell', 'Power', 'Conditioning'], ['Box Jump', 'Box', 'Power', 'Conditioning'],
   ['Run', 'None', 'Cardio', 'Conditioning'], ['Turkish Get-up', 'Kettlebell', 'Full body', 'Core'],
+  ['Warm-up', 'Bodyweight', 'Warm-up', 'Mobility'], ['Ease-out', 'Bodyweight', 'Cool-down', 'Mobility'],
 ];
 
 export const exerciseId = name => 'ex_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

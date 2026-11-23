@@ -54,10 +54,11 @@ test('Sam\'s Today reads like the design; the demo coach gets a portrait from a 
   const t = todayFor(db, { dataDir }, sam);
   assert.equal(t.goal.title, 'Down to 75 kg by March');
   assert.equal(t.goal.remainingLabel, '4.8 kg to go');
-  assert.deepEqual(t.habits.map(h => h.name), ['Water', 'Sleep', 'Steps', 'Creatine', 'Protein']);
-  assert.deepEqual(t.habits.map(h => h.iconKey), ['water', 'sleep', 'steps', 'energy', 'protein']);
+  // Plan. Act. Review.: the board's three habits and the letter from Sunday's session.
+  assert.deepEqual(t.habits.map(h => h.name), ['Protein at every meal', 'A walk after lunch', 'Lights out by eleven']);
+  assert.deepEqual(t.habits.map(h => h.iconKey), ['protein', 'steps', 'sleep']);
   assert.equal(t.coachLine.source, 'letter');
-  assert.ok(['This week: protein at breakfast, and lights out by 10:30.', 'Strongest week yet.'].includes(t.coachLine.text), t.coachLine.text);
+  assert.ok(['The run slipped again, so we\'ve made it smaller.', 'Steady is exactly right, Sam.'].includes(t.coachLine.text), t.coachLine.text);
   assert.equal(t.week.length, 7);
   assert.ok(t.consistency.done > 15, JSON.stringify(t.consistency));
   const letters = db.prepare("SELECT * FROM reports WHERE client_id=? AND headline IS NOT NULL AND question IS NOT NULL AND media_id IS NULL").all(sam.id);

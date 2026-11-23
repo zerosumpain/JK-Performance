@@ -48,14 +48,16 @@ const DEMO_CLIENTS = [
     weight: [84.6, 79.8], bodyFat: [21.5, 17.2], waist: [91, 84], rhr: [62, 55], shares: true, oneToOne: [2, '11:00', 'inperson'], fortnightly: true,
     goal: 'Squat 120 kg and get under 80 kg', checkin: [4, 4, ['Knee'], 'Left knee tight after split squats, fine by Thursday.'], thread: SAM_THREAD,
     win: 'Squat 102.5 for 5, felt fast.', struggle: 'Late nights Tuesday and Wednesday.',
-    // Today reads like the design: a weight goal 4.8 kg away, five habits, a letter with an Adjust line.
+    // Today reads like the design: a weight goal 4.8 kg away, a letter with an Adjust line.
     goalSpec: { title: 'Down to 75 kg by March', metric: 'weight', unit: 'kg', baseline: 84.6, target: 75, why: 'To feel strong again after two years off.' },
-    habits: [['Water', 'count', 3, 'L', 'water', null, 0.5], ['Sleep', 'check', 7, 'h', 'sleep', 'sleep'], ['Steps', 'count', 10000, 'steps', 'steps', 'steps'],
-      ['Creatine', 'check', 1, '', 'energy'], ['Protein', 'count', 170, 'g', 'protein', null, 10]],
+    // Plan. Act. Review.: the board's three habits, season, priorities, sessions, reflections and commitments (testclients.mjs buildPar).
+    habits: [['Protein at every meal', 'check', 1, '', 'protein'], ['A walk after lunch', 'check', 1, '', 'steps'], ['Lights out by eleven', 'check', 1, '', 'sleep']],
+    par: true,
     restDays: [[2, 'Travelling for work']],
     letters: [
-      { headline: 'Strongest week yet.', keep: 'Squat 102.5 kg for 5: up 17.5 kg since you started.', adjust: 'This week: protein at breakfast, and lights out by 10:30.',
-        question: 'How did the knee feel on Wednesday?', answer: null },
+      { headline: 'Steady is exactly right, Sam.', keep: 'You spotted the link between the walk and your sleep yourself.', adjust: 'The run slipped again, so we\'ve made it smaller.',
+        summary: 'Steady is exactly right, Sam. You spotted the link between the walk and your sleep yourself. The run slipped again, so we\'ve made it smaller.',
+        question: 'What made the walk easier to keep?', answer: null },
       { headline: 'The work trip did not break the week.', keep: 'You moved Wednesday to Saturday instead of skipping it.', adjust: 'Ten minutes of mobility before every lower session.',
         question: 'What got in the way on Thursday?', answer: 'Late meeting. I will train first thing on Thursdays.' },
       { headline: 'Down 1.5 kg, and stronger with it.', keep: 'Protein at breakfast five days out of seven.', adjust: 'Same plan, small load increases where the last set felt easy.',
@@ -96,7 +98,7 @@ function ensureAccounts(db, today) {
 }
 
 // Everything a demo account holds, by owner column. Photos stay (they're files too).
-const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_entries', 'checkins', 'messages', 'reports', 'form_requests', 'autoflow_runs', 'goals', 'rest_days'];
+const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_entries', 'checkins', 'messages', 'reports', 'form_requests', 'autoflow_runs', 'goals', 'rest_days', 'priorities', 'preps', 'commitments', 'reflection_drafts'];
 const USER_TABLES = ['measurements', 'health_samples', 'health_activities', 'challenge_members', 'class_attendees', 'membership_events'];
 const COACH_TABLES = ['bookings', 'programs', 'challenges', 'forms', 'autoflows', 'plan_settings', 'plan_price_events'];
 
