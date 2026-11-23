@@ -86,6 +86,7 @@ const ACTION_PATH = {
   reply: c => `/messages/${enc(c.id)}`,
   nudge: c => `/messages/${enc(c.id)}`,
   readAnswers: c => clientPath(c.id, 'forms'),
+  readThoughts: c => clientPath(c.id),
 };
 const REASON_TONE = { pain: 'tone-urgent', priorityUnread: 'tone-attention' };
 

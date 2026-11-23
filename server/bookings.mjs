@@ -104,7 +104,7 @@ function bookingOut(db, b, viewer) {
   const attendees = b.kind === 'group' ? db.prepare('SELECT u.id, u.name FROM class_attendees a JOIN users u ON u.id = a.user_id WHERE a.booking_id=? ORDER BY u.name').all(b.id) : [];
   const mine = viewer.role === 'coach' || b.client_id === viewer.id || attendees.some(a => a.id === viewer.id);
   return {
-    id: b.id, kind: b.kind, start: b.start, end: b.end, location: b.location, title: b.title,
+    id: b.id, kind: b.kind, start: b.start, end: b.end, location: b.location, title: b.title, purpose: b.purpose ?? null,
     client: client ? { id: client.id, name: client.name } : null,
     attendees: viewer.role === 'coach' ? attendees.map(a => ({ id: a.id, name: a.name })) : attendees.filter(a => a.id === viewer.id).map(a => ({ id: a.id, name: a.name })),
     attendeeCount: attendees.length, capacity: b.capacity, usesCredit: !!b.uses_credit,
@@ -118,12 +118,26 @@ function bookingOut(db, b, viewer) {
 
 export const resolvedMeetingUrl = (db, b) => b.meeting_url ?? (b.kind === 'video' ? coachSettings(db, b.coach_id).defaultMeetingUrl : null);
 
-/** The coach sets (or clears) a booking's own meeting link. */
+/** What a 1:1 is for: a planning session, a weekly accountability (review) session, or nothing said. */
+export const PURPOSES = ['planning', 'review'];
+const purposeOf = v => (v === null || v === '' ? null : oneOf(v, 'purpose', PURPOSES));
+
+/**
+ * The coach changes a booking: its own meeting link and/or its purpose. A body
+ * without `purpose` is the old call, which sets (or clears) the meeting link.
+ */
 function setMeeting(_req, ctx) {
   requireCoach(ctx);
   const b = ctx.db.prepare('SELECT * FROM bookings WHERE id=? AND coach_id=?').get(ctx.params.id, ctx.user.id);
   if (!b) fail(404, 'Not found');
-  ctx.db.prepare('UPDATE bookings SET meeting_url=? WHERE id=?').run(meetingUrl(ctx.body.meetingUrl ?? null, 'meetingUrl'), b.id);
+  const body = ctx.body;
+  if (body.purpose !== undefined) {
+    if (b.kind === 'group' && body.purpose !== null) fail(400, 'A group class has no purpose');
+    ctx.db.prepare('UPDATE bookings SET purpose=? WHERE id=?').run(purposeOf(body.purpose), b.id);
+  }
+  if (body.purpose === undefined || body.meetingUrl !== undefined) {
+    ctx.db.prepare('UPDATE bookings SET meeting_url=? WHERE id=?').run(meetingUrl(body.meetingUrl ?? null, 'meetingUrl'), b.id);
+  }
   return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(b.id), ctx.user);
 }
 
@@ -151,6 +165,7 @@ function createBooking(_req, ctx) {
   if (!coachId) fail(409, 'You do not have a coach yet');
   const start = instant(ctx.body.start, 'start');
   const kind = oneOf(ctx.body.kind, 'kind', ['inperson', 'video']);
+  const purpose = ctx.body.purpose === undefined ? null : purposeOf(ctx.body.purpose);
   const startDay = londonDay(new Date(start));
   const slot = slotsFor(ctx.db, coachId, startDay, startDay, kind).find(s => s.start === start);
   if (!slot) fail(400, 'That time is not one of the coach\'s slots');
@@ -161,9 +176,9 @@ function createBooking(_req, ctx) {
     if (ctx.config.gateServices && credits(ctx.db, client, startDay).creditsLeft < 1) fail(409, 'No session credits left this month');
     const id = newId('b');
     const coach = ctx.db.prepare('SELECT name FROM users WHERE id=?').get(coachId);
-    ctx.db.prepare('INSERT INTO bookings (id, coach_id, client_id, kind, start, end, location, title, uses_credit, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+    ctx.db.prepare('INSERT INTO bookings (id, coach_id, client_id, kind, start, end, location, title, uses_credit, created_at, purpose) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
       id, coachId, client.id, kind, slot.start, slot.end, kind === 'video' ? 'Video call' : slot.location,
-      `${kind === 'video' ? 'Video call' : '1:1'} with ${coach.name}`, usesCredit ? 1 : 0, nowIso());
+      `${kind === 'video' ? 'Video call' : '1:1'} with ${coach.name}`, usesCredit ? 1 : 0, nowIso(), purpose);
     return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(id), ctx.user);
   });
   const what = `${kind === 'video' ? 'Video call' : '1:1'} · ${when(slot.start)}`;

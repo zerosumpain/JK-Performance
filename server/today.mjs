@@ -23,7 +23,7 @@ const firstLine = text => (text ?? '').trim().split('\n')[0].slice(0, 160);
 const HOUR = 3_600_000;
 
 /** The line From JK shows, or null (Free, nothing yet, or stale: older than the rhythm plus three days). */
-function coachLineOf(db, client, f, today) {
+export function coachLineOf(db, client, f, today) {
   if (!f.messaging && !f.checkin) return null;
   const rhythm = rhythmOf(db, client);
   const staleAfterDays = (rhythm.days ?? 7) + 3;

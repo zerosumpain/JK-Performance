@@ -178,6 +178,7 @@ export function openStore(path) {
   if (addColumn(db, 'users', 'onboarded_at', 'TEXT')) db.exec('UPDATE users SET onboarded_at = created_at');
   addColumn(db, 'users', 'profile', 'TEXT');
   atelierSchema(db);
+  parSchema(db);
   if (path !== ':memory:') backupBeforeMigration(db, path);
   migrateAtelier(db);
   return db;
@@ -249,6 +250,45 @@ function atelierSchema(db) {
   addColumn(db, 'messages', 'media_id', 'TEXT');
   addColumn(db, 'workouts', 'feel', 'INTEGER');
   addColumn(db, 'bookings', 'meeting_url', 'TEXT');
+}
+
+/**
+ * Plan. Act. Review. (docs/design/plan-act-review.md, "Data model"): booking
+ * purpose, priorities, the season aim on goals, planning preps, reflections on
+ * check-ins (and their unshared drafts), weekly commitments and item tempo.
+ * Everything is additive and safe to run on every start.
+ */
+function parSchema(db) {
+  addColumn(db, 'bookings', 'purpose', 'TEXT');
+  addColumn(db, 'goals', 'aim', 'TEXT');
+  addColumn(db, 'goals', 'planned_on', 'TEXT');
+  addColumn(db, 'checkins', 'feeling', 'INTEGER');
+  addColumn(db, 'checkins', 'noticed', 'TEXT');
+  addColumn(db, 'workout_items', 'tempo', 'TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS priorities (
+      id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 2), title TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('notyet','settling','building','strong')),
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS priorities_client ON priorities(client_id, position);
+    CREATE TABLE IF NOT EXISTS preps (
+      id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      booking_id TEXT REFERENCES bookings(id) ON DELETE SET NULL,
+      feeling INTEGER CHECK (feeling IS NULL OR feeling BETWEEN 0 AND 100),
+      easier TEXT NOT NULL DEFAULT '', in_the_way TEXT NOT NULL DEFAULT '',
+      shared_at TEXT, seen_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS preps_client ON preps(client_id, created_at);
+    CREATE TABLE IF NOT EXISTS commitments (
+      id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      week TEXT NOT NULL, position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 2), text TEXT NOT NULL,
+      outcome TEXT CHECK (outcome IS NULL OR outcome IN ('kept','mostly','missed')),
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL,
+      accepted_at TEXT, updated_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS commitments_client_week ON commitments(client_id, week);
+    CREATE TABLE IF NOT EXISTS reflection_drafts (
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, week TEXT NOT NULL,
+      feeling INTEGER CHECK (feeling IS NULL OR feeling BETWEEN 1 AND 5), noticed TEXT,
+      updated_at TEXT NOT NULL, PRIMARY KEY (client_id, week));`);
 }
 
 const MIGRATION = 'atelier_v1';
