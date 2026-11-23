@@ -3,36 +3,48 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-/// A screen pushed inside a client tab (Today or JK). One enum so a tapped
-/// notification can open the right one.
+/// A screen pushed inside a client tab or the JK sheet. One enum so a
+/// tapped notification can open the right one.
 enum ClientRoute: Hashable {
     /// Your week, scrolled to this "YYYY-MM-DD" day (nil: today).
     case yourWeek(String?)
     /// A workout: detail, logger and the session-complete page.
     case session(String)
     case letter(String)
+    case letters
     case guides
     case guide(String)
     case challenges
+    case progress
+    /// Act › Today's work.
+    case todaysWork
+    /// Plan › Before the session.
+    case prepare
+    /// Review › Accountability session.
+    case accountability
 }
 
-/// Which tab is showing and what is pushed in it. A tapped notification moves
-/// it (a message opens JK, a letter opens the letter, a booking Your week), so
-/// the tab bars and stacks bind to this.
+/// Which tab is showing, what is pushed in it, and the JK sheet (docs/design/
+/// plan-act-review.md, "Navigation"). A tapped notification moves it, so the
+/// tab bar, the stacks and the sheet bind to this.
 @Observable
 @MainActor
 final class TabRouter {
     static let shared = TabRouter()
 
-    /// The three client tabs (atelier-spec.md, IA).
-    enum Client: Hashable { case today, progress, jk }
+    /// The three client tabs: Plan · Act · Review (default Act).
+    enum Client: Hashable { case plan, act, review }
     enum Coach: Hashable { case today, clients, messages }
 
-    var client: Client = .today
+    var client: Client = .act
     var coach: Coach = .today
-    var todayPath: [ClientRoute] = []
+    var planPath: [ClientRoute] = []
+    var actPath: [ClientRoute] = []
+    var reviewPath: [ClientRoute] = []
+    /// The JK sheet: the thread with JK and the More list.
+    var showJK = false
     var jkPath: [ClientRoute] = []
-    /// The Account sheet over Today (Account is no longer a tab).
+    /// The Account sheet, over the JK sheet.
     var showAccount = false
     /// Open the Account sheet at Membership.
     var showMembership = false
@@ -40,25 +52,78 @@ final class TabRouter {
     var replyQuote: ReplyQuote?
     /// Text to start the JK composer with ("Ask JK for a rest day").
     var composerDraft: String?
+    /// A letter to show on Review: the Accountability session if it is the latest, else the letter.
+    var reviewLetter: String?
+    /// Review should open on the Accountability session when one is waiting.
+    var reviewWantsSession = false
+    /// Unread from JK (GET /api/week): the silver dot on his avatar.
+    var unread = 0
 
     struct ReplyQuote: Equatable {
         let reportId: String
         let headline: String
     }
 
-    /// The old tab names, kept so existing payloads and links still land:
-    /// home → today; plan and calendar → today, then Your week; messages → JK;
-    /// account → today, then the Account sheet.
+    /// Push on whatever is in front: the JK sheet's stack, else the current tab's.
+    func push(_ route: ClientRoute) {
+        if showJK {
+            jkPath.append(route)
+            return
+        }
+        switch client {
+        case .plan: planPath.append(route)
+        case .act: actPath.append(route)
+        case .review: reviewPath.append(route)
+        }
+    }
+
+    /// Opens the JK sheet. `after` lets a closing sheet get out of the way first.
+    func openJK(path: [ClientRoute] = [], after delay: Double = 0) {
+        Task { @MainActor in
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            jkPath = path
+            unread = 0
+            showJK = true
+        }
+    }
+
+    /// JK sheet › Account (at Membership when asked). The Account sheet sits
+    /// over the JK sheet, so the JK sheet opens first.
+    func openAccount(membership: Bool = false) {
+        showMembership = membership
+        let wasOpen = showJK
+        showJK = true
+        Task { @MainActor in
+            if !wasOpen { try? await Task.sleep(for: .seconds(0.5)) }
+            showAccount = true
+        }
+    }
+
+    private func closeSheets() {
+        showAccount = false
+        showJK = false
+    }
+
+    /// Link and payload names, old and new: today, home and plan (old) →
+    /// Act; messages and jk → the JK sheet; account → JK sheet › Account;
+    /// checkin and review → Review; calendar → JK sheet › Your week.
     func openLegacy(_ name: String) {
         switch name {
-        case "home": client = .today
-        case "plan", "calendar":
-            client = .today
-            todayPath = [.yourWeek(nil)]
-        case "messages": client = .jk
+        case "today", "home", "plan", "act":
+            closeSheets()
+            client = .act
+        case "direction", "prepare":
+            closeSheets()
+            client = .plan
+        case "calendar", "week":
+            openJK(path: [.yourWeek(nil)])
+        case "messages", "jk":
+            openJK()
         case "account":
-            client = .today
-            showAccount = true
+            openAccount()
+        case "checkin", "review":
+            closeSheets()
+            client = .review
         default: break
         }
     }
@@ -66,28 +131,35 @@ final class TabRouter {
     func open(kind: String?, id: String? = nil) {
         switch kind {
         case "message":
-            client = .jk
             coach = .messages
-        case "report":
-            client = .jk
-            if let id { jkPath = [.letter(id)] }
+            openJK()
+        case "report", "letter":
+            closeSheets()
+            client = .review
+            reviewLetter = id
+            reviewWantsSession = true
         case "booking":
-            client = .today
-            todayPath = [.yourWeek(nil)]
             coach = .today
-        case "checkin": coach = .today
+            openJK(path: [.yourWeek(nil)])
+        case "checkin":
+            coach = .today
+            closeSheets()
+            client = .review
         case "form":
-            client = .today
             coach = .today
+            openJK()
         case let other?: openLegacy(other)
         default: break
         }
     }
 
-    /// Your week from Today, scrolled to a day.
+    /// Your week, scrolled to a day (in the JK sheet, where Your week lives).
     func openWeek(_ day: String?) {
-        client = .today
-        todayPath.append(.yourWeek(day))
+        if showJK {
+            jkPath.append(.yourWeek(day))
+        } else {
+            openJK(path: [.yourWeek(day)])
+        }
     }
 }
 

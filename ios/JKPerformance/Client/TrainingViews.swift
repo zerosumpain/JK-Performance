@@ -234,7 +234,7 @@ struct FlowChips: View {
             ForEach(texts, id: \.self) { t in
                 Text(t)
                     .font(.jkCaption)
-                    .foregroundStyle(JK.accent)
+                    .foregroundStyle(JK.silver)
                     .padding(.horizontal, JK.Space.m)
                     .padding(.vertical, JK.Space.xs)
                     .overlay(Capsule().strokeBorder(JK.hairline, lineWidth: JK.Size.hairline))

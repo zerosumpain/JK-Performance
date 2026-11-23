@@ -2,16 +2,7 @@ import Charts
 import PhotosUI
 import SwiftUI
 
-/// The Progress tab (plans with 'progress').
-struct ProgressTab: View {
-    var body: some View {
-        NavigationStack {
-            ProgressScreen().clientRoutes()
-        }
-    }
-}
-
-/// Progress in three levels of detail (atelier-spec.md, Client screens 6):
+/// Progress (JK sheet › More), in three levels of detail:
 /// the goal and three tiles; a tile's eight-week trend; then habit history,
 /// best lifts, measurements and photos (and Challenges when JK turns them on).
 /// Named ProgressScreen because SwiftUI already owns `ProgressView`.
@@ -34,7 +25,7 @@ struct ProgressScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: JK.Space.section) {
-                Text("Progress").jkText(.display).foregroundStyle(JK.text).accessibilityAddTraits(.isHeader)
+                SerifText("Your *progress.*", size: .title).foregroundStyle(JK.text).accessibilityAddTraits(.isHeader)
                 Loadable(value: progress, error: error, retry: load) { p in
                     hero
                     tiles(p)
@@ -54,7 +45,7 @@ struct ProgressScreen: View {
         }
         .jkScreen()
         .jkRefreshable { await load() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .task { await loadPhotos() }
         .onChange(of: picked) { _, item in
@@ -347,7 +338,7 @@ struct GoalHero: View {
             AdaptiveStack(verticalAlignment: .center, spacing: JK.Space.xl) {
                 ZStack {
                     Ring(fraction: goal.fraction, sweep: 300, lineWidth: 8,
-                         fill: goal.onTrack == false ? JK.text : JK.accent)
+                         fill: goal.onTrack == false ? JK.text : JK.silver)
                     Text("\(Int((goal.fraction * 100).rounded()))%")
                         .font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
                 }
@@ -430,11 +421,11 @@ private struct LiftRow: View {
     var body: some View {
         HStack(spacing: JK.Space.m) {
             Icon(key: .record, filled: record.isNewThisWeek == true)
-                .foregroundStyle(record.isNewThisWeek == true ? JK.accent : JK.textSecondary)
+                .foregroundStyle(record.isNewThisWeek == true ? JK.silver : JK.textSecondary)
             VStack(alignment: .leading, spacing: JK.Space.xs) {
                 Text(record.exercise).font(.jkCallout).foregroundStyle(JK.text)
                 if record.isNewThisWeek == true {
-                    Text("New best this week").font(.jkCaption).foregroundStyle(JK.accent)
+                    Text("New best this week").font(.jkCaption).foregroundStyle(JK.silver)
                 }
             }
             Spacer()
@@ -582,7 +573,7 @@ struct TrendSheet: View {
             Chart {
                 ForEach(pts) { p in
                     LineMark(x: .value("Week", p.date), y: .value(title, p.value))
-                        .foregroundStyle(JK.data)
+                        .foregroundStyle(JK.textSecondary)
                         .interpolationMethod(.monotone)
                 }
                 if let target {

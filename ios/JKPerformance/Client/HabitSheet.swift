@@ -71,7 +71,7 @@ struct HabitSheet: View {
     private func summary(_ d: HabitsResponse) -> some View {
         VStack(alignment: .leading, spacing: JK.Space.xs) {
             if d.dayDone == true {
-                Text("Day done").font(.jkHeadline).foregroundStyle(JK.accent)
+                Text("Day done").font(.jkHeadline).foregroundStyle(JK.silver)
             }
             if let minimum = d.dayMinimum {
                 Text("A day counts once you hit JK's minimum: \(minimum) of \(d.habits.count).")
@@ -91,8 +91,8 @@ struct HabitSheet: View {
         } else if gate.messaging {
             Button("Ask JK for a rest day") {
                 TabRouter.shared.composerDraft = "Could I take a rest day on "
-                TabRouter.shared.client = .jk
                 dismiss()
+                TabRouter.shared.openJK(after: 0.45)
             }
             .buttonStyle(TextButtonStyle())
         }
@@ -159,7 +159,7 @@ private struct HabitDetailRow: View {
             AdaptiveStack(verticalAlignment: .center) {
                 HStack(spacing: JK.Space.m) {
                     Icon(key: habit.key, filled: habit.done, size: JK.Size.iconHabit)
-                        .foregroundStyle(habit.done ? JK.accent : JK.textSecondary)
+                        .foregroundStyle(habit.done ? JK.silver : JK.textSecondary)
                     VStack(alignment: .leading, spacing: JK.Space.xs) {
                         Text(habit.name).font(.jkHeadline).foregroundStyle(JK.text)
                         Text(HabitText.value(habit) + (habit.fromHealth ? " · from Apple Health" : ""))
