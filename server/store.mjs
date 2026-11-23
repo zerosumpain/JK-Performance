@@ -179,6 +179,7 @@ export function openStore(path) {
   addColumn(db, 'users', 'profile', 'TEXT');
   atelierSchema(db);
   parSchema(db);
+  foundationSchema(db);
   if (path !== ':memory:') backupBeforeMigration(db, path);
   migrateAtelier(db);
   return db;
@@ -381,7 +382,8 @@ export function createDraftGoal(db, client) {
   return id;
 }
 
-function addColumn(db, table, column, ddl) {
+/** Add a column if it is missing (SQLite has no ADD COLUMN IF NOT EXISTS). Returns whether it added it. */
+export function addColumn(db, table, column, ddl) {
   if (db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column)) return false;
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
   return true;
@@ -390,21 +392,134 @@ function addColumn(db, table, column, ddl) {
 /**
  * Run `fn` inside one transaction. node:sqlite has no helper for it. Nested
  * calls become savepoints, so a helper that needs atomicity can be used both
- * alone and inside a bigger write.
+ * alone and inside a bigger write. Work queued with `afterCommit` runs once the
+ * outermost transaction commits, and is dropped with a rolled-back level.
  */
 let depth = 0;
+const queues = []; // one list of after-commit functions per open level
 export function tx(db, fn) {
   const name = `sp${depth}`;
   db.exec(depth === 0 ? 'BEGIN' : `SAVEPOINT ${name}`);
+  queues[depth] = [];
   depth++;
   try {
     const out = fn();
     depth--;
     db.exec(depth === 0 ? 'COMMIT' : `RELEASE ${name}`);
+    const done = queues[depth];
+    queues[depth] = null;
+    if (depth > 0) queues[depth - 1].push(...done);
+    else for (const f of done) runSafely(f);
     return out;
   } catch (error) {
     depth--;
+    queues[depth] = null;
     db.exec(depth === 0 ? 'ROLLBACK' : `ROLLBACK TO ${name}; RELEASE ${name}`);
     throw error;
   }
+}
+
+function runSafely(f) {
+  try { f(); } catch (e) { console.error('After-commit work failed', e); }
+}
+
+/**
+ * Do `fn` once the current transaction has committed (pushes, live-stream
+ * writes): inside `tx` it is queued, and a rollback drops it; outside any
+ * transaction it runs on the next turn of the event loop.
+ */
+export function afterCommit(fn) {
+  if (depth === 0) setImmediate(() => runSafely(fn));
+  else queues[depth - 1].push(fn);
+}
+
+/** Is a transaction open right now? */
+export const inTx = () => depth > 0;
+
+/**
+ * Desk v2 foundation tables (docs/design/desk-v2.md 3.2-3.5, 3.13): the event
+ * bus, coach notifications, tags, segments, coach preferences, outreach flags,
+ * deferred messages and AI call metadata. Feature tables are made by each
+ * feature's own `schema` (server/features.mjs), never here.
+ */
+function foundationSchema(db) {
+  addColumn(db, 'messages', 'updated_at', 'TEXT');   // NULL is read as `at`
+  addColumn(db, 'messages', 'via', 'TEXT');          // who or what sent it: desk, app, automation, autoflow, ... (3.5)
+  db.exec(`CREATE TABLE IF NOT EXISTS events (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+      coach_id TEXT REFERENCES users(id) ON DELETE CASCADE, client_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', payload TEXT NOT NULL DEFAULT '{}',
+      is_demo INTEGER NOT NULL DEFAULT 0, at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS events_coach_seq ON events(coach_id, seq);
+    CREATE INDEX IF NOT EXISTS events_client_seq ON events(client_id, seq);
+    CREATE INDEX IF NOT EXISTS events_at ON events(at);
+    CREATE TABLE IF NOT EXISTS event_cursors (handler TEXT PRIMARY KEY, seq INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS event_failures (
+      seq INTEGER NOT NULL, handler TEXT NOT NULL, error TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (seq, handler));
+    CREATE TABLE IF NOT EXISTS coach_notifications (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+      path TEXT, icon TEXT, tone TEXT NOT NULL DEFAULT 'data', dedupe TEXT,
+      push_after TEXT, pushed_at TEXT, read_at TEXT, created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS coach_notifications_coach ON coach_notifications(coach_id, created_at);
+    CREATE INDEX IF NOT EXISTS coach_notifications_push ON coach_notifications(push_after) WHERE pushed_at IS NULL AND push_after IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS coach_notifications_dedupe ON coach_notifications(coach_id, dedupe, created_at);
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, color TEXT NOT NULL DEFAULT 'chart-1' CHECK (color IN ('chart-1','chart-2','chart-3','chart-4','chart-5','chart-6')),
+      created_at TEXT NOT NULL, UNIQUE (coach_id, name));
+    CREATE TABLE IF NOT EXISTS client_tags (
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      added_at TEXT NOT NULL, added_by TEXT NOT NULL DEFAULT 'coach', PRIMARY KEY (client_id, tag_id));
+    CREATE INDEX IF NOT EXISTS client_tags_tag ON client_tags(tag_id);
+    CREATE TABLE IF NOT EXISTS segments (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', rules TEXT NOT NULL,
+      pinned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS coach_prefs (
+      coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key TEXT NOT NULL, value TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (coach_id, key));
+    CREATE TABLE IF NOT EXISTS client_outreach (
+      client_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      paused INTEGER NOT NULL DEFAULT 0, no_broadcasts INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS deferred_messages (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      text TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'text', media_id TEXT, via TEXT NOT NULL,
+      send_at TEXT NOT NULL, reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting','sending','sent','dropped')),
+      message_id TEXT, created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS deferred_messages_due ON deferred_messages(status, send_at);
+    CREATE TABLE IF NOT EXISTS ai_calls (
+      id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      purpose TEXT NOT NULL, provider TEXT NOT NULL, model TEXT, ok INTEGER NOT NULL, error TEXT,
+      input_tokens INTEGER, output_tokens INTEGER, audio_seconds REAL, ms INTEGER, at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS ai_calls_coach_at ON ai_calls(coach_id, at);
+    CREATE TABLE IF NOT EXISTS ai_settings (
+      coach_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      review_mode TEXT NOT NULL DEFAULT 'ask' CHECK (review_mode IN ('off','ask','always')),
+      transcribe INTEGER NOT NULL DEFAULT 1, analyse INTEGER NOT NULL DEFAULT 1, drafts INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL);`);
+}
+
+const PREF_KEY = /^[a-zA-Z0-9.-]{1,64}$/;
+
+/** A coach preference (coach_prefs, JSON values). Returns `fallback` when unset; a stored null stays null. */
+export function coachPref(db, coachId, key, fallback = undefined) {
+  const row = db.prepare('SELECT value FROM coach_prefs WHERE coach_id=? AND key=?').get(coachId, key);
+  if (!row) return fallback;
+  try { return JSON.parse(row.value); } catch { return fallback; }
+}
+
+/** Save a coach preference. Keys are `^[a-z0-9.-]{1,64}$`. */
+export function setCoachPref(db, coachId, key, value) {
+  if (!PREF_KEY.test(key)) throw new Error(`Bad preference key ${key}`);
+  db.prepare(`INSERT INTO coach_prefs (coach_id, key, value, updated_at) VALUES (?,?,?,?)
+    ON CONFLICT(coach_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`).run(coachId, key, JSON.stringify(value ?? null), nowIso());
 }
