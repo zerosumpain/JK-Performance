@@ -189,6 +189,8 @@ struct TodaysWorkView: View {
     @State private var habitFocus: String?
     @State private var sessionWorkout: SessionTarget?
     @State private var toast: String?
+    /// A long press just opened the habit sheet: swallow the tap that follows on release.
+    @State private var longPressed = false
 
     struct SessionTarget: Identifiable {
         let id: String
@@ -210,7 +212,10 @@ struct TodaysWorkView: View {
         .jkRefreshable { await load() }
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
-        .sheet(isPresented: $habitSheet, onDismiss: { Task { await load() } }) { HabitSheet(focus: habitFocus) }
+        .sheet(isPresented: $habitSheet, onDismiss: {
+            longPressed = false
+            Task { await load() }
+        }) { HabitSheet(focus: habitFocus) }
         .fullScreenCover(item: $sessionWorkout, onDismiss: { Task { await load() } }) { target in
             InSessionView(workoutId: target.id)
         }
@@ -324,7 +329,13 @@ struct TodaysWorkView: View {
 
     @ViewBuilder
     private func habitCard(_ h: WeekHabit, todayIndex: Int?, wide: Bool) -> some View {
-        let label = Button { tap(h) } label: {
+        let label = Button {
+            if longPressed {
+                longPressed = false
+            } else {
+                tap(h)
+            }
+        } label: {
             Group {
                 if wide {
                     HStack(spacing: JK.Space.m) {
@@ -355,7 +366,10 @@ struct TodaysWorkView: View {
         }
         label
             .buttonStyle(.plain)
-            .simultaneousGesture(LongPressGesture().onEnded { _ in openSheet(h) })
+            .simultaneousGesture(LongPressGesture().onEnded { _ in
+                longPressed = true
+                openSheet(h)
+            })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(h.name)
             .accessibilityValue(habitValue(h))
@@ -461,6 +475,8 @@ struct InSessionView: View {
     @State private var editing: EditTarget?
     @State private var finishing = false
     @State private var closeAfterFinish = false
+    /// A long press on "Set done" opened the editor: swallow the tap that follows on release.
+    @State private var longPressed = false
 
     struct EditTarget: Identifiable {
         let id: String
@@ -503,7 +519,7 @@ struct InSessionView: View {
             }
         }
         .task { await load(initial: true) }
-        .sheet(item: $editing) { target in
+        .sheet(item: $editing, onDismiss: { longPressed = false }) { target in
             if let workout {
                 NavigationStack {
                     WorkoutLoggerView(workout: workout, itemId: target.id) { self.workout = $0 }
@@ -642,14 +658,21 @@ struct InSessionView: View {
         VStack(spacing: JK.Space.m) {
             OfflineBanner()
             Button {
-                primary(workout)
+                if longPressed {
+                    longPressed = false
+                } else {
+                    primary(workout)
+                }
             } label: {
                 if busy { ProgressView().tint(JK.onChrome) } else { Text(primaryTitle(workout)) }
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(busy || workout.completedAt != nil)
             .simultaneousGesture(LongPressGesture().onEnded { _ in
-                if let current, workout.completedAt == nil { editing = EditTarget(id: current.id) }
+                if let current, workout.completedAt == nil {
+                    longPressed = true
+                    editing = EditTarget(id: current.id)
+                }
             })
             Text("Rest as long as you need").font(.jkMeta).foregroundStyle(JK.textTertiary)
         }

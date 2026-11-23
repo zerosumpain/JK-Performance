@@ -161,7 +161,7 @@ struct DayAgendaRow: View {
                 Text(who).font(.jkCallout).foregroundStyle(JK.text)
                 HStack(spacing: JK.Space.xs) {
                     Icon(key: kind, size: 13, label: kind.accessibilityName).foregroundStyle(JK.textSecondary)
-                    Text([booking.kindLabel, booking.location].compactMap { $0 }.joined(separator: " · "))
+                    Text([booking.purposeLabel, booking.kindLabel, booking.location].compactMap { $0 }.joined(separator: " · "))
                         .font(.jkCaption).foregroundStyle(JK.textSecondary)
                 }
             }

@@ -364,7 +364,8 @@ struct Dial: View {
         VStack(spacing: JK.Space.xs) {
             GeometryReader { geo in
                 let size = geo.size
-                let r = min(size.width / 2 - 10, size.height - 16)
+                // The ends dip 10° below the centre line: keep them inside the frame.
+                let r = max(20, min(size.width / 2 - 12, (size.height - 20) / 1.18))
                 let c = CGPoint(x: size.width / 2, y: r + 10)
                 ZStack {
                     arc(c: c, r: r).stroke(JK.trackStrong, lineWidth: JK.Size.hairline)

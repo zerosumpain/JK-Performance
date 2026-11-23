@@ -64,6 +64,23 @@ final class TabRouter {
         let headline: String
     }
 
+    /// Back to Act with nothing open (sign-in, sign-out, switching account).
+    func reset() {
+        client = .act
+        planPath = []
+        actPath = []
+        reviewPath = []
+        jkPath = []
+        showJK = false
+        showAccount = false
+        showMembership = false
+        replyQuote = nil
+        composerDraft = nil
+        reviewLetter = nil
+        reviewWantsSession = false
+        unread = 0
+    }
+
     /// Push on whatever is in front: the JK sheet's stack, else the current tab's.
     func push(_ route: ClientRoute) {
         if showJK {

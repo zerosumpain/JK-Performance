@@ -590,8 +590,18 @@ struct Booking: Codable, Identifiable, Hashable {
     var refundable: Bool?
     /// The booking's own meeting link, else the coach's default room for video calls.
     var meetingUrl: String?
+    /// "planning" | "review" (Plan. Act. Review.); nil for an ordinary session.
+    var purpose: String?
 
     var isGroup: Bool { kind == "group" }
+    /// "Planning" / "Accountability", for the coach agenda.
+    var purposeLabel: String? {
+        switch purpose {
+        case "planning": return "Planning"
+        case "review": return "Accountability"
+        default: return nil
+        }
+    }
     /// Mine to show on a client's calendar: 1:1s, and classes they joined.
     var isMine: Bool { !isGroup || joined == true }
 
