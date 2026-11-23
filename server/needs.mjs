@@ -3,6 +3,7 @@ import { bookingOut } from './bookings.mjs';
 import { flaggedAnswers } from './forms.mjs';
 import { milestoneSuggestions } from './milestones.mjs';
 import { planOf } from './plans.mjs';
+import { hooks } from './registry.mjs';
 import { feedbackWeek } from './reports.mjs';
 import { hasFeature, rhythmOf } from './settings.mjs';
 import { addDays, daysBetween, londonDay, londonToUtc, weekday } from './time.mjs';
@@ -108,19 +109,22 @@ export function needsYou(db, coach, now = new Date()) {
   const clients = db.prepare("SELECT * FROM users WHERE role='client' AND coach_id=? ORDER BY name").all(coach.id);
   const items = [];
   const due = [];
+  const extra = featureReasons(db, coach, clients, today);
   for (const c of clients) {
     const plan = planOf(db, c);
     const rhythm = letterDue(db, c, week);
     if (rhythm) due.push({ id: c.id, name: c.name, initials: initials(c.name), media: rhythm.media, every: rhythm.every });
-    const { reasons, priority } = reasonsFor(db, c, today);
+    const own = reasonsFor(db, c, today);
+    const priority = own.priority;
+    const reasons = [...own.reasons, ...(extra.get(c.id) ?? [])].sort((a, b) => a.rank - b.rank);
     if (!reasons.length) continue;
     const top = reasons[0];
-    const action = actionFor(top, c, db);
+    const action = top.feature ? null : actionFor(top, c, db);
     items.push({
       client: { id: c.id, name: c.name, firstName: c.name.split(' ')[0], initials: initials(c.name), plan: plan.id, planName: plan.name },
       rank: top.rank, priority, reasons,
       reasonLine: reasons.slice(0, 2).map(r => r.text).join(' · '),
-      primaryAction: { kind: action, label: ACTIONS[action] },
+      primaryAction: action ? { kind: action, label: ACTIONS[action] } : { kind: 'feature', label: top.action?.label ?? 'Open', path: top.action?.path ?? null },
     });
   }
   items.sort((a, b) => a.rank - b.rank || (a.reasons[0].at ?? '9').localeCompare(b.reasons[0].at ?? '9') || a.client.name.localeCompare(b.client.name));
@@ -134,6 +138,28 @@ export function needsYou(db, coach, now = new Date()) {
     lettersDue: { week, count: due.length, estMinutes: Math.round(minutes / 5) * 5, clients: due },
     items, allCaughtUp: items.length === 0,
   };
+}
+
+/**
+ * Reasons from features (hooks('needs'), docs/design/desk-v2.md 3.7), by
+ * client: {clientId, kind, text, at, rank 1-8, iconKey, action:{label, path}}.
+ * Only this coach's clients count; a provider that throws is logged and skipped.
+ */
+function featureReasons(db, coach, clients, today) {
+  const mine = new Set(clients.map(c => c.id));
+  const out = new Map();
+  for (const [f, fn] of hooks('needs')) {
+    let list = [];
+    try { list = fn(db, coach, clients, today) ?? []; } catch (e) { console.error(`needs hook of ${f.name} failed`, e); continue; }
+    for (const r of list) {
+      if (!r || !mine.has(r.clientId) || typeof r.text !== 'string') continue;
+      const rank = Math.min(8, Math.max(1, Math.round(Number(r.rank) || 8)));
+      const reason = { kind: String(r.kind ?? f.name), text: r.text, at: r.at ?? null, rank, iconKey: r.iconKey ?? 'notifications', feature: f.name,
+        action: r.action ? { label: String(r.action.label ?? 'Open'), path: r.action.path ?? null } : null };
+      out.set(r.clientId, [...(out.get(r.clientId) ?? []), reason]);
+    }
+  }
+  return out;
 }
 
 function route(_req, ctx) {

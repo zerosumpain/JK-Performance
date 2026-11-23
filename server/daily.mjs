@@ -1,6 +1,7 @@
 import { clientFor, requireCoach, requireMember } from './access.mjs';
 import { healthDay, healthVisible } from './health.mjs';
 import { day, fail, num, oneOf, str } from './http.mjs';
+import { emit } from './events.mjs';
 import { notify } from './push.mjs';
 import { defaultMinimum, requireFeature } from './settings.mjs';
 import { iconKeyFor, newId, nowIso, tx } from './store.mjs';
@@ -432,8 +433,10 @@ function submitCheckin(_req, ctx) {
       stress=excluded.stress, win=excluded.win, struggle=excluded.struggle, photo_ids=excluded.photo_ids`).run(
     id, ctx.user.id, week, num(b.energy, 'energy', { min: 1, max: 5, int: true }), num(b.sleep, 'sleep', { min: 1, max: 5, int: true }),
     JSON.stringify(pain), str(b.note ?? '', 'note', { max: 2000, min: 0 }), nowIso(), stress, win, struggle, JSON.stringify(photoIds));
+  const saved = ctx.db.prepare('SELECT * FROM checkins WHERE client_id=? AND week=?').get(ctx.user.id, week);
+  emit(ctx.db, 'checkin.submitted', { coachId: ctx.user.coach_id, clientId: ctx.user.id, summary: 'Weekly check-in', checkinId: saved.id, week, pain: pain.length > 0 });
   if (first) notify(ctx.db, ctx.config, ctx.user.coach_id, { title: ctx.user.name, body: 'Sent their weekly check-in.', kind: 'checkin', clientId: ctx.user.id });
-  return checkinOut(ctx.db.prepare('SELECT * FROM checkins WHERE client_id=? AND week=?').get(ctx.user.id, week));
+  return checkinOut(saved);
 }
 
 function reviewCheckin(_req, ctx) {

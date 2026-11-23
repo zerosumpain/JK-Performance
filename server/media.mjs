@@ -40,8 +40,8 @@ export const mediaOut = m => m && ({
   clientId: m.client_id, createdAt: m.created_at, url: `/api/media/${m.id}`,
 });
 
-/** Store bytes as media. Used by the upload route, the admin portrait command and the demo build. */
-export function storeMedia(db, config, { ownerId, clientId = null, bytes, mime, purpose = 'other', durationSec = null }) {
+/** Check bytes against a type and write the file; returns {id, kind, ext, mime, bytes}. No database work (3.10: files go before the tx). */
+export function writeMediaFile(config, { bytes, mime }) {
   const type = TYPES[mime];
   if (!type) fail(415, `Send one of ${Object.keys(TYPES).join(', ')}`);
   const [kind, ext] = type;
@@ -51,10 +51,23 @@ export function storeMedia(db, config, { ownerId, clientId = null, bytes, mime, 
   const id = newId('md');
   mkdirSync(dirOf(config), { recursive: true, mode: 0o700 });
   writeFileSync(join(dirOf(config), `${id}.${ext}`), bytes, { mode: 0o600 });
-  db.prepare('INSERT INTO media (id, owner_id, client_id, kind, mime, ext, bytes, duration_sec, purpose, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(id, ownerId, clientId, kind, MIME_OF[ext], ext, bytes.length, kind === 'image' ? null : durationSec, purpose, nowIso());
-  return db.prepare('SELECT * FROM media WHERE id=?').get(id);
+  return { id, kind, ext, mime: MIME_OF[ext], bytes: bytes.length };
 }
+
+/** The row for a file writeMediaFile wrote. Returns the media row. */
+export function insertMediaRow(db, file, { ownerId, clientId = null, purpose = 'other', durationSec = null }) {
+  db.prepare('INSERT INTO media (id, owner_id, client_id, kind, mime, ext, bytes, duration_sec, purpose, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(file.id, ownerId, clientId, file.kind, file.mime, file.ext, file.bytes, file.kind === 'image' ? null : durationSec, purpose, nowIso());
+  return db.prepare('SELECT * FROM media WHERE id=?').get(file.id);
+}
+
+/** Store bytes as media. Used by the upload route, the admin portrait command and the demo build. */
+export function storeMedia(db, config, { ownerId, clientId = null, bytes, mime, purpose = 'other', durationSec = null }) {
+  return insertMediaRow(db, writeMediaFile(config, { bytes, mime }), { ownerId, clientId, purpose, durationSec });
+}
+
+/** Where a media row's file lives. */
+export const mediaFilePath = (config, m) => fileOf(config, m);
 
 /** May `user` fetch this media row? */
 export function canSeeMedia(db, user, m) {

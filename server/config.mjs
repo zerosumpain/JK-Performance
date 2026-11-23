@@ -39,7 +39,25 @@ export function loadConfig(env = process.env) {
     pushTransport: null,
     logRequests: env.LOG_REQUESTS === '1',
     fetchImpl: fetch,
+    // The AI (docs/design/desk-v2.md 3.13): OpenRouter only with a key AND a model; otherwise the labelled stub.
+    // No model id is hard-coded. Demo accounts always use the stub.
+    ai: {
+      key: env.OPENROUTER_API_KEY || null,
+      model: env.AI_MODEL || null,
+      audioModel: env.AI_AUDIO_MODEL || null,
+      dailyCalls: Number(env.AI_DAILY_CALLS ?? 300),
+      dailyAudioSeconds: Number(env.AI_DAILY_AUDIO_SECONDS ?? 7200),
+      clientDailyNotes: Number(env.AI_CLIENT_DAILY_NOTES ?? 20),
+      clientDailyAudioSeconds: Number(env.AI_CLIENT_DAILY_AUDIO_SECONDS ?? 1800),
+      disabled: env.AI_DISABLED === '1',
+      baseUrl: 'https://openrouter.ai/api/v1',
+    },
+    // Voice and letter recordings are re-encoded with ffmpeg (audio.mjs).
+    ffmpegPath: env.FFMPEG_PATH || 'ffmpeg',
   };
+  for (const k of ['dailyCalls', 'dailyAudioSeconds', 'clientDailyNotes', 'clientDailyAudioSeconds']) {
+    if (!Number.isFinite(config.ai[k]) || config.ai[k] < 0) throw new Error(`AI_${k.replace(/[A-Z]/g, c => `_${c}`).toUpperCase()} must be a number`);
+  }
   if (!config.supportEmail.includes('@')) throw new Error('SUPPORT_EMAIL is required (shown on /privacy and /support)');
   return config;
 }

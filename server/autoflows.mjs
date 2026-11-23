@@ -1,7 +1,7 @@
 import { clientFor, initials, requireCoach } from './access.mjs';
 import { fail, day as dayField, num, oneOf, str } from './http.mjs';
-import { notify } from './push.mjs';
 import { sendForm } from './forms.mjs';
+import { sendMessage } from './messages.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, weekday } from './time.mjs';
 import { layProgram } from './training.mjs';
@@ -80,12 +80,10 @@ const nextMonday = d => addDays(d, (8 - weekday(d)) % 7);
 
 function doStep(db, config, flow, run, step, client, today) {
   if (step.action === 'message') {
-    const coach = db.prepare('SELECT name FROM users WHERE id=?').get(flow.coach_id);
+    // Governed like every automated send (docs/design/desk-v2.md 3.5): capped, held in quiet hours, skipped when paused.
     const text = step.text.replaceAll('{first}', firstName(client.name));
-    const id = newId('m');
-    db.prepare("INSERT INTO messages (id, client_id, from_id, from_role, text, at) VALUES (?,?,?,'coach',?,?)").run(id, client.id, flow.coach_id, text, nowIso());
-    notify(db, config, client.id, { title: coach?.name ?? 'Your coach', body: text, kind: 'message', id, clientId: client.id });
-    return 'sent';
+    const out = sendMessage(db, config, { coachId: flow.coach_id, clientId: client.id, text, via: 'autoflow' });
+    return out.message ? 'sent' : out.deferredUntil ? `deferred to ${out.deferredUntil}` : `skipped: ${out.skipped}`;
   }
   if (step.action === 'form') {
     const form = db.prepare('SELECT * FROM forms WHERE id=?').get(step.formId);

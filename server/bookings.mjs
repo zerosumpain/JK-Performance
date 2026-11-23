@@ -2,6 +2,7 @@ import { clientFor, coachIdOf, requireCoach, requireMember } from './access.mjs'
 import { clock, day, fail, instant, num, oneOf, str } from './http.mjs';
 import { planOf } from './plans.mjs';
 import { coachSettings, meetingUrl } from './settings.mjs';
+import { emit } from './events.mjs';
 import { notify } from './push.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc, monthBounds, weekday } from './time.mjs';
@@ -179,6 +180,7 @@ function createBooking(_req, ctx) {
     ctx.db.prepare('INSERT INTO bookings (id, coach_id, client_id, kind, start, end, location, title, uses_credit, created_at, purpose) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
       id, coachId, client.id, kind, slot.start, slot.end, kind === 'video' ? 'Video call' : slot.location,
       `${kind === 'video' ? 'Video call' : '1:1'} with ${coach.name}`, usesCredit ? 1 : 0, nowIso(), purpose);
+    emit(ctx.db, 'booking.created', { coachId, clientId: client.id, summary: `Booked ${shortWhen(slot.start)}`, ...bookingPayload({ id, kind, start: slot.start, purpose }, ctx.user.role) });
     return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(id), ctx.user);
   });
   const what = `${kind === 'video' ? 'Video call' : '1:1'} · ${when(slot.start)}`;
@@ -196,14 +198,24 @@ function cancelBooking(_req, ctx) {
   if (Date.parse(b.start) <= Date.now()) fail(409, 'That session has already started');
   // Early enough (or the coach cancelling): the booking goes, and with it the credit it used.
   const refunded = isCoach || Date.parse(b.start) - Date.now() >= CANCEL_HOURS * 3_600_000;
-  if (refunded) ctx.db.prepare('DELETE FROM bookings WHERE id=?').run(b.id);
-  else ctx.db.prepare('UPDATE bookings SET cancelled_at=? WHERE id=?').run(nowIso(), b.id);
+  tx(ctx.db, () => {
+    if (refunded) ctx.db.prepare('DELETE FROM bookings WHERE id=?').run(b.id);
+    else ctx.db.prepare('UPDATE bookings SET cancelled_at=? WHERE id=?').run(nowIso(), b.id);
+    emit(ctx.db, 'booking.cancelled', { coachId: b.coach_id, clientId: b.client_id, summary: `Cancelled ${shortWhen(b.start)}${refunded ? '' : ' (late)'}`,
+      ...bookingPayload(b, ctx.user.role, { late: !refunded, refunded }) });
+  });
   if (b.client_id) {
     const other = isCoach ? b.client_id : b.coach_id;
     notify(ctx.db, ctx.config, other, { title: `${ctx.user.name} cancelled`, body: `${b.title ?? 'Session'} · ${when(b.start)}`, kind: 'booking', clientId: b.client_id });
   }
   return { ok: true, refunded };
 }
+
+/** "Tue 4 Nov 07:00" in London time, for an event summary. */
+const shortWhen = iso => `${new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')} ${new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })}`;
+
+/** The booking.created / booking.cancelled payload (docs/design/desk-v2.md 3.2). */
+const bookingPayload = (b, byRole, { late = false, refunded = false } = {}) => ({ bookingId: b.id, kind: b.kind, start: b.start, purpose: b.purpose ?? null, byRole, late, refunded });
 
 /** "Sat 28 Nov, 09:00" in London time, for a notification. */
 const when = iso => new Date(iso).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -216,9 +228,13 @@ function createClass(_req, ctx) {
   const start = instant(b.start, 'start'), end = instant(b.end, 'end');
   if (end <= start) fail(400, 'end is before start');
   const id = newId('b');
-  ctx.db.prepare("INSERT INTO bookings (id, coach_id, kind, start, end, location, title, capacity, created_at) VALUES (?,?,'group',?,?,?,?,?,?)").run(
-    id, ctx.user.id, start, end, str(b.location ?? '', 'location', { max: 80, min: 0 }), str(b.title, 'title', { max: 80 }),
-    num(b.capacity, 'capacity', { min: 1, max: 100, int: true }), nowIso());
+  const title = str(b.title, 'title', { max: 80 });
+  tx(ctx.db, () => {
+    ctx.db.prepare("INSERT INTO bookings (id, coach_id, kind, start, end, location, title, capacity, created_at) VALUES (?,?,'group',?,?,?,?,?,?)").run(
+      id, ctx.user.id, start, end, str(b.location ?? '', 'location', { max: 80, min: 0 }), title,
+      num(b.capacity, 'capacity', { min: 1, max: 100, int: true }), nowIso());
+    emit(ctx.db, 'booking.created', { coachId: ctx.user.id, clientId: null, summary: `${title} · ${shortWhen(start)}`, ...bookingPayload({ id, kind: 'group', start }, 'coach') });
+  });
   return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(id), ctx.user);
 }
 
@@ -238,6 +254,7 @@ function joinClass(_req, ctx) {
     const already = ctx.db.prepare('SELECT 1 FROM class_attendees WHERE booking_id=? AND user_id=?').get(b.id, ctx.user.id);
     if (!already && n >= b.capacity) fail(409, 'That class is full');
     ctx.db.prepare('INSERT OR IGNORE INTO class_attendees (booking_id, user_id) VALUES (?,?)').run(b.id, ctx.user.id);
+    if (!already) emit(ctx.db, 'booking.created', { coachId: b.coach_id, clientId: ctx.user.id, summary: `Joined ${b.title} · ${shortWhen(b.start)}`, ...bookingPayload(b, 'client') });
   });
   return bookingOut(ctx.db, b, ctx.user);
 }
@@ -245,7 +262,10 @@ function joinClass(_req, ctx) {
 function leaveClass(_req, ctx) {
   requireMember(ctx);
   const b = classFor(ctx);
-  ctx.db.prepare('DELETE FROM class_attendees WHERE booking_id=? AND user_id=?').run(b.id, ctx.user.id);
+  tx(ctx.db, () => {
+    const left = ctx.db.prepare('DELETE FROM class_attendees WHERE booking_id=? AND user_id=?').run(b.id, ctx.user.id).changes;
+    if (left) emit(ctx.db, 'booking.cancelled', { coachId: b.coach_id, clientId: ctx.user.id, summary: `Left ${b.title} · ${shortWhen(b.start)}`, ...bookingPayload(b, ctx.user.role, { refunded: true }) });
+  });
   return bookingOut(ctx.db, b, ctx.user);
 }
 
