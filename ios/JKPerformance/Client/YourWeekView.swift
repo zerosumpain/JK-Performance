@@ -132,7 +132,7 @@ struct YourWeekView: View {
     }
 
     private func open(_ item: WeekItem) {
-        if case .workout(let w) = item { TabRouter.shared.todayPath.append(.session(w.id)) }
+        if case .workout(let w) = item { TabRouter.shared.push(.session(w.id)) }
     }
 
     private func join(_ item: WeekItem) {

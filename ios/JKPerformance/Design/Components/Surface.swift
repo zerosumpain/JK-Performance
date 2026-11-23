@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Containers. No shadows, no gradients: hierarchy comes from surface steps.
+/// Containers. No shadows: hierarchy comes from surface steps and hairlines
+/// (plan-act-review.md: surface fill, 1pt hairline border, radius 16, padding 16).
 /// - hero: no container, directly on the ground
 /// - group: an inset surface for a grouped list (rows separated by `GroupDivider`)
-/// - card: surface, radius 12, no border
-/// - next: surface with a 1pt hairline; the only bordered card on Today
+/// - card, next: surface with a 1pt hairline
 /// - paper: letters and guides
 enum SurfaceStyle {
     case hero, group, card, next, paper
@@ -29,6 +29,7 @@ struct SurfaceModifier: ViewModifier {
                 .padding(padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(JK.surface, in: shape)
+                .overlay(shape.strokeBorder(JK.hairline, lineWidth: JK.Size.hairline))
         case .next:
             content
                 .padding(padding)
@@ -40,6 +41,7 @@ struct SurfaceModifier: ViewModifier {
                 .padding(padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(JK.paper, in: shape)
+                .overlay(shape.strokeBorder(JK.hairline, lineWidth: JK.Size.hairline))
         }
     }
 }
@@ -73,7 +75,12 @@ extension View {
         modifier(SurfaceModifier(style: style, padding: padding))
     }
 
-    /// The old card. It now draws `Surface.card`: surface, radius 12, no border.
+    /// The Plan. Act. Review. card: surface, 1pt hairline, radius 16, padding 16.
+    func parCard(padding: CGFloat = JK.Space.l) -> some View {
+        modifier(SurfaceModifier(style: .card, padding: padding))
+    }
+
+    /// The old card. It now draws `Surface.card`.
     func jkCard(padding: CGFloat = JK.Space.cardPadding) -> some View {
         modifier(SurfaceModifier(style: .card, padding: padding))
     }

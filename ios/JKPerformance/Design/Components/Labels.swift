@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// The one-per-screen label: 11 Semibold uppercase with +1.2 tracking in
-/// textSecondary; sentence case without tracking at accessibility sizes.
+/// The tracked label: 11 Semibold uppercase with +1.6 tracking in
+/// textTertiary, with an optional italic annotation on the right
+/// ("THE SEASON … early days, building"); sentence case without tracking at
+/// accessibility sizes.
 /// (Named JKLabel so it does not shadow SwiftUI.Label; the spec calls it Label.)
 struct JKLabel: View {
     let text: String
@@ -14,10 +16,14 @@ struct JKLabel: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(text).jkText(.label).foregroundStyle(JK.textSecondary)
+            Text(text).jkText(.label).foregroundStyle(JK.textTertiary)
             Spacer(minLength: JK.Space.s)
             if let trailing {
-                Text(trailing).font(.jkCaption).foregroundStyle(JK.textSecondary)
+                // The annotation: Newsreader italic 13, right-aligned.
+                Text(trailing)
+                    .font(.jkSerif(.annotation, italic: true))
+                    .foregroundStyle(JK.textTertiary)
+                    .multilineTextAlignment(.trailing)
             }
         }
         .accessibilityElement(children: .combine)

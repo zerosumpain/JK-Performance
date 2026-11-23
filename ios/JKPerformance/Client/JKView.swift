@@ -1,34 +1,40 @@
 import PhotosUI
 import SwiftUI
 
-/// The JK tab (atelier-spec.md, IA 3 and Client screens 7): JK's voice in one
-/// place. A header with his reply line, the latest letter pinned, one
-/// timeline of messages, letters, check-ins, forms and plan updates, and the
-/// composer. Free clients see JK and his guides instead, so nothing here
-/// calls a route their plan does not include.
-struct JKView: View {
+/// The JK sheet (plan-act-review.md, screen 9), opened from JK's avatar on
+/// any tab root: JK's portrait, name and reply line; the message thread and
+/// composer; then the quiet More list that reaches every other client
+/// screen. Free clients see JK, his guides and More, so nothing here calls a
+/// route their plan does not include.
+struct JKSheet: View {
     @Environment(AppSession.self) private var session
+    @State private var habits = false
 
     private var gate: Gate { session.gate }
+    private var router: TabRouter { TabRouter.shared }
 
     var body: some View {
         NavigationStack(path: Bindable(TabRouter.shared).jkPath) {
             Group {
                 if gate.messaging || gate.checkin {
-                    JKTimelineView()
+                    JKTimelineView { habits = true }
                 } else {
-                    FreeJKView()
+                    FreeJKView { habits = true }
                 }
             }
             .clientRoutes()
         }
+        .presentationDragIndicator(.visible)
+        .presentationBackground(JK.bg)
+        .sheet(isPresented: Bindable(TabRouter.shared).showAccount) { AccountSheet() }
+        .sheet(isPresented: $habits) { HabitSheet() }
     }
 }
 
-/// JK's name, the reply line his plan sets, and two quiet links.
+/// JK's portrait (56pt), his name and the reply line his plan sets.
 struct JKHeader: View {
     @Environment(AppSession.self) private var session
-    @Binding var lettersOnly: Bool
+    @Environment(\.dismiss) private var dismiss
 
     private var gate: Gate { session.gate }
     private var replyLine: String {
@@ -39,39 +45,128 @@ struct JKHeader: View {
     }
 
     var body: some View {
+        HStack(alignment: .center, spacing: JK.Space.m) {
+            TopBarAvatar(coach: session.me?.coach, size: 56)
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                Text(session.me?.coach?.name ?? "JK").font(.jkHeadline).foregroundStyle(JK.text)
+                    .accessibilityAddTraits(.isHeader)
+                Text(replyLine).font(.jkMeta).foregroundStyle(JK.textTertiary)
+            }
+            Spacer(minLength: 0)
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").fontWeight(.light).foregroundStyle(JK.textSecondary)
+                    .frame(minWidth: JK.Size.touch, minHeight: JK.Size.touch)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+    }
+}
+
+/// More (below the thread): every client screen that isn't one of the three
+/// tabs, each only when the plan includes it. Account is always there.
+struct MoreList: View {
+    @Environment(AppSession.self) private var session
+    let onHabits: () -> Void
+
+    private var gate: Gate { session.gate }
+    private var router: TabRouter { TabRouter.shared }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: JK.Space.m) {
-            HStack(spacing: JK.Space.m) {
-                CoachAvatar(coach: session.me?.coach, size: JK.Size.avatar + JK.Space.m)
-                VStack(alignment: .leading, spacing: JK.Space.xs) {
-                    Text(session.me?.coach?.name ?? "JK").font(.jkHeadline).foregroundStyle(JK.text)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(replyLine).font(.jkCaption).foregroundStyle(JK.textSecondary)
+            JKLabel("More")
+            VStack(spacing: 0) {
+                if gate.progress { row("Progress", "Lifts, measurements and photos") { router.jkPath.append(.progress) } }
+                if gate.programme || gate.sessions {
+                    row("Your week", gate.sessions ? "Programme, bookings and your calendar" : "Your programme, day by day") {
+                        router.jkPath.append(.yourWeek(nil))
+                    }
                 }
-                Spacer(minLength: 0)
+                if gate.habits || gate.nutrition {
+                    row(gate.nutrition ? "Habits and nutrition" : "Habits", gate.nutrition ? "Today's habits, food and macros" : "Today's habits in detail", action: onHabits)
+                }
+                if gate.challenges && !gate.progress { row("Challenges", "Walk, run or row with the group") { router.jkPath.append(.challenges) } }
+                if gate.guides { row("Guides", "JK's guides") { router.jkPath.append(.guides) } }
+                if gate.checkin { row("Past letters", "Everything JK has written to you") { router.jkPath.append(.letters) } }
+                row("Account", "Membership, health, notifications, data", last: true) { router.showAccount = true }
             }
-            HStack(spacing: JK.Space.l) {
-                if gate.checkin {
-                    Button(lettersOnly ? "All of it" : "Past letters") { lettersOnly.toggle() }
-                        .buttonStyle(TextButtonStyle())
+            .surface(.group)
+        }
+    }
+
+    private func row(_ title: String, _ detail: String, last: Bool = false, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 0) {
+            Button(action: action) {
+                HStack(spacing: JK.Space.m) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.jkCallout).foregroundStyle(JK.text)
+                        Text(detail).font(.jkMeta).foregroundStyle(JK.textTertiary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.jkMeta).fontWeight(.light).foregroundStyle(JK.textTertiary)
+                        .accessibilityHidden(true)
                 }
-                if gate.guides {
-                    Button("Guides") { TabRouter.shared.jkPath.append(.guides) }
-                        .buttonStyle(TextButtonStyle())
-                }
-                Spacer(minLength: 0)
+                .padding(.horizontal, JK.Space.l)
+                .padding(.vertical, JK.Space.m)
+                .frame(minHeight: JK.Size.touch)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            if !last { GroupDivider() }
+        }
+    }
+}
+
+/// Past letters (More): JK's published letters, newest first.
+struct PastLettersView: View {
+    @State private var letters: [Report]?
+    @State private var error: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JK.Space.l) {
+                SerifText("Past *letters.*", size: .title).foregroundStyle(JK.text).accessibilityAddTraits(.isHeader)
+                Loadable(value: letters, error: error, retry: load) { list in
+                    if list.isEmpty { EmptyState(line: "JK's letters will gather here.") }
+                    ForEach(list, id: \.id) { r in
+                        if let id = r.id {
+                            LetterCard(headline: r.displayHeadline, caption: LetterText.caption(r), unread: r.isUnread, milestone: r.isMilestone) {
+                                TabRouter.shared.push(.letter(id))
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(JK.Space.gutter)
+        }
+        .jkScreen()
+        .navigationBarTitleDisplayMode(.inline)
+        .jkRefreshable { await load() }
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            let reply: ReportsResponse = try await APIClient.shared.get("/api/reports")
+            letters = reply.reports.filter(\.isPublished).sorted {
+                ($0.deliveredAt ?? $0.publishedAt ?? .distantPast) > ($1.deliveredAt ?? $1.publishedAt ?? .distantPast)
+            }
+            error = nil
+        } catch {
+            if !error.isCancellation { self.error = error.readable }
         }
     }
 }
 
 /// The timeline and composer, for plans with 'messaging' or 'checkin'.
 private struct JKTimelineView: View {
+    let onHabits: () -> Void
     @Environment(AppSession.self) private var session
     @State private var items: [TimelineItem]?
     @State private var nextBefore: String?
     @State private var letters: [Report] = []
     @State private var error: String?
-    @State private var lettersOnly = false
     @State private var loadingEarlier = false
     @State private var form: FormRequest?
     @State private var actionError: String?
@@ -89,21 +184,19 @@ private struct JKTimelineView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: JK.Space.l) {
-                        JKHeader(lettersOnly: $lettersOnly)
-                        if lettersOnly {
-                            pastLetters
-                        } else {
-                            if gate.checkin, let r = latestLetter, let id = r.id { pinned(r, id: id) }
-                            timeline
-                        }
+                        JKHeader()
+                        if gate.checkin, let r = latestLetter, let id = r.id { pinned(r, id: id) }
+                        timeline
+                        MoreList(onHabits: onHabits)
+                            .padding(.top, JK.Space.xxl)
                     }
                     .padding(JK.Space.gutter)
                 }
                 .onChange(of: shown.last?.id) { _, last in
-                    if let last, !lettersOnly { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
+                    if let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
                 }
             }
-            if gate.messaging && !lettersOnly {
+            if gate.messaging {
                 JKComposer { await refresh() }
             }
         }
@@ -171,24 +264,10 @@ private struct JKTimelineView: View {
             }
         case "planUpdate":
             if let p = item.planUpdate {
-                PlanUpdateCard(update: p) { router.openWeek(p.from) }
+                PlanUpdateCard(update: p) { router.jkPath.append(.yourWeek(p.from)) }
             }
         default:
             EmptyView()
-        }
-    }
-
-    @ViewBuilder
-    private var pastLetters: some View {
-        if letters.isEmpty {
-            EmptyState(line: "JK's letters will gather here.")
-        }
-        ForEach(letters, id: \.id) { r in
-            if let id = r.id {
-                LetterCard(headline: r.displayHeadline, caption: LetterText.caption(r), unread: r.isUnread, milestone: r.isMilestone) {
-                    router.jkPath.append(.letter(id))
-                }
-            }
         }
     }
 
@@ -263,7 +342,7 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: JK.Space.s) {
-            if mine { Spacer(minLength: JK.Space.huge) } else { CoachAvatar(coach: coach, size: JK.Size.avatarSmall - JK.Space.s) }
+            if mine { Spacer(minLength: JK.Space.huge) } else { TopBarAvatar(coach: coach, size: JK.Size.avatarSmall - JK.Space.s) }
             VStack(alignment: .leading, spacing: JK.Space.xs) {
                 if let caption { Text(caption).font(.jkCaption).foregroundStyle(JK.textSecondary) }
                 if let id = message.mediaId {
@@ -277,6 +356,12 @@ struct MessageBubble: View {
             }
             .padding(JK.Space.m)
             .background(mine ? JK.raised : JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
+            .overlay {
+                if !mine {
+                    RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous)
+                        .strokeBorder(JK.hairline, lineWidth: JK.Size.hairline)
+                }
+            }
             if !mine { Spacer(minLength: JK.Space.huge) }
         }
         .accessibilityElement(children: .combine)
@@ -541,26 +626,20 @@ private struct JKComposer: View {
 
 // MARK: - Free
 
-/// No 'messaging': JK, a line, his guides inline, and what coaching includes.
+/// No 'messaging' and no 'checkin': JK, a line, his guides inline, what
+/// coaching includes, and More.
 private struct FreeJKView: View {
+    let onHabits: () -> Void
     @Environment(AppSession.self) private var session
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: JK.Space.xxl) {
-                VStack(alignment: .leading, spacing: JK.Space.m) {
-                    CoachAvatar(coach: session.me?.coach, size: JK.Size.avatar * 2)
-                    Text(session.me?.coach?.name ?? "JK").jkText(.display).foregroundStyle(JK.text)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("New guides from JK appear here.").jkText(.quote).foregroundStyle(JK.text)
-                }
+                JKHeader()
+                SerifText("New guides from JK *appear here.*", size: .card).foregroundStyle(JK.text)
                 GuidesListContent()
-                Button("See what coaching includes") {
-                    TabRouter.shared.showMembership = true
-                    TabRouter.shared.client = .today
-                    TabRouter.shared.showAccount = true
-                }
-                .buttonStyle(SecondaryButtonStyle())
+                SecondaryButton("See what coaching includes") { TabRouter.shared.openAccount(membership: true) }
+                MoreList(onHabits: onHabits)
             }
             .padding(JK.Space.gutter)
         }

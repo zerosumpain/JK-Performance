@@ -29,7 +29,7 @@ struct GuidesListContent: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(list) { g in
-                        Button { TabRouter.shared.jkPath.append(.guide(g.id)) } label: { row(g) }
+                        Button { TabRouter.shared.push(.guide(g.id)) } label: { row(g) }
                             .buttonStyle(.plain)
                         if g.id != list.last?.id { GroupDivider() }
                     }
@@ -90,7 +90,7 @@ struct GuideView: View {
                         ForEach(Array(paragraphs(g).enumerated()), id: \.offset) { _, p in
                             Text(p).font(.jkBody).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
                         }
-                        Monogram(size: JK.Space.huge).foregroundStyle(JK.accent).padding(.top, JK.Space.l)
+                        Monogram(size: JK.Space.huge).foregroundStyle(JK.silver).padding(.top, JK.Space.l)
                     }
                     .surface(.paper, padding: JK.Space.xxl)
                 }

@@ -71,7 +71,7 @@ struct LetterView: View {
     }
 
     private var rule: some View {
-        Rectangle().fill(JK.accent).frame(height: JK.Size.hairline).accessibilityHidden(true)
+        Rectangle().fill(JK.silver).frame(height: JK.Size.hairline).accessibilityHidden(true)
     }
 
     /// An old report (before letters) keeps its summary as the body.
@@ -127,9 +127,12 @@ struct LetterView: View {
         guard let id = r.id else { return }
         let router = TabRouter.shared
         router.replyQuote = .init(reportId: id, headline: r.displayHeadline)
-        router.client = .jk
-        router.jkPath = []
-        router.todayPath.removeAll { if case .letter = $0 { return true } else { return false } }
+        let isLetter: (ClientRoute) -> Bool = { if case .letter = $0 { return true } else { return false } }
+        router.reviewPath.removeAll(where: isLetter)
+        router.actPath.removeAll(where: isLetter)
+        router.planPath.removeAll(where: isLetter)
+        router.jkPath.removeAll(where: isLetter)
+        router.openJK(path: router.jkPath)
     }
 
     private func load() async {

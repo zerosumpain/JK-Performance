@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Design-token lint (docs/design/atelier-spec.md, "GOVERNANCE"): screen files
+# Design-token lint (docs/design/plan-act-review.md, "Look"; governance from
+# atelier-spec.md): screen files
 # use tokens and components, never literal colours, font sizes, radii or fixed
 # heights on text. Literal values belong in the design layer only:
 #   iOS     ios/JKPerformance/Design/   (Tokens.swift, Type.swift, Components/)
@@ -47,10 +48,13 @@ check() {
 }
 
 lint_ios() {
-  local screens=()
+  # Plan. Act. Review. (docs/design/plan-act-review.md): monochrome silver;
+  # the chrome gradient lives in Design/Components/Buttons.swift only.
+  local screens=() client=()
   while IFS= read -r f; do screens+=("$f"); done < <(
     find ios/JKPerformance/Client ios/JKPerformance/Coach -name '*.swift' 2>/dev/null
     ls ios/JKPerformance/JKPerformanceApp.swift 2>/dev/null)
+  while IFS= read -r f; do client+=("$f"); done < <(find ios/JKPerformance/Client -name '*.swift' 2>/dev/null)
   [[ ${#screens[@]} -gt 0 ]] || return 0
   check "literal font size: use a Font.jk* token (Design/Type.swift)" '\.system\(size:' "${screens[@]}"
   check "custom font outside Design/Type.swift" 'Font\.custom|\.custom\("' "${screens[@]}"
@@ -59,13 +63,15 @@ lint_ios() {
     'Color\.(black|white|red|green|blue|orange|yellow|pink|purple|gray|grey)\b|Color\((white|red):|UIColor\.(black|white|red|green|systemRed|systemGreen)\b' "${screens[@]}"
   check "system bright colour: use a JK colour token" \
     '\.(foregroundStyle|foregroundColor|tint|fill|stroke|background)\(\.(black|white|red|green|blue|orange|yellow|pink|purple|gray)\)' "${screens[@]}"
-  check "gradient or shadow: Atelier has none" '(Linear|Radial|Angular)Gradient\(|\.shadow\(' "${screens[@]}"
+  check "gradient or shadow in a screen: use PrimaryButton (chrome) or a hairline card" \
+    '(Linear|Radial|Angular)Gradient\(|\.shadow\(' "${screens[@]}"
   check "fixed height on text: use frame(minHeight:)" \
     '(Text\(|Button[ ({]|TextField\().*\.frame\((width: [^,]+, )?height:' "${screens[@]}"
-  # textTertiary measures 4.4:1 on raised: never pair them, in screens or the design layer.
-  local all=()
-  while IFS= read -r f; do all+=("$f"); done < <(find ios/JKPerformance -name '*.swift')
-  check "textTertiary on raised (4.4:1): use textSecondary" 'JK\.textTertiary.*JK\.raised|JK\.raised.*JK\.textTertiary' "${all[@]}"
+  [[ ${#client[@]} -gt 0 ]] || return 0
+  # No colour on client screens: champagne is retired and status colours are coach-only.
+  check "champagne is retired: use JK.silver" 'JK\.accent(Pressed)?\b' "${client[@]}"
+  check "colour on a client screen: client screens are monochrome" \
+    'JK\.(onTrack|attention|urgent|data)\b' "${client[@]}"
 }
 
 lint_android() {

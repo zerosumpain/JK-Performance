@@ -192,6 +192,8 @@ struct WorkoutItem: Codable, Identifiable, Hashable {
     var note: String?
     var logged: [LoggedSet]
     var previous: String?
+    /// "3-1-1" (down, pause, drive); nil when the coach set none.
+    var tempo: String?
 
     var isDone: Bool { logged.count >= sets && sets > 0 }
 }
@@ -247,12 +249,14 @@ struct WorkoutItemInput: Codable, Hashable {
     var load: String
     var rpe: String?
     var note: String?
+    /// "3-1-1"; kept through the phone's editor so saving never clears it.
+    var tempo: String?
     /// Not part of the request body: the name to show while editing. Read
     /// from `exercise` on a Program item; never encoded.
     var exerciseName: String = ""
     var localId = UUID()
 
-    enum CodingKeys: String, CodingKey { case id, exerciseId, exercise, sets, reps, load, rpe, note }
+    enum CodingKeys: String, CodingKey { case id, exerciseId, exercise, sets, reps, load, rpe, note, tempo }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -263,6 +267,7 @@ struct WorkoutItemInput: Codable, Hashable {
         load = try c.decodeIfPresent(String.self, forKey: .load) ?? ""
         rpe = try c.decodeIfPresent(String.self, forKey: .rpe)
         note = try c.decodeIfPresent(String.self, forKey: .note)
+        tempo = try? c.decodeIfPresent(String.self, forKey: .tempo)
         exerciseName = (try? c.decodeIfPresent(Exercise.self, forKey: .exercise))?.name ?? exerciseId
     }
 
@@ -275,11 +280,13 @@ struct WorkoutItemInput: Codable, Hashable {
         try c.encode(load, forKey: .load)
         try c.encodeIfPresent(rpe, forKey: .rpe)
         try c.encodeIfPresent(note, forKey: .note)
+        try c.encodeIfPresent(tempo, forKey: .tempo)
     }
 
     init(id: String? = nil, exerciseId: String, exerciseName: String, sets: Int = 3, reps: String = "10",
-         load: String = "", rpe: String? = nil, note: String? = nil) {
+         load: String = "", rpe: String? = nil, note: String? = nil, tempo: String? = nil) {
         self.id = id
+        self.tempo = tempo
         self.exerciseId = exerciseId
         self.exerciseName = exerciseName
         self.sets = sets
@@ -291,7 +298,7 @@ struct WorkoutItemInput: Codable, Hashable {
 
     init(from item: WorkoutItem) {
         self.init(id: item.id, exerciseId: item.exercise.id, exerciseName: item.exercise.name, sets: item.sets,
-                  reps: item.reps, load: item.load, rpe: item.rpe, note: item.note)
+                  reps: item.reps, load: item.load, rpe: item.rpe, note: item.note, tempo: item.tempo)
     }
 }
 
@@ -583,8 +590,18 @@ struct Booking: Codable, Identifiable, Hashable {
     var refundable: Bool?
     /// The booking's own meeting link, else the coach's default room for video calls.
     var meetingUrl: String?
+    /// "planning" | "review" (Plan. Act. Review.); nil for an ordinary session.
+    var purpose: String?
 
     var isGroup: Bool { kind == "group" }
+    /// "Planning" / "Accountability", for the coach agenda.
+    var purposeLabel: String? {
+        switch purpose {
+        case "planning": return "Planning"
+        case "review": return "Accountability"
+        default: return nil
+        }
+    }
     /// Mine to show on a client's calendar: 1:1s, and classes they joined.
     var isMine: Bool { !isGroup || joined == true }
 
