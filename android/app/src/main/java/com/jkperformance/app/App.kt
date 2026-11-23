@@ -221,34 +221,62 @@ private fun <T> Tabs(tabs: List<Tab<T>>, selected: T, select: (T) -> Unit) {
 }
 
 /**
- * The client's three tabs (atelier-spec.md, IA): Today, Progress (plans with
- * 'progress') and JK. Account is the avatar sheet on Today.
+ * The client's three tabs (plan-act-review.md, Navigation): PLAN · ACT ·
+ * REVIEW, default Act, each with its own stack. JK's avatar on every tab root
+ * opens the JK sheet: his thread and the More list that reaches every other
+ * client screen. The tab bar steps aside on Plan's and Review's pushed
+ * screens (Before the session, Accountability session), as on the board.
  */
 @Composable
 fun ClientTabs() {
-    val session = AppSession
-    val gate = session.gate
-    LaunchedEffect(gate.progress) {
-        if (!gate.progress && TabRouter.client == TabRouter.Client.progress) TabRouter.client = TabRouter.Client.today
-    }
-    Tabs(
-        tabs = buildList {
-            add(Tab(TabRouter.Client.today, "Today", IconKey.today) {
-                RouteDrain(TabRouter.todayRequest) { TabRouter.todayRequest = null }
-                TodayView()
-            })
-            if (gate.progress) add(Tab(TabRouter.Client.progress, "Progress", IconKey.progress) { ProgressTab() })
-            add(Tab(TabRouter.Client.jk, "JK", { selected -> JKTabIcon(session.me?.coach?.avatarMediaId, selected) }) {
-                RouteDrain(TabRouter.jkRequest) { TabRouter.jkRequest = null }
-                JKView()
-            })
+    val router = TabRouter
+    val stacks = TabRouter.Client.entries.associateWith { rememberNavStack() }
+    val holder = rememberSaveableStateHolder()
+    val selected = router.client
+    val stack = stacks.getValue(selected)
+    val showBar = selected == TabRouter.Client.act || stack.depth == 0
+    Scaffold(
+        containerColor = JKColors.bg,
+        bottomBar = {
+            if (showBar) {
+                ParTabBar(
+                    labels = listOf("Plan", "Act", "Review"),
+                    selected = selected.ordinal,
+                    onSelect = { i ->
+                        val tab = TabRouter.Client.entries[i]
+                        if (tab == selected) stacks.getValue(tab).popToRoot() else router.select(tab)
+                    },
+                )
+            }
         },
-        selected = TabRouter.client,
-        select = { TabRouter.client = it },
-    )
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            holder.SaveableStateProvider(selected.name) {
+                NavHost(stack) {
+                    when (selected) {
+                        TabRouter.Client.plan -> YourDirectionView()
+                        TabRouter.Client.act -> {
+                            RouteDrain(router.actRequest) { router.actRequest = null }
+                            ThisWeekView()
+                        }
+                        TabRouter.Client.review -> LookBackView()
+                    }
+                }
+            }
+        }
+    }
+    if (router.showJK) {
+        Sheet(onDismiss = {
+            router.showJK = false
+            router.jkRequest = null
+        }) {
+            RouteDrain(router.jkRequest) { router.jkRequest = null }
+            JKSheet()
+        }
+    }
 }
 
-/** The screen for a client route, pushed on whichever tab asked for it. */
+/** The screen for a client route, pushed on whichever stack asked for it. */
 @Composable
 fun ClientRouteView(route: ClientRoute) {
     when (route) {
@@ -258,10 +286,23 @@ fun ClientRouteView(route: ClientRoute) {
         ClientRoute.guides -> GuidesList()
         is ClientRoute.guide -> GuideView(guideId = route.guideId)
         ClientRoute.challenges -> ChallengesView()
+        ClientRoute.progress -> PushedScreen("Progress") { ProgressScreen() }
+        ClientRoute.letters -> PastLettersView()
+        ClientRoute.nutrition -> HabitSheet()
+        is ClientRoute.account -> AccountSheet(openMembership = route.membership)
     }
 }
 
-/** Push a client route on the current tab's stack. */
+/** A former tab root pushed inside the JK sheet: the inline bar with a back chevron over it. */
+@Composable
+private fun PushedScreen(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.jkScreen()) {
+        TopBar(title = title)
+        Box(Modifier.weight(1f)) { content() }
+    }
+}
+
+/** Push a client route on the current stack. */
 fun NavStack.push(route: ClientRoute) = push { ClientRouteView(route) }
 
 /** Drains a TabRouter request (a tapped push, a link from another tab) into this tab's stack. */

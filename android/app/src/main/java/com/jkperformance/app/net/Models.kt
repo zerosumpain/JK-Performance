@@ -238,6 +238,8 @@ data class WorkoutItem(
     var note: String? = null,
     var logged: List<LoggedSet>,
     var previous: String? = null,
+    /** "3-1-1" (down-pause-drive, optional top pause); null when JK set none. */
+    var tempo: String? = null,
 ) {
     val isDone: Boolean get() = logged.size >= sets && sets > 0
 }
@@ -303,11 +305,13 @@ data class WorkoutItemInput(
     var load: String = "",
     var rpe: String? = null,
     var note: String? = null,
+    /** Carried through untouched so a phone edit keeps the tempo the desk set. */
+    var tempo: String? = null,
     val localId: UUID = UUID.randomUUID(),
 ) {
     constructor(item: WorkoutItem) : this(
         id = item.id, exerciseId = item.exercise.id, exerciseName = item.exercise.name, sets = item.sets,
-        reps = item.reps, load = item.load, rpe = item.rpe, note = item.note,
+        reps = item.reps, load = item.load, rpe = item.rpe, note = item.note, tempo = item.tempo,
     )
 }
 
@@ -322,6 +326,7 @@ private class WorkoutItemInputWire(
     val load: String? = null,
     val rpe: String? = null,
     val note: String? = null,
+    val tempo: String? = null,
 )
 
 object WorkoutItemInputSerializer : KSerializer<WorkoutItemInput> {
@@ -330,7 +335,7 @@ object WorkoutItemInputSerializer : KSerializer<WorkoutItemInput> {
     override fun serialize(encoder: Encoder, value: WorkoutItemInput) =
         encoder.encodeSerializableValue(
             WorkoutItemInputWire.serializer(),
-            WorkoutItemInputWire(value.id, value.exerciseId, null, value.sets, value.reps, value.load, value.rpe, value.note),
+            WorkoutItemInputWire(value.id, value.exerciseId, null, value.sets, value.reps, value.load, value.rpe, value.note, value.tempo),
         )
 
     override fun deserialize(decoder: Decoder): WorkoutItemInput {
@@ -338,7 +343,7 @@ object WorkoutItemInputSerializer : KSerializer<WorkoutItemInput> {
         val name = ((w.exercise as? JsonObject)?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content
         return WorkoutItemInput(
             id = w.id, exerciseId = w.exerciseId, exerciseName = name ?: w.exerciseId, sets = w.sets,
-            reps = w.reps, load = w.load ?: "", rpe = w.rpe, note = w.note,
+            reps = w.reps, load = w.load ?: "", rpe = w.rpe, note = w.note, tempo = w.tempo,
         )
     }
 }
@@ -662,6 +667,8 @@ data class Booking(
     var refundable: Boolean? = null,
     /** The booking's own meeting link, else the coach's default room for video calls. */
     var meetingUrl: String? = null,
+    /** planning | review | null (Plan. Act. Review.). */
+    var purpose: String? = null,
 ) {
     val isGroup: Boolean get() = kind == "group"
 

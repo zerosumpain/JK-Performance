@@ -822,7 +822,7 @@ private fun RestTimer(rest: Int, resting: Boolean, onMinus: () -> Unit, onPlus: 
 // MARK: - Offline
 
 /** The workout with one set logged (or, with null, cleared) locally, as the server would. */
-private fun Workout.withLogged(itemId: String, set: LoggedSet?, number: Int): Workout =
+internal fun Workout.withLogged(itemId: String, set: LoggedSet?, number: Int): Workout =
     copy(
         items = items.map { item ->
             if (item.id != itemId) item
