@@ -48,7 +48,7 @@ struct MonogramShape: Shape {
 /// The monogram filled in champagne (JK's colour), decorative by default.
 struct Monogram: View {
     var size: CGFloat = 44
-    var color: Color = JK.accent
+    var color: Color = JK.silver
 
     var body: some View {
         MonogramShape()
@@ -64,7 +64,7 @@ struct BrandRule: View {
 
     var body: some View {
         Rectangle()
-            .fill(JK.accent)
+            .fill(JK.silver)
             .frame(width: width, height: JK.Size.rule)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
             .accessibilityHidden(true)

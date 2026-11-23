@@ -1,44 +1,65 @@
 import SwiftUI
 
-/// One primary action per screen: an ivory fill with a dark label. Never gold,
-/// never a gradient. Minimum (not fixed) height 52 so labels can wrap at
-/// accessibility sizes.
+/// The chrome fill: a vertical-ish linear gradient through the three chrome
+/// tokens, with a 1pt white highlight along the top edge.
+struct ChromeFill: View {
+    var body: some View {
+        Capsule()
+            .fill(LinearGradient(colors: [JK.chromeTop, JK.chromeMid, JK.chromeBottom],
+                                 startPoint: UnitPoint(x: 0.35, y: 0), endPoint: UnitPoint(x: 0.65, y: 1)))
+            .overlay(alignment: .top) {
+                Capsule()
+                    .fill(JK.chromeHighlight)
+                    .frame(height: 1)
+                    .padding(.horizontal, JK.Space.xxl)
+                    .padding(.top, 1)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// One primary action per screen (plan-act-review.md): a chrome capsule,
+/// at least 52pt high (labels wrap at accessibility sizes), 16 Semibold label
+/// in onChrome.
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.jkHeadline)
+            .font(.jkButton)
             .multilineTextAlignment(.center)
-            .foregroundStyle(JK.onPrimary)
-            .tint(JK.onPrimary)
+            .foregroundStyle(JK.onChrome)
+            .tint(JK.onChrome)
             .padding(.vertical, 14)
-            .padding(.horizontal, JK.Space.l)
+            .padding(.horizontal, JK.Space.xl)
             .frame(maxWidth: .infinity, minHeight: JK.Size.buttonHeight)
-            .background(configuration.isPressed ? JK.primaryPressed : JK.primaryFill,
-                        in: RoundedRectangle(cornerRadius: JK.Radius.button, style: .continuous))
-            .opacity(enabled ? 1 : 0.5)
-            .contentShape(Rectangle())
+            .background(ChromeFill())
+            .opacity(configuration.isPressed ? 0.85 : (enabled ? 1 : 0.45))
+            .contentShape(Capsule())
     }
 }
 
-/// Transparent with a 1pt inputBorder outline and a text-colour label.
+/// A transparent capsule with a 1pt outline and a text-colour label
+/// ("Continue with a code", "Message JK"). `small` is the 32pt, 13pt variant
+/// ("Prepare →").
 struct SecondaryButtonStyle: ButtonStyle {
+    var small = false
+    /// Fill the width (the full-size button) or hug the label.
+    var fill = true
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: JK.Radius.button, style: .continuous)
         configuration.label
-            .font(.jkHeadline)
+            .font(small ? .jkButtonSmall : .jkButton)
             .multilineTextAlignment(.center)
             .foregroundStyle(JK.text)
-            .padding(.vertical, 14)
-            .padding(.horizontal, JK.Space.l)
-            .frame(maxWidth: .infinity, minHeight: JK.Size.buttonHeight)
-            .background(configuration.isPressed ? JK.raised : Color.clear, in: shape)
-            .overlay(shape.strokeBorder(JK.inputBorder, lineWidth: JK.Size.hairline))
-            .opacity(enabled ? 1 : 0.5)
-            .contentShape(Rectangle())
+            .padding(.vertical, small ? 6 : 14)
+            .padding(.horizontal, small ? JK.Space.m : JK.Space.xl)
+            .frame(maxWidth: fill && !small ? .infinity : nil, minHeight: small ? 32 : JK.Size.buttonHeight)
+            .background(configuration.isPressed ? JK.raised : Color.clear, in: Capsule())
+            .overlay(Capsule().strokeBorder(JK.buttonBorder, lineWidth: JK.Size.hairline))
+            .opacity(enabled ? 1 : 0.45)
+            .contentShape(Capsule())
     }
 }
 
@@ -71,17 +92,32 @@ struct SmallPillStyle: ButtonStyle {
 struct PrimaryButton: View {
     let title: String
     var busy = false
+    /// A trailing arrow glyph ("Begin today →").
+    var arrow = false
+    /// The Apple logo before the label (Sign in with Apple).
+    var leadingSymbol: String? = nil
     let action: () -> Void
 
-    init(_ title: String, busy: Bool = false, action: @escaping () -> Void) {
+    init(_ title: String, busy: Bool = false, arrow: Bool = false, leadingSymbol: String? = nil,
+         action: @escaping () -> Void) {
         self.title = title
         self.busy = busy
+        self.arrow = arrow
+        self.leadingSymbol = leadingSymbol
         self.action = action
     }
 
     var body: some View {
         Button(action: action) {
-            if busy { ProgressView() } else { Text(title) }
+            if busy {
+                ProgressView().tint(JK.onChrome)
+            } else {
+                HStack(spacing: JK.Space.s) {
+                    if let leadingSymbol { Image(systemName: leadingSymbol).accessibilityHidden(true) }
+                    Text(title)
+                    if arrow { Image(systemName: "arrow.right").fontWeight(.light).accessibilityHidden(true) }
+                }
+            }
         }
         .buttonStyle(PrimaryButtonStyle())
         .disabled(busy)
@@ -90,15 +126,25 @@ struct PrimaryButton: View {
 
 struct SecondaryButton: View {
     let title: String
+    var small = false
+    var arrow = false
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: String, small: Bool = false, arrow: Bool = false, action: @escaping () -> Void) {
         self.title = title
+        self.small = small
+        self.arrow = arrow
         self.action = action
     }
 
     var body: some View {
-        Button(title, action: action).buttonStyle(SecondaryButtonStyle())
+        Button(action: action) {
+            HStack(spacing: JK.Space.xs) {
+                Text(title)
+                if arrow { Image(systemName: "arrow.right").fontWeight(.light).accessibilityHidden(true) }
+            }
+        }
+        .buttonStyle(SecondaryButtonStyle(small: small))
     }
 }
 

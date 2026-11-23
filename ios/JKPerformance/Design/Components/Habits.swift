@@ -45,7 +45,7 @@ struct HabitMark: View {
             VStack(spacing: JK.Space.xs) {
                 ZStack(alignment: .topTrailing) {
                     Icon(key: key, filled: isDone, size: JK.Size.iconHabit)
-                        .foregroundStyle(isDone ? JK.accent : JK.textSecondary)
+                        .foregroundStyle(isDone ? JK.silver : JK.textSecondary)
                         .opacity(state == .rest ? 0.45 : 1)
                         .frame(width: side, height: side * 0.62)
                     if fromHealth {
@@ -59,7 +59,7 @@ struct HabitMark: View {
                     .frame(width: side * 0.6)
                 Text(state == .rest ? "Rest" : name)
                     .font(.jkCaption)
-                    .foregroundStyle(isDone ? JK.accent : JK.textSecondary)
+                    .foregroundStyle(isDone ? JK.silver : JK.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -97,7 +97,7 @@ struct HabitSegment: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Rectangle().fill(JK.track)
-                Rectangle().fill(JK.accent).frame(width: geo.size.width * fraction)
+                Rectangle().fill(JK.silver).frame(width: geo.size.width * fraction)
             }
         }
         .frame(height: JK.Size.rule)
@@ -170,7 +170,7 @@ struct WeekDots: View {
         let d = JK.Size.weekDot
         ZStack {
             switch day.state {
-            case .done: Circle().fill(JK.accent).frame(width: d, height: d)
+            case .done: Circle().fill(JK.silver).frame(width: d, height: d)
             case .notDone: Circle().strokeBorder(JK.trackStrong, lineWidth: 1.5).frame(width: d + 1, height: d + 1)
             case .future: Circle().fill(JK.track).frame(width: d, height: d)
             case .rest: EmptyView()
