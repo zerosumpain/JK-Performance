@@ -2,7 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { exchangeAppleCode, revokeApple } from './apple.mjs';
 import { codeMatches, endSession, issueSession, upsertAppleUser, verifyAppleToken } from './auth.mjs';
 import { credits } from './bookings.mjs';
+import { emit } from './events.mjs';
 import { fail, num, oneOf, raw, str } from './http.mjs';
+import { hooks } from './registry.mjs';
 import { PLAN_IDS, planOf } from './plans.mjs';
 import { erasePhotos } from './progress.mjs';
 import { eraseMedia, mediaForExport } from './media.mjs';
@@ -232,6 +234,11 @@ function exportMe(_req, ctx) {
     preferences: { notificationsOn: user.notifications_on !== 0, eveningReminderTime: user.evening_reminder ?? null },
     notificationDevices: all('SELECT platform, env, created_at, updated_at FROM push_tokens WHERE user_id=?', user.id),
     challenges: all('SELECT c.title, m.joined_at FROM challenge_members m JOIN challenges c ON c.id=m.challenge_id WHERE m.user_id=?', user.id),
+    tags: all('SELECT t.name, ct.added_at FROM client_tags ct JOIN tags t ON t.id=ct.tag_id WHERE ct.client_id=?', user.id),
+    outreach: all('SELECT paused, no_broadcasts, note, updated_at FROM client_outreach WHERE client_id=?', user.id),
+    heldMessages: all('SELECT text, kind, via, send_at, status, created_at FROM deferred_messages WHERE client_id=? ORDER BY created_at', user.id),
+    // Desk v2 features add their own sections (docs/design/desk-v2.md 3.10).
+    features: featureExports(db, user),
   };
   return raw(200, {
     'content-type': 'application/json; charset=utf-8',
@@ -240,12 +247,26 @@ function exportMe(_req, ctx) {
   }, JSON.stringify(out, null, 2));
 }
 
+/** Each feature's exportFor(db, user), under its name; a provider that throws is logged and left out. */
+function featureExports(db, user) {
+  const out = {};
+  for (const [f, fn] of hooks('exportFor')) {
+    try { out[f.name] = fn(db, user) ?? {}; } catch (e) { console.error(`exportFor of ${f.name} failed`, e); }
+  }
+  return out;
+}
+
 /** Testing only: pick a plan with no payment. Refused once real payments are on. */
 function setMembership(_req, ctx) {
   if (ctx.config.payments) fail(403, 'Choose a plan through the App Store');
   if (ctx.user.role !== 'client') fail(403, 'Clients only');
   const plan = oneOf(ctx.body.plan, 'plan', PLAN_IDS);
-  if (plan !== ctx.user.plan) recordPlan(ctx.db, ctx.user.id, plan);
+  if (plan !== ctx.user.plan) {
+    tx(ctx.db, () => {
+      recordPlan(ctx.db, ctx.user.id, plan);
+      emit(ctx.db, 'membership.changed', { coachId: ctx.user.coach_id, clientId: ctx.user.id, summary: `Plan: ${planOf(ctx.db, { ...ctx.user, plan }).name}`, from: ctx.user.plan, to: plan });
+    });
+  }
   return meOut(ctx.db, ctx.db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id));
 }
 

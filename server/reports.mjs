@@ -5,6 +5,7 @@ import { activitiesBetween, healthDay, healthVisible } from './health.mjs';
 import { day, fail, instant, num, oneOf, str } from './http.mjs';
 import { attachableMedia } from './media.mjs';
 import { milestoneSuggestions } from './milestones.mjs';
+import { emit } from './events.mjs';
 import { notify } from './push.mjs';
 import { requireFeature, rhythmOf } from './settings.mjs';
 import { firstSentence, newId, nowIso, tx } from './store.mjs';
@@ -170,6 +171,7 @@ export function deliverDue(db, config, { clientId = null } = {}) {
     const text = r.kind === 'milestone' ? `A letter from ${coach?.name ?? 'your coach'}: ${headline}` : `Your letter for the week of ${weekLabel(r.week)} is here: ${headline}`;
     db.prepare("INSERT INTO messages (id, client_id, from_id, from_role, text, at, kind, report_id) VALUES (?,?,?,'coach',?,?,'letter',?)")
       .run(newId('m'), r.client_id, r.coach_id, text, r.deliver_at && r.deliver_at < now ? r.deliver_at : now, r.id);
+    emit(db, 'letter.delivered', { coachId: db.prepare('SELECT coach_id FROM users WHERE id=?').get(r.client_id)?.coach_id ?? r.coach_id, clientId: r.client_id, summary: 'Letter delivered', reportId: r.id, kind: r.kind });
     notify(db, config, r.client_id, { title: `A letter from ${coach?.name ?? 'your coach'}`, body: headline, kind: 'report', id: r.id, clientId: r.client_id });
   }
   return rows.length;
@@ -310,6 +312,9 @@ function save(_req, ctx) {
         .run(...values, rowId, client.id, week, now);
     }
     // Publishing marks that week's check-in replied (the reply arrives as the letter).
+    if (status === 'published' && !prior?.published_at) {
+      emit(ctx.db, 'letter.published', { coachId: ctx.user.id, clientId: client.id, summary: kind === 'milestone' ? 'Milestone letter published' : 'Letter published', reportId: rowId, kind });
+    }
     if (status === 'published' && kind === 'weekly') {
       ctx.db.prepare("UPDATE checkins SET reviewed_at=COALESCE(reviewed_at, ?), reply=COALESCE(reply, ?) WHERE client_id=? AND week=?").run(now, headline ?? '', client.id, week);
     }

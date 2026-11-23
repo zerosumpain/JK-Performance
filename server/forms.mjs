@@ -1,5 +1,6 @@
 import { clientFor, initials, requireCoach } from './access.mjs';
 import { fail, num, oneOf, str } from './http.mjs';
+import { emit } from './events.mjs';
 import { notify } from './push.mjs';
 import { newId, nowIso } from './store.mjs';
 
@@ -163,11 +164,15 @@ function deleteForm(_req, ctx) {
   return { ok: true };
 }
 
-/** Send a form to a client (also used by autoflows). Returns the new request row. */
-export function sendForm(db, config, form, client, { autoflowId = null, coachName = 'Your coach' } = {}) {
+/**
+ * Send a form to a client (also used by autoflows). Returns the new request row.
+ * `emit` (form.sent) is set only by request paths and actions, never by shared builders.
+ */
+export function sendForm(db, config, form, client, { autoflowId = null, coachName = 'Your coach', emit: emitEvent = false } = {}) {
   const id = newId('fr');
   db.prepare('INSERT INTO form_requests (id, form_id, client_id, name, intro, questions, sent_at, autoflow_id) VALUES (?,?,?,?,?,?,?,?)')
     .run(id, form.id, client.id, form.name, form.intro, form.questions, nowIso(), autoflowId);
+  if (emitEvent) emit(db, 'form.sent', { coachId: client.coach_id, clientId: client.id, summary: `Sent ${form.name}`, requestId: id, formId: form.id });
   notify(db, config, client.id, { title: coachName, body: `Please fill in: ${form.name}`, kind: 'form', id });
   return db.prepare('SELECT * FROM form_requests WHERE id=?').get(id);
 }
@@ -175,7 +180,7 @@ export function sendForm(db, config, form, client, { autoflowId = null, coachNam
 function send(_req, ctx) {
   const form = ownForm(ctx);
   const client = clientFor(ctx, ctx.body.clientId);
-  return requestOut(ctx.db, sendForm(ctx.db, ctx.config, form, client, { coachName: ctx.user.name }));
+  return requestOut(ctx.db, sendForm(ctx.db, ctx.config, form, client, { coachName: ctx.user.name, emit: true }));
 }
 
 /**
@@ -210,6 +215,7 @@ function answer(_req, ctx) {
   ctx.db.prepare('UPDATE form_requests SET answers=?, submitted_at=? WHERE id=?').run(JSON.stringify(answers), nowIso(), r.id);
   const done = ctx.db.prepare('SELECT * FROM form_requests WHERE id=?').get(r.id);
   const flagged = flaggedAnswers(done).length;
+  emit(ctx.db, 'form.submitted', { coachId: ctx.user.coach_id, clientId: ctx.user.id, summary: `Answered ${r.name}`, requestId: r.id, formId: r.form_id, flagged });
   notify(ctx.db, ctx.config, ctx.user.coach_id, {
     title: ctx.user.name, body: flagged ? `${r.name}: answered yes to ${flagged === 1 ? 'a health question' : `${flagged} health questions`}` : `Filled in ${r.name}`,
     kind: 'form', id: r.id, clientId: ctx.user.id,

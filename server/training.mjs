@@ -1,6 +1,7 @@
 import { CATEGORIES } from './catalogue.mjs';
 import { canSee, clientFor, requireCoach, requireMember } from './access.mjs';
 import { day, fail, num, oneOf, str } from './http.mjs';
+import { emit } from './events.mjs';
 import { newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay } from './time.mjs';
 
@@ -247,8 +248,13 @@ function deleteSet(_req, ctx) {
 function completeWorkout(_req, ctx) {
   requireMember(ctx);
   const w = loggable(ctx);
-  ctx.db.prepare('UPDATE workouts SET completed_at=?, completion_note=?, feel=? WHERE id=?')
-    .run(nowIso(), str(ctx.body.note, 'note', { max: 500, optional: true, min: 0 }), num(ctx.body.feel, 'feel', { min: 1, max: 5, int: true, optional: true }), w.id);
+  const feel = num(ctx.body.feel, 'feel', { min: 1, max: 5, int: true, optional: true });
+  tx(ctx.db, () => {
+    ctx.db.prepare('UPDATE workouts SET completed_at=?, completion_note=?, feel=? WHERE id=?')
+      .run(nowIso(), str(ctx.body.note, 'note', { max: 500, optional: true, min: 0 }), feel, w.id);
+    const client = ctx.db.prepare('SELECT coach_id FROM users WHERE id=?').get(w.client_id);
+    emit(ctx.db, 'workout.completed', { coachId: client?.coach_id ?? null, clientId: w.client_id, summary: `Finished ${w.title}`, workoutId: w.id, feel });
+  });
   return workoutOut(ctx.db, ctx.db.prepare('SELECT * FROM workouts WHERE id=?').get(w.id));
 }
 
