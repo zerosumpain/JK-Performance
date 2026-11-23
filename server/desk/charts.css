@@ -1,0 +1,73 @@
+/* Charts (charts.js). Marks draw in currentColor; these classes give it.
+ * Tones 1–6 are the chart tokens; heat 0–4 the champagne ramp. */
+.ch{position:relative;margin:0;min-width:0}
+.ch-svg{position:relative;width:100%;overflow:hidden}
+.ch-svg svg{display:block}
+.ch:focus-visible{outline:none;box-shadow:var(--focus);border-radius:var(--r-control)}
+.ch-tone-1{color:var(--chart-1)}.ch-tone-2{color:var(--chart-2)}.ch-tone-3{color:var(--chart-3)}
+.ch-tone-4{color:var(--chart-4)}.ch-tone-5{color:var(--chart-5)}.ch-tone-6{color:var(--chart-6)}
+.ch-grid line{stroke:var(--chart-grid);stroke-width:1}
+.ch-label{fill:var(--text-secondary);font:500 11px/1 var(--sans);font-variant-numeric:tabular-nums}
+.ch-area{fill:var(--chart-area);opacity:.7}
+.ch-goal line{stroke:var(--text-secondary);stroke-dasharray:4 4}
+.ch-cross{stroke:var(--input-border);stroke-width:1}
+.ch-hover{fill:var(--track)}
+.ch-dots circle{stroke:var(--tile);stroke-width:2}
+/* Lines draw in over 600 ms (pathLength=1). */
+.ch-line .ch-stroke{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 600ms var(--ease)}
+.ch-line.ch-in .ch-stroke{stroke-dashoffset:0}
+@media (prefers-reduced-motion:reduce){.ch-line .ch-stroke{stroke-dashoffset:0}}
+.ch-barrect{transition:opacity var(--dur-fast) var(--ease)}
+.ch-tip{position:absolute;z-index:3;pointer-events:none;min-width:120px;padding:8px 10px;border-radius:var(--r-control);background:var(--raised);box-shadow:var(--shadow-float);font-size:12px;color:var(--text)}
+.ch-tip-x{font-weight:600;margin-bottom:4px}
+.ch-tip-row{display:flex;align-items:center;gap:8px}
+.ch-tip-row b,.ch-legend b{color:var(--text);font-variant-numeric:tabular-nums}
+.ch-tip-row .grow,.ch-legend .grow{color:var(--text-secondary)}
+.ch-key{width:8px;height:8px;border-radius:2px;background:currentColor;flex:none}
+
+/* Donut */
+.ch-donut{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.ch-donut-ring{position:relative;flex:none}
+.ch-donut-ring svg{display:block}
+.ch-track{color:var(--track)}
+.ch-seg{transition:opacity var(--dur-fast) var(--ease)}
+.ch-seg:hover{opacity:.8}
+.ch-donut-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ch-donut-v{font:var(--t-number);font-variant-numeric:tabular-nums}
+.ch-donut-k{font-size:12px;color:var(--text-secondary)}
+.ch-legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-width:140px;flex:1;font-size:13px}
+.ch-legend li{display:flex;align-items:center;gap:8px}
+
+/* Heatmap and cohorts */
+.ch-heat{display:grid;grid-template-columns:auto repeat(var(--cols),minmax(14px,1fr));gap:3px;align-items:center;font-size:11px}
+.ch-heat-col{color:var(--text-secondary);text-align:center;font-variant-numeric:tabular-nums}
+.ch-heat-row{color:var(--text-secondary);padding-right:6px;white-space:nowrap}
+.ch-cell{display:block;height:22px;border-radius:4px}
+.ch-cell:focus-visible{box-shadow:var(--focus)}
+.ch-heat-0{background:var(--heat-0)}.ch-heat-1{background:var(--heat-1)}.ch-heat-2{background:var(--heat-2)}
+.ch-heat-3{background:var(--heat-3)}.ch-heat-4{background:var(--heat-4)}
+.ch-heat-scale{display:flex;align-items:center;justify-content:flex-end;gap:3px;margin-top:8px;font-size:11px;color:var(--text-secondary)}
+.ch-heat-scale .ch-cell{width:12px;height:12px}
+.ch-cohort-scroll{overflow-x:auto}
+.ch-cohort-table{border-collapse:separate;border-spacing:3px;font-size:12px}
+.ch-cohort-table th,.ch-cohort-table td{padding:6px 8px;border:none;border-radius:4px;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ch-cohort-table th{color:var(--text-secondary);font-weight:500}
+.ch-cohort-table tbody th{text-align:left}
+.ch-cohort-table .ch-heat-4,.ch-cohort-table .ch-heat-3{color:var(--bg);font-weight:600}
+.ch-none{background:none}
+
+/* Funnel */
+.ch-funnel-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ch-funnel-text{display:flex;align-items:baseline;gap:8px;font-size:13px;margin-bottom:4px}
+.ch-funnel-text>span:first-child{flex:1;color:var(--text-secondary)}
+.ch-funnel-conv{font-size:12px;color:var(--text-secondary);min-width:3.5ch;text-align:right}
+.ch-funnel-track{height:10px;border-radius:var(--r-pill);background:var(--track);overflow:hidden}
+.ch-funnel-bar{height:100%;width:var(--w,0%);border-radius:inherit;background:currentColor;transition:width var(--dur-slow) var(--ease)}
+
+/* Gauge */
+.ch-gauge{display:inline-flex;flex-direction:column;align-items:center}
+.ch-gauge-seg{opacity:.28}
+.ch-gauge-seg.on{opacity:1}
+.ch-needle{color:var(--text)}
+.ch-gauge-v{font:var(--t-number);margin-top:-14px}
+.ch-gauge-k{font-size:12px;font-weight:600}
