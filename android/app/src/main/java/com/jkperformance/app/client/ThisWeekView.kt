@@ -70,7 +70,7 @@ fun ParRootScreen(
             }
             if (footer != null) {
                 Column(
-                    Modifier.fillMaxWidth().padding(horizontal = JKSpace.gutter).padding(bottom = JKSpace.m),
+                    Modifier.fillMaxWidth().padding(horizontal = JKSpace.gutter).padding(top = JKSpace.m, bottom = JKSpace.m),
                     verticalArrangement = Arrangement.spacedBy(JKSpace.m),
                     content = footer,
                 )

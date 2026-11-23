@@ -195,7 +195,7 @@ fun LookBackView() {
             )
             if (r.commitments.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(JKSpace.l)) {
-                    ParLabel("What you said you'd do")
+                    ParLabel("What you said you\u2019d do")
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(JKSpace.s)) {
                         r.commitments.take(3).forEach { c ->
                             CommitmentRing(c, outcomes[c.id], Modifier.weight(1f).fillMaxHeight()) {
@@ -225,7 +225,7 @@ fun LookBackView() {
 @Composable
 private fun ReviewLocked() {
     LockedCard(
-        title = "Review with *JK.*",
+        title = "Review with *JK*",
         line = "A weekly accountability session: look back, then agree a few commitments for the week ahead.",
         onSee = { TabRouter.openMembership() },
     )
@@ -351,7 +351,7 @@ fun AccountabilitySessionView(initial: ReviewPayload, onAccepted: (ReviewPayload
             }
             if (session != null && session.agreed.isNotEmpty()) {
                 PrimaryButton(
-                    if (accepted) "You're in" else "I'm in",
+                    if (accepted) "You\u2019re in" else "I\u2019m in",
                     enabled = !accepted && !accepting,
                     onClick = { scope.launch { accept() } },
                     modifier = Modifier.weight(1f),

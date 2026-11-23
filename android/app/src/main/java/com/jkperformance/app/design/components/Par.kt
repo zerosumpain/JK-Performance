@@ -216,7 +216,7 @@ fun JKMarkLarge(modifier: Modifier = Modifier, size: Dp = JKSize.markLarge) {
         painterResource(R.drawable.jk_mark_silver),
         contentDescription = "JK Performance",
         contentScale = ContentScale.Fit,
-        modifier = modifier.size(size).clip(JKShape.parCard),
+        modifier = modifier.size(size),
     )
 }
 
@@ -632,7 +632,8 @@ fun TempoLine(tempo: String, modifier: Modifier = Modifier) {
         }
         label("slow down", Offset((p0.x + p1.x) / 2f - 8.dp.toPx(), (p0.y + p1.y) / 2f + 6.dp.toPx()))
         label("pause", Offset((p1.x + p2.x) / 2f, yBottom + 6.dp.toPx()))
-        label("drive", Offset((p2.x + p3.x) / 2f + 18.dp.toPx(), (p2.y + p3.y) / 2f - 10.dp.toPx()))
+        val drive = measurer.measure("drive", style)
+        drawText(drive, topLeft = Offset((p3.x + 6.dp.toPx()).coerceAtMost(size.width - drive.size.width), yTop + 8.dp.toPx()))
     }
 }
 

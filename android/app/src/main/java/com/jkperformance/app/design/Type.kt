@@ -146,11 +146,18 @@ fun emphasized(text: String, style: TextStyle): AnnotatedString {
     }
 }
 
-/** "Goblet *squat*": the last word of a name in italic (spec, In the session). */
+/**
+ * "Goblet *squat*": the last word of a name in italic and, after the first
+ * word, in lower case as the board sets it (spec, In the session). Words in
+ * capitals (RDL) keep them.
+ */
 fun lastWordItalic(name: String): String {
     val trimmed = name.trim()
     val cut = trimmed.lastIndexOf(' ')
-    return if (cut <= 0) "*$trimmed*" else trimmed.substring(0, cut + 1) + "*" + trimmed.substring(cut + 1) + "*"
+    if (cut <= 0) return "*$trimmed*"
+    val last = trimmed.substring(cut + 1)
+    val shown = if (last.length > 1 && last.drop(1).any { it.isUpperCase() }) last else last.lowercase()
+    return trimmed.substring(0, cut + 1) + "*" + shown + "*"
 }
 
 /**

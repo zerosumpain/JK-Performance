@@ -31,6 +31,7 @@ import com.jkperformance.app.net.APIClient
 import com.jkperformance.app.net.AppSession
 import com.jkperformance.app.net.Habit
 import com.jkperformance.app.net.HabitDayInput
+import com.jkperformance.app.net.TabRouter
 import com.jkperformance.app.net.WeekHabit
 import com.jkperformance.app.net.WeekPayload
 import com.jkperformance.app.net.WeekToday
@@ -107,10 +108,17 @@ fun TodaysWorkView(initial: WeekPayload? = null) {
         Loadable(value = week, error = error, retry = { load() }) { p ->
             Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
                 ParLabel("Act · ${p.dayName.ifEmpty { Fmt.weekdayName(java.time.LocalDate.now(Day.zone)) }}")
-                ParTitle("Today's *work.*")
+                ParTitle("Today\u2019s *work.*")
             }
             val t = p.today ?: WeekToday()
             if (t.workout != null || gate.programme) SessionCard(t, onStart = { sessionId = it })
+            if (t.workout == null && !gate.programme && !(gate.habits && t.habits.isNotEmpty())) {
+                LockedCard(
+                    title = "Train with *JK*",
+                    line = "Your sessions and habits arrive here once JK writes your programme.",
+                    onSee = { TabRouter.openMembership() },
+                )
+            }
             if (gate.habits && t.habits.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(JKSpace.m)) {
                     ParLabel("Habits", annotation = "the work between sessions")

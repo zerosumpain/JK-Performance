@@ -286,7 +286,7 @@ fun ClientRouteView(route: ClientRoute) {
         ClientRoute.guides -> GuidesList()
         is ClientRoute.guide -> GuideView(guideId = route.guideId)
         ClientRoute.challenges -> ChallengesView()
-        ClientRoute.progress -> PushedScreen("Progress") { ProgressScreen() }
+        ClientRoute.progress -> PushedScreen { ProgressScreen() }
         ClientRoute.letters -> PastLettersView()
         ClientRoute.nutrition -> HabitSheet()
         is ClientRoute.account -> AccountSheet(openMembership = route.membership)
@@ -295,9 +295,9 @@ fun ClientRouteView(route: ClientRoute) {
 
 /** A former tab root pushed inside the JK sheet: the inline bar with a back chevron over it. */
 @Composable
-private fun PushedScreen(title: String, content: @Composable () -> Unit) {
+private fun PushedScreen(content: @Composable () -> Unit) {
     Column(Modifier.jkScreen()) {
-        TopBar(title = title)
+        TopBar()
         Box(Modifier.weight(1f)) { content() }
     }
 }

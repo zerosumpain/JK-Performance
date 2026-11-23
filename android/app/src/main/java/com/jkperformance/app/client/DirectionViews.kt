@@ -138,7 +138,7 @@ fun YourDirectionView() {
 @Composable
 private fun PlanLocked() {
     LockedCard(
-        title = "Plan with *JK.*",
+        title = "Plan with *JK*",
         line = "Coaching starts with a planning session: what matters this season, in a few sentences.",
         onSee = { TabRouter.openMembership() },
     )
