@@ -1,5 +1,5 @@
 <resources>
-    <!-- Warm off-black ground behind Compose, dark system bars: the app is dark-only (Atelier bg). -->
+    <!-- Near-black ground behind Compose, dark system bars: the app is dark-only (JKColors.bg). -->
     <style name="Theme.JK" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/jk_bg</item>
         <item name="android:statusBarColor">@color/jk_bg</item>

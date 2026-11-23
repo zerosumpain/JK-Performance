@@ -654,7 +654,7 @@ fun TrendSheet(kind: TrendKind, goal: Goal?, progress: ProgressData?, history: H
     }
 }
 
-/** A slate line over time with an optional dashed bone target line. No fill, no axes. */
+/** A silver line over time with an optional dashed target line. No fill, no axes. */
 @Composable
 private fun TrendChart(points: List<Pair<LocalDate, Double>>, target: Double?, modifier: Modifier) {
     val values = points.map { it.second } + listOfNotNull(target)
@@ -663,7 +663,7 @@ private fun TrendChart(points: List<Pair<LocalDate, Double>>, target: Double?, m
     val pad = max((high0 - low0) * 0.1, 0.5)
     val low = low0 - pad
     val high = high0 + pad
-    val line = JKColors.data
+    val line = JKColors.silver
     val dash = JKColors.text
     Canvas(modifier) {
         val firstDay = points.minOf { it.first.toEpochDay() }

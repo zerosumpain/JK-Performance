@@ -125,6 +125,8 @@ enum class IconKey(val glyph: String, @DrawableRes val outline: Int, @DrawableRe
     /** Done. */
     done("check", R.drawable.ms_check_fill0, R.drawable.ms_check_fill1),
     /** Disclosure. */
+    /** The trailing arrow on "Begin today →" and "Prepare →". */
+    arrow("east", R.drawable.ms_east_fill0, R.drawable.ms_east_fill1),
     chevron("chevron_right", R.drawable.ms_chevron_right_fill0, R.drawable.ms_chevron_right_fill1),
     /** Add. */
     add("add", R.drawable.ms_add_fill0, R.drawable.ms_add_fill1),

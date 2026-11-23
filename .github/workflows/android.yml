@@ -24,11 +24,11 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
-      - name: Design lint and contrast (Atelier tokens)
+      - name: Design lint and contrast (design tokens)
         working-directory: .
         run: |
           scripts/lint-design.sh android
-          node scripts/contrast-check.mjs
+          node scripts/contrast-check.mjs --platform android
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

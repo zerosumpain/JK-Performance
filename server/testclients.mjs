@@ -653,6 +653,12 @@ export function addTestExtras(db, coachId, today = londonDay()) {
       thread.forEach((m, i) => db.prepare('UPDATE messages SET at=?, read_at=? WHERE id=?').run(ago(24 * days - i * 3), ago(24 * days - i * 3), m.id));
       const c = db.prepare('SELECT id, submitted_at FROM checkins WHERE client_id=? AND reviewed_at IS NULL').get(id);
       if (c) db.prepare('UPDATE checkins SET reviewed_at=?, reply=? WHERE id=?').run(new Date(Date.parse(c.submitted_at) + 2 * 3_600_000).toISOString(), 'Great week, noted. Same again.', c.id);
+      // Answered check-ins and letters count as contact too: hold back any after that day (on a Monday this
+      // week's letter has just gone out, which made this test fail on Mondays).
+      db.prepare('UPDATE checkins SET submitted_at=MIN(submitted_at, ?), reviewed_at=? WHERE client_id=? AND reviewed_at>?').run(ago(24 * days + 2), ago(24 * days), id, ago(24 * days));
+      // Letters likewise.
+      db.prepare('UPDATE reports SET published_at=?, delivered_at=CASE WHEN delivered_at IS NULL THEN NULL ELSE ? END WHERE client_id=? AND published_at>?')
+        .run(ago(24 * days), ago(24 * days), id, ago(24 * days));
     }
     return { programs: PROGRAMS.length, forms: FORM_TEMPLATES.length, autoflows: 3 };
   });

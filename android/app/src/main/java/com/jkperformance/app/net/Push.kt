@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.Serializable
 
-/** A screen pushed inside a client tab (Today or JK). One type so a tapped notification can open the right one. */
+/** A screen pushed inside a client tab or the JK sheet. One type so a tapped notification can open the right one. */
 sealed class ClientRoute {
     /** Your week, scrolled to this "YYYY-MM-DD" day (null: today). */
     data class yourWeek(val day: String? = null) : ClientRoute()
@@ -45,67 +45,93 @@ sealed class ClientRoute {
     data object guides : ClientRoute()
     data class guide(val guideId: String) : ClientRoute()
     data object challenges : ClientRoute()
+    /** JK sheet › More: Progress. */
+    data object progress : ClientRoute()
+    /** JK sheet › More: past letters. */
+    data object letters : ClientRoute()
+    /** JK sheet › More: Nutrition (the Fuel view). */
+    data object nutrition : ClientRoute()
+    /** JK sheet › More: Account, optionally straight on to Membership. */
+    data class account(val membership: Boolean = false) : ClientRoute()
 }
 
 /**
- * Which tab is showing and what is pushed in it. A tapped notification moves
- * it (a message opens JK, a letter opens the letter, a booking Your week), so
- * the tab bars and stacks bind to this.
+ * Which tab is showing, whether the JK sheet is open, and what is pushed. A
+ * tapped notification moves it (a message opens the JK sheet, a letter opens
+ * Review), so the tab bar, the sheet and the stacks bind to this.
  *
  * Android's stacks hold composable lambdas (design/Nav.kt), so a route asked
- * for from outside a tab is a [RouteRequest]: the tab's root drains it into
- * its own NavStack (App.kt, RouteDrain) and clears it.
+ * for from outside a stack is a [RouteRequest]: the stack's root drains it
+ * into its own NavStack (App.kt, RouteDrain) and clears it.
  */
 object TabRouter {
-    /** The three client tabs (atelier-spec.md, IA). */
-    enum class Client { today, progress, jk }
+    /** The three client tabs (plan-act-review.md, Navigation): default Act. */
+    enum class Client { plan, act, review }
     enum class Coach { today, clients, messages }
 
-    /** Routes to push on a tab, after popping it to its root when [reset]. */
+    /** Routes to push on a stack, after popping it to its root when [reset]. */
     data class RouteRequest(val routes: List<ClientRoute>, val reset: Boolean, val serial: Long)
 
     data class ReplyQuote(val reportId: String, val headline: String)
 
-    var client: Client by mutableStateOf(Client.today)
+    var client: Client by mutableStateOf(Client.act)
     var coach: Coach by mutableStateOf(Coach.today)
-    var todayRequest: RouteRequest? by mutableStateOf(null)
+    /** Routes for the Act tab's stack. */
+    var actRequest: RouteRequest? by mutableStateOf(null)
+    /** Routes for the JK sheet's stack (More's screens, a letter). */
     var jkRequest: RouteRequest? by mutableStateOf(null)
-    /** The Account sheet over Today (Account is no longer a tab). */
-    var showAccount: Boolean by mutableStateOf(false)
-    /** Open the Account sheet at Membership. */
-    var showMembership: Boolean by mutableStateOf(false)
+    /** The JK sheet: JK's thread and the More list, over whichever tab is showing. */
+    var showJK: Boolean by mutableStateOf(false)
+    /** A letter Review was asked to show: Accountability session when it is the latest, else the letter. */
+    var reviewLetter: String? by mutableStateOf(null)
     /** Opens the composer quoting a letter ("Reply to JK"). */
     var replyQuote: ReplyQuote? by mutableStateOf(null)
     /** Text to start the JK composer with ("Ask JK for a rest day"). */
     var composerDraft: String? by mutableStateOf(null)
+    /** Unread from JK (GET /api/week `unread`): the silver dot on his avatar. */
+    var unread: Int by mutableStateOf(0)
 
     private var serial = 0L
 
-    /** Show Today with these routes pushed (replacing what was pushed when [reset]). */
-    fun pushToday(vararg routes: ClientRoute, reset: Boolean = false) {
-        client = Client.today
-        todayRequest = RouteRequest(routes.toList(), reset, ++serial)
+    /** Show Act with these routes pushed (replacing what was pushed when [reset]). */
+    fun pushAct(vararg routes: ClientRoute, reset: Boolean = false) {
+        showJK = false
+        client = Client.act
+        actRequest = RouteRequest(routes.toList(), reset, ++serial)
     }
 
-    /** Show JK with these routes pushed. */
-    fun pushJK(vararg routes: ClientRoute, reset: Boolean = false) {
-        client = Client.jk
+    /** Open the JK sheet with these routes pushed on its stack (from its root when [reset]). */
+    fun openJK(vararg routes: ClientRoute, reset: Boolean = true) {
+        showJK = true
+        unread = 0
         jkRequest = RouteRequest(routes.toList(), reset, ++serial)
     }
 
+    /** Account › Membership, from wherever the client is ("See what coaching includes"). */
+    fun openMembership() = openJK(ClientRoute.account(membership = true))
+
+    fun select(tab: Client) {
+        showJK = false
+        client = tab
+    }
+
     /**
-     * The old tab names, kept so existing payloads and links still land:
-     * home → today; plan and calendar → today, then Your week; messages → JK;
-     * account → today, then the Account sheet.
+     * Deep links (plan-act-review.md, Navigation): today, home and the old
+     * plan tab → Act; messages and jk → the JK sheet; account → JK sheet ›
+     * Account; checkin and review → Review; letter → Review (the
+     * Accountability session if it is the latest letter).
      */
-    fun openLegacy(name: String) {
+    fun openLink(name: String, id: String? = null) {
         when (name) {
-            "home" -> client = Client.today
-            "plan", "calendar" -> pushToday(ClientRoute.yourWeek(null), reset = true)
-            "messages" -> client = Client.jk
-            "account" -> {
-                client = Client.today
-                showAccount = true
+            "today", "home", "plan", "act" -> select(Client.act)
+            "direction" -> select(Client.plan)
+            "calendar", "booking" -> openJK(ClientRoute.yourWeek(null))
+            "messages", "message", "jk", "form" -> openJK()
+            "account" -> openJK(ClientRoute.account())
+            "checkin", "review" -> select(Client.review)
+            "letter", "report" -> {
+                select(Client.review)
+                reviewLetter = id
             }
         }
     }
@@ -114,25 +140,23 @@ object TabRouter {
         when (kind) {
             null -> Unit
             "message" -> {
-                client = Client.jk
+                openJK()
                 coach = Coach.messages
             }
-            "report" -> if (id != null) pushJK(ClientRoute.letter(id), reset = true) else client = Client.jk
             "booking" -> {
-                pushToday(ClientRoute.yourWeek(null), reset = true)
+                openJK(ClientRoute.yourWeek(null))
                 coach = Coach.today
             }
-            "checkin" -> coach = Coach.today
-            "form" -> {
-                client = Client.today
+            "checkin", "form" -> {
+                openLink(kind, id)
                 coach = Coach.today
             }
-            else -> openLegacy(kind)
+            else -> openLink(kind, id)
         }
     }
 
-    /** Your week from Today, scrolled to a day. */
-    fun openWeek(day: String?) = pushToday(ClientRoute.yourWeek(day))
+    /** Your week, scrolled to a day, in the JK sheet. */
+    fun openWeek(day: String?) = openJK(ClientRoute.yourWeek(day), reset = false)
 }
 
 /**

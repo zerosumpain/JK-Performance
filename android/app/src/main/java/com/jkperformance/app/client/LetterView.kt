@@ -121,9 +121,9 @@ private fun Letter(r: Report, onAnswered: (Report) -> Unit) {
             PrimaryButton("Reply to JK", onClick = {
                 val id = r.id ?: return@PrimaryButton
                 TabRouter.replyQuote = TabRouter.ReplyQuote(id, r.displayHeadline)
-                // Off the JK tab (a letter opened from Today), take the letter off that stack too.
-                if (TabRouter.client != TabRouter.Client.jk) nav.pop()
-                TabRouter.pushJK(reset = true)
+                // Back to the thread: the JK sheet at its root (opened over the tab when the letter came from Review).
+                if (!TabRouter.showJK) nav.pop()
+                TabRouter.openJK(reset = true)
             })
         }
     }

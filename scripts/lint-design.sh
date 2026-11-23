@@ -91,8 +91,16 @@ lint_android() {
   check "Material icon sets: use IconKey / Glyph" \
     'androidx\.compose\.material\.icons|Icons\.(Outlined|Filled|Rounded|AutoMirrored|Default|Sharp|TwoTone)\.' "${all[@]}"
   check "retired chrome or tile (Atelier)" '\bJK\.chrome\b|ChromeButton\(|GhostButton\(|IconTile\(|sfIcon\(' "${all[@]}"
-  check "gradient or shadow: Atelier has none" \
+  check "gradient or shadow: only the chrome PrimaryButton (design layer) has one" \
     'Brush\.(linear|radial|vertical|horizontal|sweep)Gradient|\.shadow\(' "${screens[@]}"
+  # Plan. Act. Review.: client screens are monochrome silver. Status and booking-kind colours are coach-only.
+  local client=()
+  while IFS= read -r f; do client+=("$f"); done < <(find "$app/client" -name '*.kt' 2>/dev/null | sort)
+  check "colour on a client screen: the client app is monochrome (plan-act-review.md, Look)" \
+    'JKColors\.(onTrack|attention|data|error|urgent|inPerson|video|group|accentWash)\b|JKColors\.slot\(' "${client[@]}"
+  local design=()
+  while IFS= read -r f; do design+=("$f"); done < <(find "$app/design" -name '*.kt' | sort)
+  check "retired champagne: the palette is silver (design/Tokens.kt)" '(C8A970|B08F52)' "${all[@]}" "${design[@]}"
 }
 
 lint_desk() {

@@ -2,7 +2,11 @@ package com.jkperformance.app.design
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -85,6 +89,75 @@ object JKType {
 
     /** The monogram's text stand-in where a vector cannot go (notification text, a11y previews). */
     val monogram = serif(22f, 28f)
+
+    // Plan. Act. Review. (docs/design/plan-act-review.md, Type): Newsreader regular with one
+    // italic word ([emphasized]), tracked labels, quiet meta and italic annotations.
+
+    /** Screen titles: "Today's *work.*". */
+    val parTitle = serif(30f, 36f)
+    /** "Plan. *Act.* Review." on Welcome, and the exercise name in the session. */
+    val parDisplay = serif(34f, 40f)
+    /** Card titles: "Lower body strength, and three habits." */
+    val parCardTitle = serif(18f, 24f)
+    /** The season's aim. */
+    val parQuote = serif(24f, 30f)
+    /** JK's notes from the accountability session. */
+    val parNotes = serif(19f, 27f)
+    /** Priority and agreed-commitment titles, the planning date. */
+    val parSmall = serif(15f, 20f)
+    /** JK's cue in the session. */
+    val parCue = serif(17f, 24f, italic = true)
+    /** The word in the middle of a dial. */
+    val parDialWord = serif(24f, 30f, italic = true)
+    /** Tracked uppercase labels: "MONDAY 23 NOVEMBER", the tab words. */
+    val parLabel = sans(11f, 14f, FontWeight.SemiBold, tracking = 1.6f)
+    /** Body copy, 15/21. */
+    val parBody = sans(15f, 21f, FontWeight.Normal)
+    /** Card meta, 12/16. */
+    val meta = sans(12f, 16f, FontWeight.Normal)
+    /** Italic serif notes on a label row: "the work between sessions". */
+    val annotation = serif(13f, 18f, italic = true)
+    /** Primary and secondary button labels. */
+    val button = sans(16f, 20f, FontWeight.SemiBold)
+    val buttonSmall = sans(13f, 16f, FontWeight.SemiBold)
+    /** Habit names under their rings. */
+    val habitName = sans(13f, 17f, FontWeight.Normal)
+    /** The small "JK." mark. */
+    val markSmall = sans(10f, 12f, FontWeight.Bold)
+    /** The session header's name. */
+    val parHeadline = sans(15f, 20f, FontWeight.SemiBold)
+}
+
+/**
+ * Newsreader with the words between asterisks in italic, as the board sets
+ * titles: `emphasized("Good morning,\n*Sam.*", JKType.parTitle)`. The italic
+ * uses the italic cut at the same optical size, so it is a true italic.
+ */
+fun emphasized(text: String, style: TextStyle): AnnotatedString {
+    val size = style.fontSize.value
+    val italic = SpanStyle(fontFamily = newsreader(size, italic = true), fontStyle = FontStyle.Italic)
+    return buildAnnotatedString {
+        var inItalic = false
+        text.split('*').forEachIndexed { i, part ->
+            if (i > 0) inItalic = !inItalic
+            if (part.isEmpty()) return@forEachIndexed
+            if (inItalic) withStyle(italic) { append(part) } else append(part)
+        }
+    }
+}
+
+/**
+ * "Goblet *squat*": the last word of a name in italic and, after the first
+ * word, in lower case as the board sets it (spec, In the session). Words in
+ * capitals (RDL) keep them.
+ */
+fun lastWordItalic(name: String): String {
+    val trimmed = name.trim()
+    val cut = trimmed.lastIndexOf(' ')
+    if (cut <= 0) return "*$trimmed*"
+    val last = trimmed.substring(cut + 1)
+    val shown = if (last.length > 1 && last.drop(1).any { it.isUpperCase() }) last else last.lowercase()
+    return trimmed.substring(0, cut + 1) + "*" + shown + "*"
 }
 
 /**
