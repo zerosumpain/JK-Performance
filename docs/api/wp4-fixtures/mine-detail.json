@@ -1,0 +1,1194 @@
+{
+  "enrolment": {
+    "id": "ce_T6TVXx6qweVa",
+    "status": "active",
+    "campaign": {
+      "id": "cg_u8qSi4Q8PpHK",
+      "name": "12-Week Marathon Build",
+      "tagline": "From 10 km to race day, one week at a time",
+      "coverUrl": null
+    },
+    "day": 24,
+    "lengthDays": 84,
+    "startOn": "2026-11-01",
+    "endsOn": "2027-01-23",
+    "pct": 20,
+    "points": 130,
+    "today": [
+      {
+        "id": "ca_NL_iuNMNKrEo",
+        "day": 23,
+        "date": "2026-11-24",
+        "title": "Intervals 6 × 800 m",
+        "kind": "workout",
+        "detail": "",
+        "points": 15,
+        "required": true,
+        "spendPence": 0,
+        "guide": null,
+        "done": false,
+        "doneAt": null
+      }
+    ],
+    "next": [
+      {
+        "id": "ca_KVqFrQfQSGns",
+        "day": 24,
+        "date": "2026-11-25",
+        "title": "Mobility 10",
+        "kind": "habit",
+        "detail": "",
+        "points": 5,
+        "required": false,
+        "spendPence": 0,
+        "guide": {
+          "id": "gb_jYwQl3PK3wOY",
+          "title": "Mobility 10"
+        },
+        "done": false,
+        "doneAt": null
+      },
+      {
+        "id": "ca_6skbwBgccCLO",
+        "day": 26,
+        "date": "2026-11-27",
+        "title": "Long run 16 km",
+        "kind": "workout",
+        "detail": "",
+        "points": 20,
+        "required": true,
+        "spendPence": 0,
+        "guide": {
+          "id": "gb_hDxv41Peg6H_",
+          "title": "Fuel the long run"
+        },
+        "done": false,
+        "doneAt": null
+      },
+      {
+        "id": "ca__YGv2aTzt0mG",
+        "day": 27,
+        "date": "2026-11-28",
+        "title": "Weekly check-in",
+        "kind": "checkin",
+        "detail": "",
+        "points": 5,
+        "required": true,
+        "spendPence": 0,
+        "guide": null,
+        "done": false,
+        "doneAt": null
+      }
+    ],
+    "rank": {
+      "position": 3,
+      "of": 4
+    },
+    "planUrl": "https://jk.example.com/plan/ce_T6TVXx6qweVa.1799369296.VijdgmQ2HL2nWR7WbE0JAX2DpgfSZidN_hMxE6AThdE"
+  },
+  "campaign": {
+    "id": "cg_u8qSi4Q8PpHK",
+    "name": "12-Week Marathon Build",
+    "tagline": "From 10 km to race day, one week at a time",
+    "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
+    "coverUrl": null,
+    "lengthDays": 84,
+    "startMode": "fixed",
+    "welcomeText": "Welcome to the build. Read \"Your first week\" before Monday and tick as you go."
+  },
+  "phases": [
+    {
+      "id": "cph_19Q2nQxStAtZ",
+      "name": "Base",
+      "startDay": 0,
+      "endDay": 20,
+      "color": "chart-2",
+      "summary": "Easy miles, hills and habits.",
+      "startsOn": "2026-11-01",
+      "guide": {
+        "id": "gb_uz5SQfzB2U48",
+        "title": "Your first week"
+      }
+    },
+    {
+      "id": "cph_1UYEiPc2Bimf",
+      "name": "Build",
+      "startDay": 21,
+      "endDay": 48,
+      "color": "chart-1",
+      "summary": "Long runs grow; practise fuelling.",
+      "startsOn": "2026-11-22",
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      }
+    },
+    {
+      "id": "cph_z3Mg3SvWPRVv",
+      "name": "Peak",
+      "startDay": 49,
+      "endDay": 69,
+      "color": "chart-5",
+      "summary": "Biggest weeks. Sleep and mobility matter most.",
+      "startsOn": "2026-12-20",
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      }
+    },
+    {
+      "id": "cph_9WjYMY6ytRC7",
+      "name": "Taper",
+      "startDay": 70,
+      "endDay": 83,
+      "color": "chart-3",
+      "summary": "Less volume, same intensity.",
+      "startsOn": "2027-01-10",
+      "guide": {
+        "id": "gb_tWSP1b7_2Yxu",
+        "title": "Taper week"
+      }
+    }
+  ],
+  "activities": [
+    {
+      "id": "ca_4sqEdw79bmnA",
+      "day": 0,
+      "date": "2026-11-01",
+      "title": "Read: Your first week",
+      "kind": "read",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_uz5SQfzB2U48",
+        "title": "Your first week"
+      },
+      "done": true,
+      "doneAt": "2026-11-01T06:10:00.000Z"
+    },
+    {
+      "id": "ca_hycPNN5oza_u",
+      "day": 0,
+      "date": "2026-11-01",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-01T06:10:00.000Z"
+    },
+    {
+      "id": "ca_wei9pgjgGrV2",
+      "day": 1,
+      "date": "2026-11-02",
+      "title": "Buy race shoes",
+      "kind": "purchase",
+      "detail": "Get fitted. Neutral unless you have been told otherwise.",
+      "points": 5,
+      "required": true,
+      "spendPence": 12000,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_CsGv-8B9uUfG",
+      "day": 2,
+      "date": "2026-11-03",
+      "title": "Starting 5 km time trial",
+      "kind": "measure",
+      "detail": "Flat route, record the time.",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_EAM86gfY7GbG",
+      "day": 2,
+      "date": "2026-11-03",
+      "title": "Hills 8 × 60 s",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-03T08:12:00.000Z"
+    },
+    {
+      "id": "ca_42AqIN6vfxMv",
+      "day": 3,
+      "date": "2026-11-04",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": true,
+      "doneAt": "2026-11-04T06:13:00.000Z"
+    },
+    {
+      "id": "ca_-WKwKnJN6pvM",
+      "day": 5,
+      "date": "2026-11-06",
+      "title": "Long run 10 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": true,
+      "doneAt": "2026-11-06T08:15:00.000Z"
+    },
+    {
+      "id": "ca_9DwbS81nmI_x",
+      "day": 6,
+      "date": "2026-11-07",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-07T06:10:00.000Z"
+    },
+    {
+      "id": "ca_Nm3XbAGL6RFy",
+      "day": 7,
+      "date": "2026-11-08",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-08T07:11:00.000Z"
+    },
+    {
+      "id": "ca_uTAU3Hhl1Taj",
+      "day": 9,
+      "date": "2026-11-10",
+      "title": "Hills 8 × 60 s",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_FNzgPxveZqNu",
+      "day": 10,
+      "date": "2026-11-11",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_V1RYKuwXLd0W",
+      "day": 12,
+      "date": "2026-11-13",
+      "title": "Long run 12 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_PSEzpY0uw2In",
+      "day": 13,
+      "date": "2026-11-14",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-14T07:11:00.000Z"
+    },
+    {
+      "id": "ca_0GWIE32Xb7_o",
+      "day": 14,
+      "date": "2026-11-15",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_Pwpg20bTp9OW",
+      "day": 16,
+      "date": "2026-11-17",
+      "title": "Hills 8 × 60 s",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-17T07:14:00.000Z"
+    },
+    {
+      "id": "ca_AAiwS_7el9Zt",
+      "day": 17,
+      "date": "2026-11-18",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": true,
+      "doneAt": "2026-11-18T08:15:00.000Z"
+    },
+    {
+      "id": "ca_4k4NIhAIixj5",
+      "day": 19,
+      "date": "2026-11-20",
+      "title": "Long run 14 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": true,
+      "doneAt": "2026-11-20T07:11:00.000Z"
+    },
+    {
+      "id": "ca_WhZjuPF8QI9O",
+      "day": 20,
+      "date": "2026-11-21",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-21T08:12:00.000Z"
+    },
+    {
+      "id": "ca_9wZnDGzB7ihF",
+      "day": 21,
+      "date": "2026-11-22",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": true,
+      "doneAt": "2026-11-22T06:13:00.000Z"
+    },
+    {
+      "id": "ca_NL_iuNMNKrEo",
+      "day": 23,
+      "date": "2026-11-24",
+      "title": "Intervals 6 × 800 m",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_KVqFrQfQSGns",
+      "day": 24,
+      "date": "2026-11-25",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_6skbwBgccCLO",
+      "day": 26,
+      "date": "2026-11-27",
+      "title": "Long run 16 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca__YGv2aTzt0mG",
+      "day": 27,
+      "date": "2026-11-28",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_AczEIpmwHzS1",
+      "day": 28,
+      "date": "2026-11-29",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_Ts4TjxuT3KW1",
+      "day": 30,
+      "date": "2026-12-01",
+      "title": "Intervals 6 × 800 m",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_pcfD3X-asfAy",
+      "day": 31,
+      "date": "2026-12-02",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_RoNO4RCJ39wJ",
+      "day": 33,
+      "date": "2026-12-04",
+      "title": "Long run 18 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_nJg4r_DvYSbc",
+      "day": 34,
+      "date": "2026-12-05",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_l2t-kptMdgwg",
+      "day": 35,
+      "date": "2026-12-06",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_LA4Ij76pxU0W",
+      "day": 37,
+      "date": "2026-12-08",
+      "title": "Intervals 6 × 800 m",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_VWVHZ8yrf16P",
+      "day": 38,
+      "date": "2026-12-09",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_fhN-aja9RwF0",
+      "day": 40,
+      "date": "2026-12-11",
+      "title": "Long run 16 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_S_Zd8duv6GUC",
+      "day": 41,
+      "date": "2026-12-12",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_2wN6QaVcoO5f",
+      "day": 42,
+      "date": "2026-12-13",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_zAhgN9ppnvFK",
+      "day": 44,
+      "date": "2026-12-15",
+      "title": "Intervals 6 × 800 m",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_k0f2vDdKYWRk",
+      "day": 45,
+      "date": "2026-12-16",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_WErIgIkoLEZJ",
+      "day": 47,
+      "date": "2026-12-18",
+      "title": "Long run 20 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_znNzRUnrY_nD",
+      "day": 48,
+      "date": "2026-12-19",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_iNiJ6mWDQknP",
+      "day": 49,
+      "date": "2026-12-20",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_QDk_Tmol9hnX",
+      "day": 51,
+      "date": "2026-12-22",
+      "title": "Intervals 6 × 800 m",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_ayDgMBVSKfoa",
+      "day": 52,
+      "date": "2026-12-23",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_GHcoJ2SeFUA4",
+      "day": 54,
+      "date": "2026-12-25",
+      "title": "Long run 22 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_ECoCoHXbxlfE",
+      "day": 55,
+      "date": "2026-12-26",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_mXY_WtGAJnqN",
+      "day": 56,
+      "date": "2026-12-27",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_SGrxBWaIanCX",
+      "day": 58,
+      "date": "2026-12-29",
+      "title": "Intervals 6 × 800 m",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_LFCmmPCdslSF",
+      "day": 59,
+      "date": "2026-12-30",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_KpLk9xkJsF8e",
+      "day": 61,
+      "date": "2027-01-01",
+      "title": "Long run 24 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_lZaLvbmmAcSa",
+      "day": 62,
+      "date": "2027-01-02",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_RMOdpfg9nesz",
+      "day": 63,
+      "date": "2027-01-03",
+      "title": "Easy run 6 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_x2LHs37iWk3F",
+      "day": 65,
+      "date": "2027-01-05",
+      "title": "Race-pace 5 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_1xfg2i-RS2tr",
+      "day": 66,
+      "date": "2027-01-06",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_CLf7CIHxV-Oq",
+      "day": 68,
+      "date": "2027-01-08",
+      "title": "Long run 26 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_hDxv41Peg6H_",
+        "title": "Fuel the long run"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_ikFQ0r-jbO8a",
+      "day": 69,
+      "date": "2027-01-09",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_U3Vt9PCpXRF6",
+      "day": 70,
+      "date": "2027-01-10",
+      "title": "Easy run 5 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_vKDiTa7vYrkw",
+      "day": 72,
+      "date": "2027-01-12",
+      "title": "Race-pace 5 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_pjdSbpBi0hpz",
+      "day": 73,
+      "date": "2027-01-13",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_Bit6Hl7HxXQ7",
+      "day": 75,
+      "date": "2027-01-15",
+      "title": "Long run 18 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_tWSP1b7_2Yxu",
+        "title": "Taper week"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_5ZmWmuNTWg_t",
+      "day": 76,
+      "date": "2027-01-16",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_aS1_IO89_sPm",
+      "day": 77,
+      "date": "2027-01-17",
+      "title": "Easy run 5 km",
+      "kind": "workout",
+      "detail": "Conversational pace. You should be able to talk.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_d0AZ7vVQCp45",
+      "day": 77,
+      "date": "2027-01-17",
+      "title": "Race-day kit check",
+      "kind": "task",
+      "detail": "Lay everything out. Nothing new on race day.",
+      "points": 10,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_DtoibisfBor7",
+      "day": 79,
+      "date": "2027-01-19",
+      "title": "Race-pace 5 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 15,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_plreduOfmh15",
+      "day": 80,
+      "date": "2027-01-20",
+      "title": "Mobility 10",
+      "kind": "habit",
+      "detail": "",
+      "points": 5,
+      "required": false,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_jYwQl3PK3wOY",
+        "title": "Mobility 10"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_WeiR7CVkUkTp",
+      "day": 82,
+      "date": "2027-01-22",
+      "title": "Long run 12 km",
+      "kind": "workout",
+      "detail": "",
+      "points": 20,
+      "required": true,
+      "spendPence": 0,
+      "guide": {
+        "id": "gb_tWSP1b7_2Yxu",
+        "title": "Taper week"
+      },
+      "done": false,
+      "doneAt": null
+    },
+    {
+      "id": "ca_bsDntKI-fcRi",
+      "day": 83,
+      "date": "2027-01-23",
+      "title": "Weekly check-in",
+      "kind": "checkin",
+      "detail": "",
+      "points": 5,
+      "required": true,
+      "spendPence": 0,
+      "guide": null,
+      "done": false,
+      "doneAt": null
+    }
+  ],
+  "kit": [
+    {
+      "id": "ck_BVbV9B057KlA",
+      "name": "Running shoes",
+      "estPence": 12000,
+      "required": true,
+      "url": "https://www.runnersneed.com/",
+      "note": "Get fitted in store.",
+      "position": 0,
+      "bought": true,
+      "spentPence": 12999
+    },
+    {
+      "id": "ck_S74mLtrKAnDY",
+      "name": "Energy gels (box of 12)",
+      "estPence": 2500,
+      "required": true,
+      "url": null,
+      "note": "",
+      "position": 1,
+      "bought": true,
+      "spentPence": 2500
+    },
+    {
+      "id": "ck_t85ZWFFUuyx3",
+      "name": "Running belt",
+      "estPence": 1500,
+      "required": false,
+      "url": null,
+      "note": "",
+      "position": 2,
+      "bought": false,
+      "spentPence": null
+    },
+    {
+      "id": "ck_iuCEWv1B4iU5",
+      "name": "Foam roller",
+      "estPence": 2000,
+      "required": false,
+      "url": null,
+      "note": "",
+      "position": 3,
+      "bought": true,
+      "spentPence": 2200
+    },
+    {
+      "id": "ck_rUSYcnnV5US4",
+      "name": "Anti-chafe balm",
+      "estPence": 800,
+      "required": true,
+      "url": null,
+      "note": "",
+      "position": 4,
+      "bought": true,
+      "spentPence": 800
+    },
+    {
+      "id": "ck_IMMkM07xAPPC",
+      "name": "Reflective vest",
+      "estPence": 1800,
+      "required": false,
+      "url": null,
+      "note": "",
+      "position": 5,
+      "bought": false,
+      "spentPence": null
+    }
+  ]
+}

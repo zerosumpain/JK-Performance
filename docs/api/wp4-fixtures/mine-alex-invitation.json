@@ -1,0 +1,94 @@
+{
+  "invitations": [
+    {
+      "enrolmentId": "ce_3yrC1pueo4IJ",
+      "status": "invited",
+      "campaign": {
+        "id": "cg_u8qSi4Q8PpHK",
+        "name": "12-Week Marathon Build",
+        "tagline": "From 10 km to race day, one week at a time",
+        "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
+        "coverUrl": null,
+        "startMode": "fixed",
+        "startsOn": "2026-11-01",
+        "endsOn": "2027-01-23",
+        "lengthDays": 84
+      },
+      "feePence": 4900,
+      "discountPence": 0,
+      "discountCode": null,
+      "kit": {
+        "required": [
+          {
+            "name": "Running shoes",
+            "estPence": 12000
+          },
+          {
+            "name": "Energy gels (box of 12)",
+            "estPence": 2500
+          },
+          {
+            "name": "Anti-chafe balm",
+            "estPence": 800
+          }
+        ],
+        "optional": [
+          {
+            "name": "Running belt",
+            "estPence": 1500
+          },
+          {
+            "name": "Foam roller",
+            "estPence": 2000
+          },
+          {
+            "name": "Reflective vest",
+            "estPence": 1800
+          }
+        ],
+        "requiredPence": 15300,
+        "optionalPence": 5300
+      },
+      "expectedSpendPence": 15300,
+      "placesLeft": 2,
+      "respondBy": "2026-12-06",
+      "welcomeText": "Welcome to the build. Read \"Your first week\" before Monday and tick as you go."
+    }
+  ],
+  "enrolments": [
+    {
+      "id": "ce_y8xWBLhca_8s",
+      "status": "completed",
+      "campaign": {
+        "id": "cg_RSQHjRLvCdUM",
+        "name": "Ski-fit 6 weeks",
+        "tagline": "Legs, lungs and knees for the slopes",
+        "coverUrl": null
+      },
+      "day": 42,
+      "lengthDays": 42,
+      "startOn": "2026-09-25",
+      "endsOn": "2026-11-05",
+      "pct": 100,
+      "points": 270,
+      "today": [
+        {
+          "id": "ca_e-RjcuBelNHa",
+          "day": 41,
+          "date": "2026-11-05",
+          "title": "Weekly check-in",
+          "kind": "checkin",
+          "detail": "",
+          "points": 5,
+          "required": true,
+          "spendPence": 0,
+          "guide": null,
+          "done": true,
+          "doneAt": "2026-11-05T18:20:00.000Z"
+        }
+      ],
+      "next": [],
+      "planUrl": "https://jk.example.com/plan/ce_y8xWBLhca_8s.1799369296.KjTdpSQHjz2ze3QHWuaiGUx76OQq89ZjlAYOetl9_F8"
+    }
+  ]
+}

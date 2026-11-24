@@ -1,0 +1,97 @@
+{
+  "guides": [
+    {
+      "id": "gb_GulC4x2n8iL3",
+      "title": "Ski-fit warm-up",
+      "summary": "A 12-minute warm-up for the slopes and for every session in the block.",
+      "tags": [
+        "ski",
+        "mobility"
+      ],
+      "status": "published",
+      "blockCount": 3,
+      "readMinutes": 1,
+      "cover": null,
+      "createdAt": "2026-10-30T09:00:00.000Z",
+      "updatedAt": "2026-11-19T09:00:00.000Z",
+      "opens": 0
+    },
+    {
+      "id": "gb_by685wn67EW3",
+      "title": "Sleep basics",
+      "summary": "Five habits that buy you an extra hour of real recovery.",
+      "tags": [
+        "recovery"
+      ],
+      "status": "published",
+      "blockCount": 3,
+      "readMinutes": 1,
+      "cover": null,
+      "createdAt": "2026-10-23T09:00:00.000Z",
+      "updatedAt": "2026-11-16T09:00:00.000Z",
+      "opens": 2
+    },
+    {
+      "id": "gb_jYwQl3PK3wOY",
+      "title": "Mobility 10",
+      "summary": "Ten minutes, four moves, before every run or lower session.",
+      "tags": [
+        "mobility"
+      ],
+      "status": "published",
+      "blockCount": 3,
+      "readMinutes": 1,
+      "cover": null,
+      "createdAt": "2026-10-16T09:00:00.000Z",
+      "updatedAt": "2026-11-13T09:00:00.000Z",
+      "opens": 1
+    },
+    {
+      "id": "gb_uz5SQfzB2U48",
+      "title": "Your first week",
+      "summary": "How the campaign works, what to tick, and how to tell me how it went.",
+      "tags": [
+        "start"
+      ],
+      "status": "published",
+      "blockCount": 6,
+      "readMinutes": 1,
+      "cover": null,
+      "createdAt": "2026-10-09T09:00:00.000Z",
+      "updatedAt": "2026-11-10T09:00:00.000Z",
+      "opens": 2
+    },
+    {
+      "id": "gb_tWSP1b7_2Yxu",
+      "title": "Taper week",
+      "summary": "Less running, more sleep, and why you will feel sluggish (it is working).",
+      "tags": [
+        "running",
+        "race"
+      ],
+      "status": "published",
+      "blockCount": 4,
+      "readMinutes": 1,
+      "cover": null,
+      "createdAt": "2026-10-02T09:00:00.000Z",
+      "updatedAt": "2026-11-07T09:00:00.000Z",
+      "opens": 2
+    },
+    {
+      "id": "gb_hDxv41Peg6H_",
+      "title": "Fuel the long run",
+      "summary": "What to eat before, during and after your longest run of the week.",
+      "tags": [
+        "running",
+        "nutrition"
+      ],
+      "status": "published",
+      "blockCount": 12,
+      "readMinutes": 1,
+      "cover": null,
+      "createdAt": "2026-09-25T09:00:00.000Z",
+      "updatedAt": "2026-11-04T09:00:00.000Z",
+      "opens": 3
+    }
+  ]
+}

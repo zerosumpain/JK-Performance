@@ -1,0 +1,150 @@
+{
+  "campaigns": [
+    {
+      "id": "cg_u8qSi4Q8PpHK",
+      "name": "12-Week Marathon Build",
+      "tagline": "From 10 km to race day, one week at a time",
+      "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
+      "coverMediaId": null,
+      "coverUrl": null,
+      "status": "live",
+      "startMode": "fixed",
+      "startsOn": "2026-11-01",
+      "endsOn": "2027-01-23",
+      "lengthDays": 84,
+      "feePence": 4900,
+      "capacity": 6,
+      "waitlist": true,
+      "public": false,
+      "challengeId": null,
+      "settings": {
+        "dailyNudge": true,
+        "nudgeAt": "07:00",
+        "showRank": true
+      },
+      "welcomeText": "Welcome to the build. Read \"Your first week\" before Monday and tick as you go.",
+      "completionText": "You did it. Twelve weeks, every long run. Enjoy race day.",
+      "createdAt": "2026-10-15T07:30:00.000Z",
+      "updatedAt": "2026-11-24T00:48:16.519Z",
+      "enrolled": 4,
+      "invited": 1,
+      "placesLeft": 2,
+      "avgProgress": 24,
+      "behind": 2,
+      "activityCount": 64,
+      "phaseCount": 4,
+      "expectedSpendPence": 15300,
+      "requiredKitPence": 15300,
+      "people": [
+        {
+          "id": "u_fGx2sUY4KLMF",
+          "name": "Priya Shah",
+          "initials": "PS"
+        },
+        {
+          "id": "u_Y94-s_UtqNb9",
+          "name": "Rory Kane",
+          "initials": "RK"
+        },
+        {
+          "id": "u_DzavUIdHs2JS",
+          "name": "Sam Carter",
+          "initials": "SC"
+        },
+        {
+          "id": "u_CW2TA6R9-JAv",
+          "name": "Leo Grant",
+          "initials": "LG"
+        }
+      ],
+      "today": 24
+    },
+    {
+      "id": "cg_Jht_RTtQy3pN",
+      "name": "January Reset",
+      "tagline": "Thirty days to get the basics back",
+      "description": "A daily walk, protein at breakfast, lights out by eleven and one short session a week. Small things, every day.",
+      "coverMediaId": null,
+      "coverUrl": null,
+      "status": "draft",
+      "startMode": "rolling",
+      "startsOn": null,
+      "endsOn": null,
+      "lengthDays": 30,
+      "feePence": 0,
+      "capacity": null,
+      "waitlist": true,
+      "public": true,
+      "challengeId": null,
+      "settings": {
+        "dailyNudge": true,
+        "nudgeAt": "07:00",
+        "showRank": false
+      },
+      "welcomeText": "Start when you are ready. One day at a time.",
+      "completionText": "",
+      "createdAt": "2026-10-15T07:30:00.000Z",
+      "updatedAt": "2026-11-24T00:48:16.519Z",
+      "enrolled": 0,
+      "invited": 0,
+      "placesLeft": null,
+      "avgProgress": 0,
+      "behind": 0,
+      "activityCount": 42,
+      "phaseCount": 3,
+      "expectedSpendPence": 0,
+      "requiredKitPence": 0,
+      "people": [],
+      "today": null
+    },
+    {
+      "id": "cg_RSQHjRLvCdUM",
+      "name": "Ski-fit 6 weeks",
+      "tagline": "Legs, lungs and knees for the slopes",
+      "description": "Strength, power and balance for a week on the mountain.",
+      "coverMediaId": null,
+      "coverUrl": null,
+      "status": "ended",
+      "startMode": "fixed",
+      "startsOn": "2026-09-25",
+      "endsOn": "2026-11-05",
+      "lengthDays": 42,
+      "feePence": 3500,
+      "capacity": 8,
+      "waitlist": true,
+      "public": false,
+      "challengeId": null,
+      "settings": {
+        "dailyNudge": true,
+        "nudgeAt": "07:00",
+        "showRank": false
+      },
+      "welcomeText": "",
+      "completionText": "Ready for the hill. Send me a photo from the top.",
+      "createdAt": "2026-10-15T07:30:00.000Z",
+      "updatedAt": "2026-11-24T00:48:16.519Z",
+      "enrolled": 2,
+      "invited": 0,
+      "placesLeft": 6,
+      "avgProgress": 100,
+      "behind": 0,
+      "activityCount": 24,
+      "phaseCount": 3,
+      "expectedSpendPence": 1800,
+      "requiredKitPence": 1800,
+      "people": [
+        {
+          "id": "u_DzavUIdHs2JS",
+          "name": "Sam Carter",
+          "initials": "SC"
+        },
+        {
+          "id": "u_mr-IG2AeA6FP",
+          "name": "Alex Morgan",
+          "initials": "AM"
+        }
+      ],
+      "today": null
+    }
+  ]
+}
