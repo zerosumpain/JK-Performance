@@ -152,6 +152,12 @@ final class MediaFiles {
     static let shared = MediaFiles()
     private var local: [String: URL] = [:]
 
+    /// Deletes every downloaded file (sign-out, account deletion, switching account).
+    func clear() {
+        for url in local.values { try? FileManager.default.removeItem(at: url) }
+        local = [:]
+    }
+
     func file(for mediaId: String, kind: String?) async throws -> URL {
         try await file(path: "/api/media/\(seg(mediaId))", key: mediaId, ext: kind == "video" ? "mp4" : "m4a")
     }

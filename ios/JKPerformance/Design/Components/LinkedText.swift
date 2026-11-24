@@ -30,13 +30,20 @@ struct LinkedText: View {
 extension View {
     /// Our own plan links (`/plan/<token>` and its guides) open in the app for
     /// a client; everything else opens in the browser.
-    func planLinksOpenInApp(_ open: Bool = true) -> some View {
-        environment(\.openURL, OpenURLAction { url in
-            guard open, let link = PlanLink.parse(url, host: APIClient.shared.baseURL.host) else { return .systemAction }
+    func planLinksOpenInApp() -> some View { modifier(PlanLinksInApp()) }
+}
+
+private struct PlanLinksInApp: ViewModifier {
+    func body(content: Content) -> some View {
+        let host = APIClient.shared.baseURL.host
+        content.environment(\.openURL, OpenURLAction { url in
+            guard let link = PlanLink.parse(url, host: host) else { return .systemAction }
+            let route: ClientRoute
             switch link {
-            case .enrolment(let id): TabRouter.shared.push(.campaign(id))
-            case .guide(let id): TabRouter.shared.push(.coachGuide(id))
+            case .enrolment(let id): route = .campaign(id)
+            case .guide(let id): route = .coachGuide(id)
             }
+            Task { @MainActor in TabRouter.shared.push(route) }
             return .handled
         })
     }

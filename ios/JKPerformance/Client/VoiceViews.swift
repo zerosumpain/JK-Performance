@@ -770,7 +770,6 @@ struct VoiceConsentSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: JK.Space.s) {
                     point("JK hears every voice note, whichever you choose.")
-                    point("Nothing is shared with anyone else.")
                     point("Change it any time in Account › Privacy.")
                 }
                 VStack(spacing: JK.Space.m) {
