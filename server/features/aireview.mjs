@@ -40,9 +40,13 @@ function rateLimit(ctx) {
   if (!limit(`ai:${ctx.user.id}`, { max: 30, perMs: 60_000 })) fail(429, 'Too many AI requests; try again in a minute');
 }
 
-/** An AiError as an HTTP failure ("AI unavailable: …", 429 for the daily cap). */
+/**
+ * An AiError as an HTTP failure the desk can show: 429 for the daily cap, 409
+ * when AI is off, and 424 "AI unavailable: …" for everything upstream (app.mjs
+ * hides the message of any 5xx, and the coach must see why; never a stub).
+ */
 function aiFail(e) {
-  if (e instanceof AiError) fail(e.status, e.message);
+  if (e instanceof AiError) fail(e.status >= 500 ? 424 : e.status, e.message);
   throw e;
 }
 
