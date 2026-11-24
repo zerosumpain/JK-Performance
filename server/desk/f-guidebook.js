@@ -162,7 +162,7 @@ export function blockEditor({ blocks = [], onChange = null, compact = false } = 
         status.textContent = 'Uploading…';
         try {
           const type = f.type || (b.t === 'audio' ? 'audio/mp4' : b.t === 'video' ? 'video/mp4' : 'image/jpeg');
-          const m = await apiUpload('/api/media?purpose=other', f, type);
+          const m = await apiUpload('/api/media?purpose=guide', f, type);
           set('mediaId', m.id);
           status.textContent = 'Uploaded';
         } catch (err) { status.textContent = err.message; }

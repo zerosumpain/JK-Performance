@@ -1,5 +1,5 @@
 /*
- * Today: the Command Centre (desk v2, F1) and Business.
+ * Today: the Command Centre (desk v2, F1). /business redirects to /revenue.
  *
  * Today is a bento of tiles, every one from registerWidget: WP1's five
  * (needs, today-sessions, inbox, letters, activity, in f-command-widgets.js)
@@ -10,16 +10,11 @@
  * events, so the screen never redraws as a whole.
  */
 import {
-  MONTHS_LONG, api, card, emptyCard, errorLine, eyebrow, fill, fmtMoney, h, icon, link, loading, parseDay, personRow, prefs, q,
-  registered, route, screenHeader, segmented, stat, state, svgEl, toast, todayLondon,
+  MONTHS_LONG, errorLine, fill, fmtMoney, go, h, icon, link, parseDay, prefs, registered, route, state, toast, todayLondon,
 } from './core.js';
 import { coachFirst, greeting, onRefresh, openBrief, summary } from './f-command-core.js';
 import { bento, tile } from './ui.js';
 
-const enc = encodeURIComponent;
-const clientPath = (id, tab) => `/clients/${enc(id)}${tab ? `/${tab}` : ''}`;
-/** A back link over a pushed screen (the iPhone's navigation back button). */
-const backLink = (to, label) => link(to, { class: 'back-link' }, icon('back', 16), label);
 const LAYOUT_KEY = 'desk.today.layout';
 const DAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -126,61 +121,5 @@ export async function widgetGrid(view, { all = false, editable = false } = {}) {
 // MARK: - Business
 
 /** The MRR line: slate, no fill, no axes. */
-function mrrChart(series) {
-  const points = series.map(s => s.pence / 100);
-  if (points.length < 2) return null;
-  const W = 600, H = 90;
-  const max = Math.max(...points), min = Math.min(...points);
-  const span = Math.max(max - min, 1);
-  const lo = min - span * 0.1, hi = max + span * 0.1;
-  const x = i => (i / (points.length - 1)) * W;
-  const y = v => H - ((v - lo) / (hi - lo)) * H;
-  const line = points.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
-  return svgEl('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'mrr-chart', role: 'img', 'aria-label': 'Monthly recurring revenue over the period' },
-    svgEl('path', { d: line, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
-}
-
-const delta = v => (v < 0 ? `−${Math.abs(v)}` : v > 0 ? `+${v}` : `${v}`);
-const attentionIcon = kind => (kind === 'checkin' ? 'checkIn' : kind === 'payment' ? 'tag' : 'noTraining');
-
-function businessBody(b) {
-  return [
-    card({ class: 'mrr-card' },
-      h('div', { class: 'spread' }, h('div', { class: 'eyebrow m0' }, 'Monthly recurring revenue'),
-        b.mrrDeltaPct !== null && b.mrrDeltaPct !== undefined ? h('span', { class: 'delta-badge' }, `${delta(b.mrrDeltaPct)}%`) : null),
-      h('div', { class: 'mrr-value' }, fmtMoney(b.mrrPence)),
-      mrrChart(b.series || [])),
-    h('div', { class: 'grid4 biz-stats' },
-      stat(String(b.active), 'Active'), stat(String(b.new), 'New'), stat(String(b.churned), 'Churned'),
-      stat(b.adherence === null || b.adherence === undefined ? '–' : `${b.adherence}%`, 'Adherence')),
-    eyebrow('Members by plan', link('/business/plans', { class: 'row gap4' }, icon('tag', 16), 'Plans & prices')),
-    b.plans && b.plans.length ? h('div', { class: 'stats' }, b.plans.map(p => stat(String(p.members), p.name))) : null,
-    eyebrow('Needs attention', 'Auto-flagged'),
-    b.attention.length
-      ? card({ class: 'flush' }, b.attention.map(a => personRow(a.client, a.reason, clientPath(a.client.id), {
-        trailing: h('span', { class: 'muted' }, icon(attentionIcon(a.kind), 18)),
-      })))
-      : emptyCard('check', 'Everyone’s on track'),
-  ];
-}
-
-route('/business', async (el, _params, view) => {
-  let period = 'month';
-  const month = MONTHS_LONG[parseDay(todayLondon()).getUTCMonth()];
-  const head = h('div');
-  const body = h('div');
-  el.append(backLink('/today', 'Today'), head, body);
-  const draw = async () => {
-    fill(head, screenHeader(month, 'Business', segmented([['week', 'Week'], ['month', 'Month']], period, v => { period = v; draw(); })));
-    fill(body, loading());
-    const asked = period;
-    try {
-      const b = await api('GET', `/api/coach/business?${q({ period })}`);
-      if (view.fresh() && asked === period) fill(body, businessBody(b));
-    } catch (err) {
-      if (view.fresh()) fill(body, errorLine(err), h('button', { class: 'btn small', type: 'button', onclick: draw }, 'Try again'));
-    }
-  };
-  await draw();
-}, { nav: 'today' });
-
+// Business moved to /revenue (WP3, F26); old links and bookmarks land there.
+route('/business', () => go('/revenue', { replace: true }), { nav: 'today' });

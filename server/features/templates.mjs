@@ -58,7 +58,11 @@ function shortcutFree(db, coachId, shortcut, exceptId = null) {
 
 function list(_req, ctx) {
   requireCoach(ctx);
-  const rows = ctx.db.prepare('SELECT * FROM message_templates WHERE coach_id=? ORDER BY category, name').all(ctx.user.id);
+  // ?category= narrows the list (an unknown category has no templates, so callers fall back to their own words).
+  const category = ctx.query.category === undefined || ctx.query.category === '' ? null : String(ctx.query.category);
+  const rows = category === null
+    ? ctx.db.prepare('SELECT * FROM message_templates WHERE coach_id=? ORDER BY category, name').all(ctx.user.id)
+    : ctx.db.prepare('SELECT * FROM message_templates WHERE coach_id=? AND category=? ORDER BY name').all(ctx.user.id, category);
   return { templates: rows.map(templateOut), categories: CATEGORIES };
 }
 

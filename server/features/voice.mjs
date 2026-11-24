@@ -503,12 +503,23 @@ function timeline(db, coach, client, before, lim) {
   });
 }
 
+const VENDORS = { google: 'Google', openai: 'OpenAI', mistralai: 'Mistral AI', anthropic: 'Anthropic', 'meta-llama': 'Meta', qwen: 'Alibaba Qwen', deepseek: 'DeepSeek', 'x-ai': 'xAI', microsoft: 'Microsoft' };
+/** The vendor of AI_AUDIO_MODEL ("google/gemini-2.5-flash" → "Google"), for the apps' consent sheet (D16); null when unset. */
+export function voiceProvider(model = process.env.AI_AUDIO_MODEL) {
+  const prefix = String(model ?? '').split('/')[0].trim().toLowerCase();
+  if (!prefix || prefix === String(model).trim().toLowerCase()) return null;
+  return VENDORS[prefix] ?? prefix.replace(/(^|[-_])([a-z])/g, (_, s, c) => `${s ? ' ' : ''}${c.toUpperCase()}`);
+}
+
 function meFeatures(db, user) {
+  // The iPhone app reads voiceProvider, the Android app voiceAiProvider: both carry the audio model's vendor.
+  const provider = voiceProvider();
+  const vendor = provider ? { voiceProvider: provider, voiceAiProvider: provider } : {};
   if (user.role === 'coach') {
     const s = aiSettings(db, user.id);
-    return { voiceMaxSec: MAX_SEC, voiceTranscription: s.enabled && s.transcribe ? 'on' : 'off' };
+    return { voiceMaxSec: MAX_SEC, voiceTranscription: s.enabled && s.transcribe ? 'on' : 'off', ...vendor };
   }
-  return { voiceMaxSec: MAX_SEC, voiceTranscription: consentOf(db, user.id).voice };
+  return { voiceMaxSec: MAX_SEC, voiceTranscription: consentOf(db, user.id).voice, ...vendor };
 }
 
 function exportFor(db, user) {
@@ -565,7 +576,11 @@ function buildDemo(db, ctx) {
   voiceSchema(db);
   const ids = JSON.stringify(clients.map(c => c.id));
   for (const t of ['voice_analyses', 'client_ai_consent', 'voice_client_state']) db.prepare(`DELETE FROM ${t} WHERE client_id IN (SELECT value FROM json_each(?))`).run(ids);
-  const nowAt = londonToUtc(today, '12:00').getTime();
+  // Anchored at noon, or just before the build when it runs earlier on the same day (the nightly rebuild is after 03:00), so no note
+  // is in the future: the client's /api/timeline leaves future rows out.
+  const noon = londonToUtc(today, '12:00').getTime();
+  const real = Date.now();
+  const nowAt = real >= londonToUtc(today, '00:00').getTime() && real < noon ? real - 10 * 60_000 : noon;
   const consented = new Set();
   for (const n of DEMO_NOTES) {
     const client = byName[n.who];

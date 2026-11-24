@@ -7,7 +7,7 @@ import { fail, instant, num, oneOf } from '../http.mjs';
 import { needsYou } from '../needs.mjs';
 import { notifyCoach, quietWindow, TONES } from '../notifications.mjs';
 import { limit as rateLimit } from '../ratelimit.mjs';
-import { allEvents, allFacts, hooks } from '../registry.mjs';
+import { allEvents, allFacts, featureNames, hooks } from '../registry.mjs';
 import { likeAny, matchScore } from '../search.mjs';
 import { coachPref, newId, nowIso, setCoachPref, tx } from '../store.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, weekday } from '../time.mjs';
@@ -48,7 +48,7 @@ const ownClient = (db, coachId, clientId) => (clientId
 
 // MARK: - Inbox (F4)
 
-export const INBOX_KINDS = ['message', 'voice', 'form', 'checkin', 'flag', 'draft', 'lead', 'waitlist'];
+export const INBOX_KINDS = ['message', 'voice', 'form', 'checkin', 'flag', 'draft', 'lead', 'waitlist', 'testimonial'];
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
 /**
@@ -439,6 +439,27 @@ export const NOTIFY_KINDS = [
   { kind: 'pain', label: 'Pain in check-ins', detail: 'A weekly check-in reports a sore area.', event: 'checkin.submitted', urgent: true },
 ];
 
+/**
+ * Other packages' notification kinds (notifyCoach honours notify.prefs for every kind), listed in Settings ›
+ * Notifications when their feature is loaded.
+ */
+const OTHER_KINDS = [
+  { kind: 'voiceFlag', feature: 'voice', label: 'Voice notes that need you', detail: 'A client voice note mentions pain, a health worry or something risky.', urgent: true },
+  { kind: 'calendar.conflict', feature: 'calsync', label: 'Calendar clashes', detail: 'A session clashes with your calendar or time off.', urgent: true },
+  { kind: 'detractor', feature: 'insights', label: 'Low pulse scores', detail: 'A client scores you 6 or below in a pulse survey.', urgent: true },
+  { kind: 'waitlist.matched', feature: 'calsync', label: 'Waitlist matches', detail: 'A freed slot suits someone on the waitlist.' },
+  { kind: 'lead', feature: 'leads', label: 'New enquiries', detail: 'Someone fills in your enquiry form.' },
+  { kind: 'invoiceOverdue', feature: 'billing', label: 'Overdue invoices', detail: 'Dunning reaches the step where a personal word helps.' },
+  { kind: 'invoiceDraft', feature: 'billing', label: 'Invoices ready to issue', detail: 'A recurring or campaign invoice is drafted for you.' },
+  { kind: 'task', feature: 'tasks', label: 'Tasks due', detail: 'One of your tasks falls due.' },
+  { kind: 'streak', feature: 'accountability', label: 'Streak milestones', detail: 'A client reaches a 7, 14, 30, 60 or 100-day streak.' },
+  { kind: 'automation', feature: 'automations', label: 'Automation limits', detail: 'An automation hits its daily limit.' },
+];
+const allNotifyKinds = () => {
+  const loaded = new Set(featureNames());
+  return [...NOTIFY_KINDS, ...OTHER_KINDS.filter(k => loaded.has(k.feature))];
+};
+
 const kindOn = (db, coachId, kind) => {
   const p = coachPref(db, coachId, 'notify.prefs', {});
   return !(p && typeof p === 'object' && p[kind] === false);
@@ -494,7 +515,7 @@ const handlers = {
 
 function notifySettingsOut(db, coachId) {
   return {
-    kinds: NOTIFY_KINDS.map(k => ({ kind: k.kind, label: k.label, detail: k.detail, urgent: !!k.urgent, on: kindOn(db, coachId, k.kind) })),
+    kinds: allNotifyKinds().map(k => ({ kind: k.kind, label: k.label, detail: k.detail, urgent: !!k.urgent, on: kindOn(db, coachId, k.kind) })),
     pushUrgent: coachPref(db, coachId, 'notify.push.urgent', true) !== false,
     quietHours: quietWindow(coachPref(db, coachId, 'notify.quietHours'), { start: '22:00', end: '06:30' }),
   };
@@ -509,7 +530,7 @@ const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 function putNotifySettings(_req, ctx) {
   requireCoach(ctx);
   const b = ctx.body ?? {};
-  const known = new Set(NOTIFY_KINDS.map(k => k.kind));
+  const known = new Set(allNotifyKinds().map(k => k.kind));
   let kinds = null;
   if (b.kinds !== undefined) {
     if (!b.kinds || typeof b.kinds !== 'object' || Array.isArray(b.kinds)) fail(400, 'kinds must be an object of kind: true|false');

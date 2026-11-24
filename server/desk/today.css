@@ -37,10 +37,3 @@ a.cmd-line-part:hover strong{text-decoration:underline;text-decoration-color:var
   .cmd-head-actions .btn{flex:1}
 }
 
-/* Business */
-.mrr-card .eyebrow{margin:0}
-.mrr-value{font-size:48px;font-weight:300;font-variant-numeric:tabular-nums;line-height:52px;margin:4px 0 8px}
-.mrr-chart{display:block;width:100%;height:90px;color:var(--data)}
-.delta-badge{font-size:12px;font-weight:500;color:var(--muted);padding:2px 9px;border:1px solid var(--hairline);border-radius:var(--r-pill)}
-.biz-stats{margin-top:10px}
-@media (max-width:420px){.biz-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -41,3 +41,4 @@
 .of-chain li+li::before{content:"";position:absolute;left:-6px;top:14px;width:4px;height:4px;border-radius:50%;background:var(--text-tertiary)}
 .of-chain-n{font-family:var(--serif);font-size:28px;line-height:1.1;font-weight:500}
 .of-bento .ui-seg{flex-wrap:wrap;height:auto}
+.of-pick{display:flex;align-items:center;gap:12px;width:100%;text-align:left;justify-content:flex-start}

@@ -79,7 +79,9 @@ test('the demo coach\'s numbers never include a real coach\'s', async () => {
   assert.ok(s.billedMrr.at(-1).pence > 0);
   const clients = await w.ok('GET', at('/api/revenue/clients'), { token });
   assert.ok(clients.clients.every(c => c.client.id !== theirs.id));
-  assert.equal(clients.clients.length, 6);
+  // Every demo client (other packages' demo builders may add more than the core six), and nobody else.
+  assert.equal(clients.clients.length, w.db.prepare("SELECT COUNT(*) n FROM users WHERE coach_id=? AND role='client'").get(demo.id).n);
+  assert.ok(clients.clients.length >= 6);
   const f = await w.ok('GET', at('/api/revenue/forecast'), { token });
   assert.ok(f.totals.certainPence > 0);
   // And the real coach never sees demo money.

@@ -20,9 +20,9 @@ const enc = encodeURIComponent;
 const FILTERS = [
   ['all', 'All', 'inbox'], ['flag', 'Flags', 'healing'], ['message', 'Messages', 'chat_bubble'], ['voice', 'Voice', 'graphic_eq'],
   ['checkin', 'Check-ins', 'monitor_heart'], ['form', 'Forms', 'description'], ['draft', 'Drafts', 'edit_note'], ['lead', 'Leads', 'person_add'],
-  ['snoozed', 'Snoozed', 'snooze'], ['done', 'Done', 'task_alt'],
+  ['waitlist', 'Waitlist', 'event_available'], ['testimonial', 'Testimonials', 'format_quote'], ['snoozed', 'Snoozed', 'snooze'], ['done', 'Done', 'task_alt'],
 ];
-const KIND_LABEL = { message: 'Message', voice: 'Voice note', checkin: 'Check-in', form: 'Form', flag: 'Flag', draft: 'Draft', lead: 'Lead', waitlist: 'Waitlist' };
+const KIND_LABEL = { message: 'Message', voice: 'Voice note', checkin: 'Check-in', form: 'Form', flag: 'Flag', draft: 'Draft', lead: 'Lead', waitlist: 'Waitlist', testimonial: 'Testimonial' };
 const EMPTY = {
   all: ['Inbox zero.', 'Go coach someone.'], snoozed: ['Nothing snoozed.', 'Press s on an item to bring it back later.'],
   done: ['Nothing done yet.', 'Press e on an item to clear it. A new message reopens a thread.'], flag: ['No flags.', 'No pain or health flags waiting. Good.'],
@@ -86,7 +86,7 @@ route('/inbox/:filter?', async (el, params, view) => {
   function drawFilters() {
     fill(filterNav, FILTERS.map(([id, label, glyph]) => {
       const n = counts ? (id === 'all' ? counts.all : counts[id] ?? 0) : null;
-      if (['draft', 'lead', 'voice'].includes(id) && !n && id !== filter) return null; // kinds nothing provides yet stay out of the way
+      if (['draft', 'lead', 'voice', 'waitlist', 'testimonial'].includes(id) && !n && id !== filter) return null; // kinds nothing provides yet stay out of the way
       return link(id === 'all' ? '/inbox' : `/inbox/${id}`, { class: `cmd-ib-filter${id === filter ? ' sel' : ''}${id === 'flag' && n ? ' urgent' : ''}`, 'aria-current': id === filter ? 'page' : null },
         icon(glyph, 18, { filled: id === filter }), h('span', { class: 'grow' }, label), n ? h('span', { class: 'cmd-ib-count t-num' }, String(n)) : null);
     }));

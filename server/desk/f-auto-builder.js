@@ -75,8 +75,10 @@ function paramControl(spec, value, set, cat) {
   else if (spec.type === 'money') { control = moneyInput({ value: value ?? null, onChange: set, label: spec.label }); control.input.id = id; }
   else if (spec.type === 'day') control = h('input', { id, type: 'date', value: value ?? '', onchange: e => set(e.target.value || null) });
   else if (spec.type === 'enum') {
-    control = h('select', { id, onchange: e => set(e.target.value) }, (spec.options ?? []).map(o => (typeof o === 'object' ? o : { value: o, label: o }))
-      .map(o => h('option', { value: o.value, selected: (value ?? spec.default) === o.value }, o.label)));
+    const unset = (value ?? spec.default) == null;
+    control = h('select', { id, onchange: e => set(e.target.value || null) }, unset ? h('option', { value: '' }, `Choose ${spec.label.toLowerCase()}…`) : null,
+      (spec.options ?? []).map(o => (typeof o === 'object' ? o : { value: o, label: o }))
+        .map(o => h('option', { value: o.value, selected: (value ?? spec.default) === o.value }, o.label)));
   } else if (ID_LOOKUP[spec.type]) {
     const opts = cat.lookups?.[ID_LOOKUP[spec.type]] ?? [];
     control = opts.length

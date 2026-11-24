@@ -154,8 +154,6 @@ a.ld-src:hover{color:var(--text);border-color:var(--text-secondary)}
 .mk-h{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin:0 0 10px}
 .mk-src{display:inline-flex;align-items:center;gap:8px;font-weight:600}
 .mk-src .icon{color:var(--text-secondary)}
-.mk-section th.ui-al-right{text-align:right}
-.mk-section th.ui-al-right .ui-sort{margin-left:auto}
 .mk-pct{display:inline-flex;align-items:center;gap:8px}
 .mk-pct-bar{position:relative;width:72px;height:6px;border-radius:var(--r-pill);background:var(--track);overflow:hidden}
 .mk-pct-bar::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--pct);background:var(--on-track);border-radius:inherit}

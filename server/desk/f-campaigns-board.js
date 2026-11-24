@@ -188,9 +188,13 @@ export async function renderEnrol(box, ctx) {
   const checkCode = h('button', { type: 'button', class: 'btn small', onclick: async () => {
     if (!state.code) return;
     if (!await hasFeature('billing')) { codeStatus.textContent = 'Billing checks the code on the invoice.'; return; }
+    const clientId = [...state.ids][0];
+    if (!clientId) { codeStatus.className = 'small faint'; codeStatus.textContent = 'Pick a client to check the code against.'; return; }
     try {
-      const r = await api('POST', '/api/offers/discounts/check', { code: state.code, amountPence: c.feePence, clientId: [...state.ids][0] });
-      state.discountPence = Math.min(c.feePence, r.discountPence ?? r.amountOffPence ?? 0);
+      // WP3's check: {ok, amountPence} for a campaign line of the fee, or {ok:false, reason}.
+      const r = await api('POST', '/api/offers/discounts/check', { code: state.code, clientId, lines: [{ kind: 'campaign', amountPence: c.feePence }] });
+      if (!r.ok) { codeStatus.className = 'small error'; codeStatus.textContent = r.reason || 'That code can’t be used here.'; state.discountPence = 0; refreshPreview(); return; }
+      state.discountPence = Math.min(c.feePence, r.amountPence ?? 0);
       codeStatus.className = 'small ok';
       codeStatus.textContent = state.discountPence ? `Valid: ${money(state.discountPence)} off` : 'Valid';
     } catch (err) { codeStatus.className = 'small error'; codeStatus.textContent = err.message; state.discountPence = 0; }

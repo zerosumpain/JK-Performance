@@ -1585,6 +1585,14 @@ function factLtv(db, _coachId, clientIds) {
   return out;
 }
 
+/** Paid in the last 12 months (received in the 365 days up to today), for WP11's Sources revenue column. */
+function factPaid12(db, _coachId, clientIds, today) {
+  const out = new Map(clientIds.map(id => [id, 0]));
+  for (const r of db.prepare(`SELECT client_id, SUM(amount_pence) n FROM payments WHERE client_id ${IN} AND voided_at IS NULL AND received_on>? AND received_on<=? GROUP BY client_id`)
+    .all(ids(clientIds), addDays(today, -365), today)) out.set(r.client_id, r.n);
+  return out;
+}
+
 function factLastPaid(db, _coachId, clientIds, today) {
   const out = new Map();
   for (const r of db.prepare(`SELECT client_id, MAX(received_on) d FROM payments WHERE client_id ${IN} AND voided_at IS NULL GROUP BY client_id`).all(ids(clientIds))) out.set(r.client_id, Math.max(0, daysBetween(r.d, today)));
@@ -2047,6 +2055,7 @@ export const feature = {
     'billing.balance': { label: 'Balance owed', type: 'money', compute: factBalance },
     'billing.overdueDays': { label: 'Days the oldest invoice is overdue', type: 'days', compute: factOverdueDays },
     'billing.ltv': { label: 'Lifetime value (paid)', type: 'money', compute: factLtv },
+    'billing.paid12': { label: 'Paid in the last 12 months', type: 'money', compute: factPaid12 },
     'billing.lastPaidDays': { label: 'Days since last payment', type: 'days', compute: factLastPaid },
     'billing.credits': { label: 'Package sessions left', type: 'number', compute: factCredits },
     'billing.packageExpiresDays': { label: 'Days until a package expires', type: 'days', compute: factPackageExpires },

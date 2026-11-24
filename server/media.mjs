@@ -257,8 +257,9 @@ export const mediaForExport = (db, userId) => db.prepare('SELECT * FROM media WH
   .map(m => ({ ...mediaOut(m), note: 'Download from the url while signed in' }));
 
 export function mediaRoutes(r) {
-  // rawLimit: the per-purpose body limit (10 MB for voice and letter audio), for app.mjs to apply before reading (integration request).
-  r.add('POST', '/api/media', upload, { rawBody: MEDIA_LIMITS.video, rawLimit: rawLimitFor });
+  // rawLimit: the per-purpose body limit (10 MB for voice and letter audio); app.mjs refuses a larger declared body before reading it.
+  r.add('POST', '/api/media', upload, { rawBody: MEDIA_LIMITS.video, rawLimit: rawLimitFor,
+    tooLarge: limit => (limit === MEDIA_LIMITS.audio ? 'Voice notes are limited to 10 MB' : null) });
   r.add('GET', '/api/media/:id', get);
   r.add('DELETE', '/api/media/:id', remove);
 }

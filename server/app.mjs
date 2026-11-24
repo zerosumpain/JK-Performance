@@ -83,7 +83,14 @@ export function createApp(db, config) {
       const ctx = { db, config, user, params, query: Object.fromEntries(url.searchParams), body: {}, rawBody: null };
       if (!['GET', 'HEAD', 'DELETE'].includes(req.method)) {
         if (route.opts.rawBody) {
-          ctx.rawBody = await readBody(req, route.opts.rawBody);
+          // A route may narrow its limit from the query and headers (media: 10 MB for voice audio) and refuse before reading.
+          const limit = Math.min(route.opts.rawBody, route.opts.rawLimit?.(req, url) ?? route.opts.rawBody);
+          const declared = Number(req.headers['content-length']);
+          if (Number.isFinite(declared) && declared > limit) {
+            res.setHeader('connection', 'close');
+            return sendJson(res, 413, { error: route.opts.tooLarge?.(limit) ?? 'Request body too large' });
+          }
+          ctx.rawBody = await readBody(req, limit);
         } else {
           const buf = await readBody(req, JSON_LIMIT);
           if (buf.length) {

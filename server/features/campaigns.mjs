@@ -1621,7 +1621,7 @@ export const feature = {
  * "12-Week Marathon Build" (live, fixed, started 23 days ago, capacity 6, £49,
  * 4 phases, ~60 activities with guides, 6 kit items, four enrolled with
  * varied progress and spend, one invitation pending, one declined);
- * "January Reset" (draft, rolling, 30 days, public); "Ski-fit 6 weeks"
+ * "January Reset" (live, rolling, 30 days, public, no one in it yet); "Ski-fit 6 weeks"
  * (ended, two completed). Rows only: no events, no messages.
  */
 function buildDemo(db, { coach, clients, byName, today, rng }) {
@@ -1709,8 +1709,9 @@ function buildDemo(db, { coach, clients, byName, today, rng }) {
   if (byName.Alex) enrolDemo(mid, byName.Alex, 'invited', { fee: 4900, invitedAt: at(addDays(today, -2), '19:05') });
   if (byName.Tom) enrolDemo(mid, byName.Tom, 'declined', { fee: 4900, invitedAt: at(addDays(today, -27), '18:00'), respondedAt: at(addDays(today, -26), '21:30'), note: 'Not this time: work travel' });
 
-  // January Reset: draft, rolling, 30 days, public
-  const jan = insertCampaign({ name: 'January Reset', tagline: 'Thirty days to get the basics back', status: 'draft', startMode: 'rolling', lengthDays: 30, public: 1,
+  // January Reset: rolling, 30 days, public. Live (open for sign-ups, nobody in it yet) rather than the spec's draft, so the public
+  // offer page and F28's demo (3 interested leads) have it: publicOffers lists live campaigns only, and a draft is never public.
+  const jan = insertCampaign({ name: 'January Reset', tagline: 'Thirty days to get the basics back', status: 'live', startMode: 'rolling', lengthDays: 30, public: 1,
     description: 'A daily walk, protein at breakfast, lights out by eleven and one short session a week. Small things, every day.', welcome: 'Start when you are ready. One day at a time.' });
   const janActs = [{ day: 0, title: 'Read: Your first week', kind: 'read', guide: 'Your first week', points: 5 }, { day: 0, title: 'Starting weight and waist', kind: 'measure', points: 10 }];
   for (let d = 0; d < 30; d++) janActs.push({ day: d, title: 'Walk after a meal', kind: 'habit', points: 5, detail: '10 minutes, any meal.' });

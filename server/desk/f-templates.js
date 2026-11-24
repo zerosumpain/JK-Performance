@@ -50,7 +50,7 @@ export async function ensureSlash(force = false) {
   try {
     for (const t of await templates(force)) {
       if (!t.shortcut) continue;
-      registerSlash({ id: t.shortcut, label: t.name, run: c => insertTemplate(c, t) });
+      registerSlash({ id: t.shortcut, label: t.name, detail: String(t.body ?? '').replace(/\s+/g, ' ').slice(0, 80), run: c => insertTemplate(c, t) });
     }
   } catch { slashLoaded = false; }
 }

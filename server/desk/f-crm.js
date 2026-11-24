@@ -154,8 +154,13 @@ const BUILT_IN = {
 async function templatesFor(category, client) {
   if (await hasFeature('templates')) {
     try {
-      const r = await api('GET', `/api/templates?category=${enc(category)}`);
-      const list = (r.templates ?? []).map(t => ({ name: t.name ?? t.title ?? 'Template', text: String(t.body ?? t.text ?? '').replaceAll('{first}', firstName(client.name)) })).filter(t => t.text);
+      // WP5's categories: the renewal play reads "renewal" templates, a check-in "checkin"; upgrade and farewell have none (built-in words).
+      const wp5 = { billing: 'renewal', checkIn: 'checkin' }[category] ?? category;
+      const r = await api('GET', `/api/templates?category=${enc(wp5)}`);
+      // Fill the name variables; a template that still needs others (filled only by a real send) is left out, so no raw {variable} goes out.
+      const list = (r.templates ?? []).map(t => ({ name: t.name ?? t.title ?? 'Template',
+        text: String(t.body ?? t.text ?? '').replaceAll('{first}', firstName(client.name)).replaceAll('{name}', client.name) }))
+        .filter(t => t.text && !/\{[a-zA-Z][\w.]*\}/.test(t.text));
       if (list.length) return list;
     } catch { /* fall back to the built-in words */ }
   }

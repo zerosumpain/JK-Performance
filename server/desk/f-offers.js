@@ -50,7 +50,31 @@ route('/offers/:tab?', async (el, params, view) => {
   };
   await draw();
   if (new URLSearchParams(location.hash.split('?')[1] || '').get('new') === '1' && tab === 'discounts') { if (await discountSheet()) redraw(); }
+  // ?client=<id> (the retention radar's Offer play): send that client a personal code from a live offer.
+  const forClient = view.query.get('client');
+  if (forClient && tab === 'discounts' && view.fresh() && await personalCodeSheet(forClient)) redraw();
 }, { nav: 'offers' });
+
+/** Pick a live general offer and send this client a single-use personal code from it. Resolves true when one was sent. */
+async function personalCodeSheet(clientId) {
+  const [list, { discounts }] = await Promise.all([clients().catch(() => []), api('GET', '/api/offers/discounts')]);
+  const client = list.find(c => c.id === clientId);
+  if (!client) return false;
+  const live = discounts.filter(d => !d.client && d.live);
+  return sheet(`An offer for ${client.name.split(' ')[0]}`, (body, close) => {
+    const status = h('div');
+    body.append(live.length
+      ? h('div', { class: 'stack' }, h('p', { class: 'muted m0' }, 'They get a single-use code of their own in a message.'),
+        live.map(d => h('button', { type: 'button', class: 'btn of-pick', onclick: e => busy(e.currentTarget, status, async () => {
+          const out = await api('POST', `/api/offers/discounts/${enc(d.id)}/issue`, { clientId: client.id, send: true });
+          toast(`${out.code} sent to ${client.name.split(' ')[0]}`);
+          close(true);
+        }) }, h('span', { class: 'grow strong' }, d.name), h('span', { class: 'small muted' }, `${d.label} · ${APPLIES[d.appliesTo]}`))))
+      : emptyHero({ icon: 'sell', title: 'No live offers.', line: 'Create one first, then send a personal code from it.' }),
+      status);
+    return h('div', { class: 'spread' }, h('span'), button('Close', () => close()));
+  });
+}
 
 // MARK: - Discounts
 

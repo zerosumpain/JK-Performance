@@ -446,7 +446,8 @@ route('/account/:section?', async (el, { section }, view) => {
   setCrumbs([{ label: 'Settings', path: '/account' }, ...(current && id !== 'general' ? [{ label: current.label }] : [])]);
   const nav = h('nav', { class: 'set-nav', 'aria-label': 'Settings sections' },
     sections.map(s => link(s.id === 'general' ? '/account' : `/account/${s.id}`, { class: s.id === id ? 'sel' : '', 'aria-current': s.id === id ? 'page' : null }, icon(s.icon || 'settings', 18), s.label)),
-    link('/account/kit?kit=1', { class: 'set-kit' }, icon('grid_view', 18), 'Design kit'));
+    // The kit is a developer page: its link shows only once the desk is opened with ?kit=1.
+    kitOn() ? link('/account/kit?kit=1', { class: 'set-kit' }, icon('grid_view', 18), 'Design kit') : null);
   const body = h('div', { class: 'set-body' }, skeleton('card', { rows: 4 }));
   el.append(h('div', { class: 'set-layout' }, nav, body));
   if (!current) {

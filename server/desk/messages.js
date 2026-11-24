@@ -280,6 +280,7 @@ export async function threadPane(el, clientId, view, { compact = false } = {}) {
   const main = h('div', { class: 'thread-main' }, log, h('div', { class: 'thread-compose' }, draftBanner, box.el));
   fill(el, head, h('div', { class: 'thread-body' + (compact ? '' : ' with-ctx') }, main, ctx));
   el.classList.add('thread-pane');
+  el.dataset.clientId = clientId; // read by other features' thread extras (WP5's scheduled ghost bubbles)
   if (compact) el.classList.add('compact');
 
   const upsert = list => {

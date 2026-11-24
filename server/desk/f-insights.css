@@ -82,6 +82,3 @@
   .in-quote{margin-left:0}
 }
 
-/* The charts' visually hidden data tables: a <table> ignores width and overflow, so the
-   kit's .ui-sr alone still stretches the page. Scoped fix (integration request to WP-Z for ui.css). */
-.in-body table.ui-sr{display:block;clip-path:inset(50%)}

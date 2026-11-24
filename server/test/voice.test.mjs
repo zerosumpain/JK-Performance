@@ -311,7 +311,8 @@ describe('voice through OpenRouter (fake fetch, real ffmpeg)', { skip: !HAS_FFMP
     const { message, media } = await sendVoice(w, gone);
     let open;
     gate = new Promise(r => { open = r; });
-    const notesBefore = w.db.prepare('SELECT COUNT(*) n FROM coach_notifications').get().n;
+    // Erasure cascades the notifications already about this client (WP1's "new client" one), so count only the others.
+    const notesBefore = w.db.prepare('SELECT COUNT(*) n FROM coach_notifications WHERE client_id IS NULL OR client_id<>?').get(gone.id).n;
     const running = w.tick('voice.transcribe', new Date());
     await new Promise(r => setTimeout(r, 300));
     await w.ok('DELETE', '/api/me', { as: gone });

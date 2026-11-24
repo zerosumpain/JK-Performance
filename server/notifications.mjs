@@ -64,12 +64,15 @@ export const notificationOut = (n, client) => ({
 
 /**
  * Tell the coach something in the desk. Same `(coach, dedupe)` within 24 hours
- * is dropped (returns null). Stream and push work happens after commit.
+ * is dropped (returns null), and so is a kind the coach switched off. Stream and push work happens after commit.
  * Returns the new row.
  */
 export function notifyCoach(db, config, coachId, { clientId = null, kind, title, body = '', path = null, icon = null, tone = 'data', dedupe = null, now = new Date() }) {
   if (!coachId || !kind || !title) throw new Error('notifyCoach needs coachId, kind and title');
   if (!TONES.includes(tone)) throw new Error(`notifyCoach: unknown tone ${tone}`);
+  // Settings › Notifications can switch any kind off (notify.prefs[kind] === false); default on.
+  const prefs = coachPref(db, coachId, 'notify.prefs', {});
+  if (prefs && typeof prefs === 'object' && prefs[kind] === false) return null;
   return tx(db, () => {
     if (dedupe && db.prepare('SELECT 1 FROM coach_notifications WHERE coach_id=? AND dedupe=? AND created_at>?')
       .get(coachId, dedupe, new Date(now.getTime() - DEDUPE_MS).toISOString())) return null;

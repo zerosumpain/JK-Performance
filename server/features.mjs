@@ -6,7 +6,7 @@ import { seedDemo } from './demo.mjs';
 import { drainEvents, emitDayStarted, pruneEvents } from './events.mjs';
 import { sendDeferred } from './messages.mjs';
 import { pruneNotifications, pushDueNotifications } from './notifications.mjs';
-import { FOUNDATION_VARIABLES, RESERVED_EXACT, RESERVED_NAMESPACES, FEATURES, installFeatures } from './registry.mjs';
+import { FOUNDATION_VARIABLES, RESERVED_EXACT, RESERVED_NAMESPACES, FEATURES, installFeatures, setSchemaRunner } from './registry.mjs';
 import { deliverDue } from './reports.mjs';
 import { addColumn, tx } from './store.mjs';
 import { londonClock, londonDay } from './time.mjs';
@@ -148,6 +148,7 @@ export function runFeatureSchemas(db) {
   }
   schemasDone.add(db);
 }
+setSchemaRunner(runFeatureSchemas);
 
 // MARK: - Clocks (3.6)
 

@@ -7,15 +7,19 @@ Each desk v2 package documents what it adds in its own file here, in the house s
 |---|---|
 | [`wp0-server.md`](wp0-server.md) | WP0-S foundation, server: events, notifications, stream, facts, tags, segments, prefs, outreach, search, AI, audio |
 | `wp0-desk.md` | WP0-D foundation, desk |
-| `wp1-command.md` | WP1 Command (F1, F2, F3, F4) |
-| `wp2-crm.md` | WP2 Clients and lifecycle (F5, F7, F8, F27) |
-| `wp3-billing.md` | WP3 Billing and revenue (F9–F12, F26) |
-| `wp4-campaigns.md` | WP4 Campaigns and guidebook (F13, F14) |
-| `wp5-automations.md` | WP5 Automations and outreach (F15–F17) |
-| `wp6-ai-voice.md` | WP6 AI and voice (F18, F19) |
-| `wp7-calendar.md` | WP7 Calendar and diary (F20–F22) |
-| `wp8-tasks.md` | WP8 Tasks, accountability and insights (F23–F25) |
-| `wp11-growth.md` | WP11 Growth: leads and marketing (F6, F28) |
+| [`wp1-command.md`](wp1-command.md) | WP1 Command (F1, F2, F3, F4) |
+| [`wp2-crm.md`](wp2-crm.md) | WP2 Clients and lifecycle (F5, F7, F8, F27) |
+| [`wp3-billing.md`](wp3-billing.md) | WP3 Billing and revenue (F9–F12, F26) |
+| [`wp4-campaigns.md`](wp4-campaigns.md) | WP4 Campaigns and guidebook (F13, F14) |
+| [`wp5-automations.md`](wp5-automations.md) | WP5 Automations and outreach (F15–F17) |
+| [`wp6-ai-voice.md`](wp6-ai-voice.md) | WP6 AI and voice (F18, F19) |
+| [`wp7-calendar.md`](wp7-calendar.md) | WP7 Calendar and diary (F20–F22) |
+| [`wp8-tasks-insights.md`](wp8-tasks-insights.md) | WP8 Tasks, accountability and insights (F23–F25) |
+| [`wp11-growth.md`](wp11-growth.md) | WP11 Growth: leads and marketing (F6, F28) |
+| [`wp9-ios.md`](wp9-ios.md) | WP9 iPhone app (F19 apps, F13 client view, F14 renderer) |
+| [`wp10-android.md`](wp10-android.md) | WP10 Android app (F19 apps, F13 client view, F14 renderer) |
+
+The integrated state (what WP-Z merged, applied and left open) is in [`../design/desk-v2-status.md`](../design/desk-v2-status.md).
 
 ## Conventions
 
@@ -28,6 +32,12 @@ Each desk v2 package documents what it adds in its own file here, in the house s
 - Each package file has these sections: endpoints, events (with payload keys and `aiDerived`), actions (with ParamSpecs and `clientFacing`),
   facts, variables, then **Integration requests** (shared edits WP-Z must make), **Parity gaps** and **Design notes**.
 - Tests may move time with `?at=<iso>` only where a route reads `requestNow(ctx)` and the config has `testNow` (the test helper sets it).
+- `server/desk.mjs` reads the desk files once at start-up: restart the server to see a desk edit.
+- `buildDemo` runs every feature's `schema` first (through `registry.ensureFeatureSchemas`), so a feature may list its tables in `demo.tables`
+  even when a test builds the demo before `createApp`.
+- `notifyCoach` drops a kind the coach switched off (`notify.prefs[kind] === false`); Settings › Notifications lists every loaded package's kinds.
+- A raw-body route may pass `rawLimit(req, url)` (and `tooLarge(limit)` for the message): `app.mjs` answers 413 on a larger `content-length`
+  before reading the body.
 
 ## OpenRouter: facts checked at build time (WP0-S, 2026-11-23)
 

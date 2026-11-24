@@ -5,6 +5,7 @@ import { clientFacts, ownClients } from '../facts.mjs';
 import { day as dayParam, fail, num, oneOf, str } from '../http.mjs';
 import { sendMessage } from '../messages.mjs';
 import { notifyCoach } from '../notifications.mjs';
+import { allFacts } from '../registry.mjs';
 import { newId, tx } from '../store.mjs';
 import { render } from '../templating.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, mondayOf } from '../time.mjs';
@@ -98,8 +99,14 @@ function streakEnd(db, client, today) {
 
 // MARK: - Rows and access (client-linked rows always join the client's CURRENT coach, 6.1)
 
-/** Everyone except lapsed people: no plan and nothing from them for four weeks. */
+const RESTING = new Set(['paused', 'churned', 'alumni']);
+
+/** Everyone except lapsed people (no plan and nothing from them for four weeks) and, with crm loaded, paused or departed clients. */
 function onBoard(db, coachId, clients, today) {
+  if (allFacts().some(f => f.id === 'crm.stage') && clients.length) {
+    const stages = clientFacts(db, coachId, clients.map(c => c.id), { only: ['crm.stage'], today });
+    clients = clients.filter(c => !RESTING.has(stages.get(c.id)?.['crm.stage']));
+  }
   const lapsed = clients.filter(c => c.plan === 'none');
   if (!lapsed.length) return clients;
   const facts = clientFacts(db, coachId, lapsed.map(c => c.id), { only: ['core.daysQuiet'], today });

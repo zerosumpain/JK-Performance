@@ -7,7 +7,7 @@ import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { coachSettings, saveCoachSettings } from './settings.mjs';
 import { insertMediaRow, mediaFilePath, storeMedia, writeMediaFile } from './media.mjs';
-import { FEATURES } from './registry.mjs';
+import { FEATURES, ensureFeatureSchemas } from './registry.mjs';
 import { rng } from './rng.mjs';
 import { afterCommit, newId, nowIso, tx } from './store.mjs';
 import { buildPerson, programWorkouts, sampleProfile } from './testclients.mjs';
@@ -204,6 +204,8 @@ export function demoPortrait(db, config, file = process.env.DEMO_COACH_PORTRAIT_
  * feature-name order. Builders write rows directly and never emit, send or notify.
  */
 export function buildDemo(db, today = londonDay(), config = null) {
+  // Feature tables must exist before the wipe and the builders touch them, even when a test builds the demo before createApp.
+  ensureFeatureSchemas(db);
   const fixtures = prepareFixtures(db, config);
   try {
     buildInTx(db, today, config, fixtures);

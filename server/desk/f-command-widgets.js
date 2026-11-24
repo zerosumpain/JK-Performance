@@ -5,7 +5,7 @@
  * events (onRefresh), so the screen never redraws as a whole.
  */
 import {
-  api, avatar, clients, fill, firstName, fmtCountdown, fmtRelative, fmtTime, h, icon, link, live, registerWidget, state, todayLondon,
+  api, avatar, clients, fill, firstName, fmtCountdown, fmtRelative, fmtTime, h, hasFeature, icon, link, live, registerWidget, state, todayLondon,
 } from './core.js';
 import { getLettersOnly, load, needsYou, onLetters, onRefresh, setLettersOnly } from './f-command-core.js';
 import { avatarStack, countUp, emptyHero, flash, openPanel, skeleton } from './ui.js';
@@ -143,7 +143,7 @@ function sessionRow(b, clash, nextId) {
         [...new Set([b.purpose === 'planning' ? 'Planning session' : b.purpose === 'review' ? 'Review call' : KIND_LABEL[b.kind], b.location || null,
           people.length ? plural(people.length, 'person', 'people') : null].filter(Boolean))].join(' · '))),
     people.length ? avatarStack(people, { max: 3, size: 24 }) : null,
-    clash.has(b.id) || b.conflict ? h('span', { class: 'cmd-flag tone-attention' }, icon('event_busy', 14), 'Overlaps') : null,
+    clash.has(b.id) || b.conflict ? h('span', { class: 'cmd-flag tone-attention' }, icon('event_busy', 14), 'Clash') : null,
     status);
 }
 
@@ -158,6 +158,12 @@ registerWidget({
         const list = bookings.filter(b => !b.cancelled);
         if (!list.length) { fill(body, emptyHero({ icon: 'event_available', title: 'No sessions today.', line: 'A clear day: letters, programming, or a rest.', action: { label: 'Open the calendar', path: '/schedule' } })); return; }
         const clash = overlaps(list);
+        // With calendar sync on, a session that clashes with the coach's calendar, time off or a buffer is badged too (WP7 F20).
+        if (await hasFeature('calsync').catch(() => false)) {
+          const { conflicts = [] } = await api('GET', `/api/calendar/conflicts?from=${day}&to=${day}`).catch(() => ({}));
+          for (const c of conflicts) for (const side of [c.a, c.b]) if (side?.id && list.some(b => b.id === side.id)) clash.add(side.id);
+          if (!view.fresh()) return;
+        }
         const next = list.find(b => Date.parse(b.start) > Date.now());
         const done = list.filter(b => Date.parse(b.end) <= Date.now()).length;
         fill(body,
@@ -177,7 +183,7 @@ registerWidget({
 
 const KIND_META = [
   ['flag', 'Flags', 'urgent'], ['message', 'Messages', 'data'], ['voice', 'Voice', 'video'], ['checkin', 'Check-ins', 'ok'],
-  ['form', 'Forms', 'accent'], ['draft', 'Drafts', 'muted'], ['lead', 'Leads', 'attention'], ['waitlist', 'Waitlist', 'muted'],
+  ['form', 'Forms', 'accent'], ['draft', 'Drafts', 'muted'], ['lead', 'Leads', 'attention'], ['waitlist', 'Waitlist', 'muted'], ['testimonial', 'Testimonials', 'accent'],
 ];
 
 registerWidget({

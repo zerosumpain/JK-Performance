@@ -681,15 +681,20 @@ function catalogue(db, coachId) {
     forms: f.forms.map(x => ({ value: x.id, label: x.name })), programs: f.programs.map(x => ({ value: x.id, label: x.name })),
     tags: f.tags.map(x => ({ value: x.id, label: x.name, color: x.color })), segments: f.segments.map(x => ({ value: x.id, label: x.name })),
   };
+  // An action whose id param is plain text but which lists its choices (pulse.send's surveyId) is served as a select.
+  const picks = new Map();
   for (const a of allActions()) {
     if (typeof a.options !== 'function') continue;
     let opts = [];
     try { opts = (a.options(db, coachId) ?? []).map(o => ({ value: o.value ?? o.id, label: o.label ?? o.name ?? String(o.value ?? o.id) })); } catch (e) { console.error(`options of ${a.id} failed`, e); }
     for (const p of a.params ?? []) if (ID_TYPES[p.type] && !['forms', 'programs', 'tags', 'segments'].includes(ID_TYPES[p.type])) lookups[ID_TYPES[p.type]] = opts;
+    const textId = (a.params ?? []).find(p => p.type === 'text' && p.required && /Id$/.test(p.key));
+    if (textId) picks.set(a.id, { key: textId.key, options: opts });
   }
+  const paramsOut = a => (a.params ?? []).map(p => (picks.get(a.id)?.key === p.key ? { ...p, type: 'enum', options: picks.get(a.id).options } : p));
   return {
     events: allEvents().filter(e => !e.type.startsWith('automation.')).map(e => ({ type: e.type, label: e.label, payload: e.payload, feature: e.feature, ...(e.aiDerived ? { aiDerived: true } : {}) })),
-    actions: actionCatalogue().map(a => ({ id: a.id, label: a.label, params: a.params ?? [], clientFacing: a.clientFacing !== false, feature: a.feature, ...(a.critical ? { critical: true } : {}), aiSafe: AI_SAFE_ACTIONS.includes(a.id) })),
+    actions: actionCatalogue().map(a => ({ id: a.id, label: a.label, params: paramsOut(a), clientFacing: a.clientFacing !== false, feature: a.feature, ...(a.critical ? { critical: true } : {}), aiSafe: AI_SAFE_ACTIONS.includes(a.id) })),
     facts: factCatalogue(), variables: variableCatalogue(), lookups, features: featureNames(),
   };
 }

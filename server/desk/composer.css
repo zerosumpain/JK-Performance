@@ -24,7 +24,12 @@
 .cmp.compact .cmp-tool{padding:0 7px}
 /* The `/` menu */
 .cmp-slash{min-width:280px;padding:4px}
+.cmp-slash{max-width:min(460px,calc(100vw - 16px))}
 .cmp-slash-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-chip);cursor:pointer;font-size:14px}
+/* A long detail shrinks and ellipses instead of running over the label. */
+.cmp-slash-item>*{min-width:0}
+.cmp-slash-item>.grow{flex:1 0 auto;max-width:55%}
+.cmp-slash-item>.clamp1{flex:0 1 auto}
 .cmp-slash-item.sel{background:var(--accent-wash)}
 .cmp-slash-label{font:600 12px/1 var(--sans);color:var(--accent);min-width:7ch}
 /* A thread's composer row (messages.js threadPane) */

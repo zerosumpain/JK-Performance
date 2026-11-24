@@ -25,6 +25,12 @@ export function installFeatures(list) {
 
 export const featuresInstalled = () => frozen;
 
+let schemaRunner = null;
+/** features.mjs only: register its schema runner, so modules that cannot import the loader (demo.mjs) can still run it. */
+export function setSchemaRunner(fn) { schemaRunner = fn; }
+/** Run every feature's idempotent DDL on `db` if the loader is present (a no-op otherwise). */
+export function ensureFeatureSchemas(db) { schemaRunner?.(db); }
+
 /** Namespaces and exact ids the foundation keeps for itself (3.11). */
 export const RESERVED_NAMESPACES = ['core', 'message', 'checkin', 'form', 'workout', 'membership', 'letter', 'commitment', 'day', 'tag', 'coach', 'program'];
 export const RESERVED_EXACT = ['client.joined', 'client.tagged', 'client.untagged', 'booking.created', 'booking.cancelled'];

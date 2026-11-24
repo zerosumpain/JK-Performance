@@ -532,7 +532,7 @@ describe('demo', () => {
     assert.equal(one('SELECT COUNT(*) n FROM events').n, before);
     const demoCoach = one("SELECT id FROM users WHERE apple_sub='demo-coach'");
     const cs = rows('SELECT * FROM campaigns WHERE coach_id=? ORDER BY name', demoCoach.id);
-    assert.deepEqual(cs.map(c => [c.name, c.status]), [['12-Week Marathon Build', 'live'], ['January Reset', 'draft'], ['Ski-fit 6 weeks', 'ended']]);
+    assert.deepEqual(cs.map(c => [c.name, c.status]), [['12-Week Marathon Build', 'live'], ['January Reset', 'live'], ['Ski-fit 6 weeks', 'ended']]);
     const m = cs[0];
     assert.equal(m.starts_on, addDays(today, -23));
     assert.equal(m.capacity, 6);
