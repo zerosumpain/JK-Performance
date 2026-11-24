@@ -1,0 +1,27 @@
+{
+  "id": "m_9xQ2bK7tLm1aPz",
+  "clientId": "u_tom01",
+  "fromId": "u_tom01",
+  "fromRole": "client",
+  "text": "Voice note · 0:42",
+  "workoutId": null,
+  "at": "2026-11-24T08:14:05.120Z",
+  "readAt": null,
+  "kind": "voice",
+  "reportId": null,
+  "exerciseId": null,
+  "mediaId": null,
+  "mediaUrl": null,
+  "mediaKind": "audio",
+  "updatedAt": "2026-11-24T08:14:05.120Z",
+  "voice": {
+    "mediaId": "md_Vt3kq0Lw8sYb",
+    "url": "/api/media/md_Vt3kq0Lw8sYb",
+    "durationSec": 42,
+    "status": "off",
+    "reason": "noConsent",
+    "transcript": null,
+    "provider": null,
+    "model": null
+  }
+}
