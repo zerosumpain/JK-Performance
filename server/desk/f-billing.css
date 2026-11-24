@@ -259,3 +259,6 @@
 :is(.bl-body,.rv-body,.of-body,.bl-client-bento) .ui-table th.ui-al-right{text-align:right}
 :is(.bl-body,.rv-body,.of-body,.bl-client-bento) .ui-table th.ui-al-right .ui-sort{margin-left:auto}
 .bl-sub-k{margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--hairline)}
+@media (max-width:820px){
+  .bl-settings :is(.grid2,.grid3),.ui-slide-body .bl-review .grid2{grid-template-columns:minmax(0,1fr)}
+}

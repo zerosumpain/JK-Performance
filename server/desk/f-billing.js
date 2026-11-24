@@ -502,7 +502,8 @@ async function clientBillingTab(box, client, view) {
       pkgs.length ? h('div', { class: 'bl-meters' }, pkgs.map(p => h('div', { class: 'bl-meter' },
       h('div', { class: 'spread' }, h('span', { class: 'strong' }, p.name), h('span', { class: `small ${p.left <= 1 ? 'tone-attention' : 'muted'}` }, `${p.left} of ${p.sessionsTotal} left`)),
       progressBar((p.sessionsUsed / p.sessionsTotal) * 100, { tone: p.left <= 1 ? 'attention' : 'accent' }),
-      h('div', { class: 'small muted' }, `Expires ${fmtDay(p.expiresOn)} · ${p.expiresInDays} days`, p.moves.length ? ` · last used ${fmtDay(p.moves.find(m => m.delta < 0)?.at?.slice(0, 10) ?? p.startsOn)}` : '')))) : h('div', { class: 'bl-w-clear' }, icon('inventory_2', 22), h('span', null, 'No active packages.')),
+      h('div', { class: 'spread' }, h('span', { class: 'small muted' }, `Expires ${fmtDay(p.expiresOn)} · ${p.expiresInDays} days`, p.moves.length ? ` · last used ${fmtDay(p.moves.find(m => m.delta < 0)?.at?.slice(0, 10) ?? p.startsOn)}` : ''),
+        h('button', { type: 'button', class: 'btn small text', onclick: async () => { if (await creditsSheet(p)) reload(); } }, 'Credits'))))) : h('div', { class: 'bl-w-clear' }, icon('inventory_2', 22), h('span', null, 'No active packages.')),
       h('div', { class: 'bl-k bl-sub-k' }, 'Recurring billing'),
       d.schedules.length ? h('ul', { class: 'bl-mini' }, d.schedules.map(s => h('li', null,
       h('div', { class: 'grow' }, h('div', { class: 'strong' }, s.label), h('div', { class: 'small muted' }, `${money(s.amountPence)} every ${INTERVAL_LABEL[s.interval]}${s.status === 'active' ? ` · next ${fmtDay(s.nextOn)}` : ''}`)), statusPill(s.status)))) : h('div', { class: 'bl-w-clear' }, icon('event_repeat', 22), h('span', null, 'No recurring billing.'))] }),
@@ -516,6 +517,30 @@ async function clientBillingTab(box, client, view) {
       ] }).el }),
     tile({ id: 'payments', eyebrow: 'Payments', icon: 'payments', size: 'm', body: d.payments.length ? h('ul', { class: 'bl-mini' }, d.payments.slice(0, 5).map(p => h('li', null,
       h('div', { class: 'grow' }, h('div', null, fmtDay(p.receivedOn)), h('div', { class: 'small muted' }, `${methodLabel(p.method)}${p.invoiceNumber ? ` · ${p.invoiceNumber}` : ' · on account'}`)), h('b', { class: `t-num ${p.voidedAt ? 'faint' : 'tone-ok'}` }, money(p.amountPence))))) : h('p', { class: 'muted' }, 'No payments yet.') })));
+}
+
+/** A package's credit history, and a manual adjustment (a session given back, or taken for an off-app booking). */
+function creditsSheet(p) {
+  const REASON = { booking: 'Booked', refund: 'Cancelled in time: credit back' };
+  return sheet(`${p.name} · credits`, (body, close) => {
+    let delta = 1;
+    const status = h('div', { role: 'status' });
+    const reason = h('input', { maxlength: '120', placeholder: 'Session in the park, not booked in the app' });
+    body.append(
+      h('div', { class: 'bl-sell-sum' }, h('span', { class: 'bl-pack-n' }, String(p.left)), h('div', { class: 'grow' }, h('div', { class: 'strong' }, `${p.left} of ${p.sessionsTotal} left`), h('div', { class: 'small muted' }, `Expires ${fmtDay(p.expiresOn)}`))),
+      p.moves.length ? h('ul', { class: 'bl-mini' }, p.moves.map(m => h('li', null,
+        h('span', { class: `t-num strong ${m.delta < 0 ? '' : 'tone-ok'}` }, m.delta > 0 ? `+${m.delta}` : String(m.delta)),
+        h('span', { class: 'grow' }, REASON[m.reason] ?? (m.reason.startsWith('pause:') ? `Paused: expiry moved ${m.reason.slice(7)}` : m.reason.replace(/^adjust: /, 'Adjusted: '))),
+        h('span', { class: 'small muted' }, fmtDay(m.at.slice(0, 10)))))) : h('p', { class: 'small muted' }, 'No credits used yet.'),
+      h('div', { class: 'bl-k bl-sub-k' }, 'Adjust'),
+      h('div', { class: 'row' }, h('select', { 'aria-label': 'Change', onchange: e => { delta = Number(e.target.value); } }, h('option', { value: '1' }, 'Give one back (+1)'), h('option', { value: '-1' }, 'Use one (−1)')), reason),
+      status);
+    const save = button('Save adjustment', () => busy(save, status, async () => {
+      await api('POST', `/api/billing/client-packages/${enc(p.id)}/adjust`, { delta, reason: reason.value.trim() || (delta > 0 ? 'Given back' : 'Used outside the app') });
+      toast('Credits adjusted'); close(true);
+    }), { kind: 'primary' });
+    return h('div', { class: 'row end' }, button('Close', () => close()), save);
+  });
 }
 
 function choosePackage(list) {
