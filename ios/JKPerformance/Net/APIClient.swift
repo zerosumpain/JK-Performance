@@ -113,25 +113,8 @@ final class APIClient {
 
     // MARK: Coding
 
-    static let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .custom { date, encoder in
-            var c = encoder.singleValueContainer()
-            try c.encode(ISO.fractional.string(from: date))
-        }
-        return e
-    }()
-
-    static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .custom { decoder in
-            let c = try decoder.singleValueContainer()
-            let text = try c.decode(String.self)
-            if let date = ISO.fractional.date(from: text) ?? ISO.plain.date(from: text) { return date }
-            throw DecodingError.dataCorruptedError(in: c, debugDescription: "Not an ISO 8601 instant: \(text)")
-        }
-        return d
-    }()
+    static let encoder: JSONEncoder = JSONCoding.encoder()
+    static let decoder: JSONDecoder = JSONCoding.decoder()
 
     // MARK: Requests
 
@@ -260,16 +243,3 @@ func seg(_ value: String) -> String {
     return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
 }
 
-enum ISO {
-    static let fractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    static let plain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-}
