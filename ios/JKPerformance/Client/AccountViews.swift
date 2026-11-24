@@ -90,6 +90,9 @@ struct AccountSheet: View {
                 if TabRouter.shared.showMembership {
                     TabRouter.shared.showMembership = false
                     path = [.membership]
+                } else if TabRouter.shared.showPrivacy {
+                    TabRouter.shared.showPrivacy = false
+                    path = [.privacy]
                 }
             }
         }
@@ -309,11 +312,20 @@ struct PreferencesInput: Encodable {
 // MARK: - Privacy
 
 struct PrivacyView: View {
+    @Environment(AppSession.self) private var session
+    @State private var transcribe = false
+    @State private var saving = false
+    @State private var error: String?
+
+    /// The switch shows once the server knows voice notes (desk-v2 F19).
+    private var voiceKnown: Bool { session.me?.isCoach == false && session.gate.voiceTranscription != nil }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: JK.Space.l) {
                 Text("Your account, sessions, habits, check-ins, messages and photos are stored so JK can coach you. Apple Health data is read only with your permission and shared with JK only if you say so. Photos are private to you and JK.")
                     .font(.jkBody).foregroundStyle(JK.text).fixedSize(horizontal: false, vertical: true)
+                if voiceKnown { voiceSection }
                 Link("Read the privacy policy", destination: APIClient.shared.privacyURL)
                     .buttonStyle(TextButtonStyle())
                 NavigationLink("Acknowledgements") { AcknowledgementsView() }
@@ -324,6 +336,47 @@ struct PrivacyView: View {
         .jkScreen()
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { transcribe = session.gate.voiceTranscription == "on" }
+        .onChange(of: session.gate.voiceTranscription) { _, value in transcribe = value == "on" }
+    }
+
+    private var voiceSection: some View {
+        VStack(alignment: .leading, spacing: JK.Space.s) {
+            VStack(spacing: 0) {
+                Toggle(isOn: Binding(get: { transcribe }, set: { on in Task { await setTranscribe(on) } })) {
+                    VStack(alignment: .leading, spacing: JK.Space.xs) {
+                        Text("Transcribe my voice notes").font(.jkBody).foregroundStyle(JK.text)
+                        Text(VoiceCopy.consent(provider: session.me?.features?.voiceProvider))
+                            .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .disabled(saving)
+                .padding(JK.Space.l)
+            }
+            .surface(.group)
+            .tint(JK.accentControl)
+            Text(transcribe
+                 ? "Turning this off stops new notes being transcribed. Transcripts already made stay until you ask JK or delete your account."
+                 : "JK still hears every voice note you send.")
+                .font(.jkCaption).foregroundStyle(JK.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error { ErrorBanner(message: error) }
+        }
+    }
+
+    private func setTranscribe(_ on: Bool) async {
+        let before = transcribe
+        transcribe = on
+        saving = true
+        defer { saving = false }
+        do {
+            try await VoiceConsentStore.set(on, session: session)
+            error = nil
+        } catch {
+            transcribe = before
+            self.error = error.readable
+        }
     }
 }
 

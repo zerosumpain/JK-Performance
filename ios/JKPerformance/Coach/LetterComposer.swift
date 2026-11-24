@@ -1,4 +1,3 @@
-import AVFoundation
 import SwiftUI
 
 // MARK: - Letter composer (coach)
@@ -16,7 +15,7 @@ struct LetterComposer: View {
     var milestone: NeedsReason? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var voice = VoiceRecorder()
+    @StateObject private var voice = VoiceRecorder(cap: 90, purpose: "letter")
     @State private var report: Report?
     @State private var loadedWeek: String?
     @State private var error: String?
@@ -331,147 +330,4 @@ struct LetterComposer: View {
     }
 
     private func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-}
-
-// MARK: - Voice note
-
-/// Records an m4a (AAC) voice note of at most 90 seconds, plays it back,
-/// and uploads it as letter media. Polls rather than using delegates so it
-/// stays on the main actor.
-@MainActor
-final class VoiceRecorder: NSObject, ObservableObject {
-    static let cap: TimeInterval = 90
-
-    @Published private(set) var recording = false
-    @Published private(set) var playing = false
-    @Published private(set) var elapsed: TimeInterval = 0
-    @Published private(set) var duration: TimeInterval = 0
-    @Published private(set) var file: URL?
-    @Published var error: String?
-
-    private var recorder: AVAudioRecorder?
-    private var player: AVAudioPlayer?
-    private var timer: Timer?
-
-    func start() async {
-        error = nil
-        let granted = await AVAudioApplication.requestRecordPermission()
-        guard granted else {
-            error = "Microphone access is off. Turn it on in Settings › JK Performance."
-            return
-        }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-            try session.setActive(true)
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("letter-\(UUID().uuidString).m4a")
-            let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-                AVSampleRateKey: 44_100,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-            ]
-            let r = try AVAudioRecorder(url: url, settings: settings)
-            guard r.record(forDuration: Self.cap) else {
-                error = "Couldn't start recording."
-                return
-            }
-            discard()
-            recorder = r
-            file = url
-            recording = true
-            elapsed = 0
-            startTimer()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    func stop() {
-        guard let recorder else { return }
-        duration = min(recorder.currentTime, Self.cap)
-        recorder.stop()
-        finishRecording()
-    }
-
-    func togglePlay() {
-        guard let file else { return }
-        if playing {
-            player?.pause()
-            playing = false
-            return
-        }
-        do {
-            if player == nil {
-                try AVAudioSession.sharedInstance().setCategory(.playback)
-                player = try AVAudioPlayer(contentsOf: file)
-            }
-            player?.play()
-            playing = true
-            startTimer()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    func discard() {
-        player?.stop()
-        player = nil
-        playing = false
-        if let file { try? FileManager.default.removeItem(at: file) }
-        file = nil
-        duration = 0
-        elapsed = 0
-    }
-
-    func stopAll() {
-        if recording { stop() }
-        player?.stop()
-        playing = false
-        timer?.invalidate()
-        timer = nil
-    }
-
-    /// POST /api/media (audio/mp4, purpose letter); returns the media id.
-    func upload(clientId: String) async throws -> String {
-        guard let file else { throw APIError.config("No recording to send.") }
-        let data = try Data(contentsOf: file)
-        let seconds = max(1, Int(duration.rounded()))
-        let media: Media = try await APIClient.shared.upload("/api/media", data: data, contentType: "audio/mp4", query: [
-            "purpose": "letter", "clientId": clientId, "durationSec": "\(min(seconds, Int(Self.cap)))",
-        ])
-        return media.id
-    }
-
-    private func startTimer() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
-        }
-    }
-
-    private func tick() {
-        if recording, let recorder {
-            if recorder.isRecording {
-                elapsed = recorder.currentTime
-            } else {
-                // record(forDuration:) stopped itself at the cap.
-                duration = max(elapsed, duration)
-                finishRecording()
-            }
-        } else if playing, let player, !player.isPlaying {
-            playing = false
-            player.currentTime = 0
-            timer?.invalidate()
-            timer = nil
-        }
-    }
-
-    private func finishRecording() {
-        recording = false
-        recorder = nil
-        if duration == 0 { duration = elapsed }
-        timer?.invalidate()
-        timer = nil
-    }
 }

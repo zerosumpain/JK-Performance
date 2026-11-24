@@ -153,12 +153,20 @@ final class MediaFiles {
     private var local: [String: URL] = [:]
 
     func file(for mediaId: String, kind: String?) async throws -> URL {
-        if let hit = local[mediaId], FileManager.default.fileExists(atPath: hit.path) { return hit }
-        let data = try await APIClient.shared.data("/api/media/\(seg(mediaId))")
-        let ext = kind == "video" ? "mp4" : "m4a"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("media-\(mediaId).\(ext)")
+        try await file(path: "/api/media/\(seg(mediaId))", key: mediaId, ext: kind == "video" ? "mp4" : "m4a")
+    }
+
+    /// Any signed-in media path the server gave (a voice note's `voice.url`, a
+    /// guide's `/api/guides/coach/…/media/…`). Only our own `/api/` paths are
+    /// fetched with the token; `key` names the cached file.
+    func file(path: String, key: String, ext: String) async throws -> URL {
+        if let hit = local[key], FileManager.default.fileExists(atPath: hit.path) { return hit }
+        guard path.hasPrefix("/api/"), !path.contains("..") else { throw APIError.config("That file is not on JK's server.") }
+        let data = try await APIClient.shared.data(path)
+        let safe = key.filter { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("media-\(safe).\(ext)")
         try data.write(to: url, options: .atomic)
-        local[mediaId] = url
+        local[key] = url
         return url
     }
 }

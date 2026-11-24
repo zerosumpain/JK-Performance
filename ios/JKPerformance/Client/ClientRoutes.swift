@@ -77,6 +77,9 @@ extension View {
             case .todaysWork: TodaysWorkView()
             case .prepare: BeforeSessionView()
             case .accountability: AccountabilityView()
+            case .campaign(let id): CampaignDetailView(enrolmentId: id)
+            case .coachGuide(let id): CoachGuideView(guideId: id)
+            case .inlineGuide(let guide): GuideReader(title: guide.title, summary: nil, minutes: nil, blocks: guide.blocks, guideId: nil)
             }
         }
     }
