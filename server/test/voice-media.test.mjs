@@ -135,6 +135,9 @@ describe('voice uploads (fake ffmpeg)', () => {
     assert.equal(sent.voice.mediaId, up.id);
     assert.equal(sent.voice.url, `/api/media/${up.id}`);
     assert.equal(sent.voice.durationSec, 42.4);
+    const theirs = (await upload(a, SAMPLES.webm, 'purpose=voice')).body;
+    const borrowed = await w.call('POST', '/api/messages', { as: coach, body: { clientId: a.id, kind: 'voice', mediaId: theirs.id } });
+    assert.equal(borrowed.status, 400, 'a coach cannot send the client\'s own recording as theirs');
     const again = await w.call('POST', '/api/messages', { as: coach, body: { clientId: a.id, kind: 'voice', mediaId: up.id } });
     assert.equal(again.status, 400);
     assert.equal(again.body.error, 'That voice note has already been sent');

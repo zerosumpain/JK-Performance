@@ -121,7 +121,8 @@ function send(_req, ctx) {
   if (kind === 'voice') {
     if (!media) fail(400, 'mediaId is required');
     if (media.kind !== 'audio' || media.purpose !== 'voice') fail(400, 'mediaId is not a voice note');
-    if (media.client_id !== client.id) fail(400, 'That voice note is for someone else');
+    // The sender's own recording, made for this thread's client.
+    if (media.client_id !== client.id || media.owner_id !== ctx.user.id) fail(400, 'That voice note is for someone else');
     if (ctx.db.prepare('SELECT 1 FROM messages WHERE media_id=?').get(media.id)) fail(400, 'That voice note has already been sent');
   } else if (media?.kind === 'audio') fail(400, 'Audio goes as kind voice');
   if (ctx.user.role === 'client' && kind !== 'text') {
