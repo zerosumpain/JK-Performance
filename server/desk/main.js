@@ -310,7 +310,10 @@ function drawCrumbs(list) {
   const trail = list || (nav ? [{ label: nav.label, path: navPath(nav) }] : []);
   fill(shell.crumbs, group && !list ? h('span', { class: 'crumb-group' }, group) : null,
     trail.map((c, i) => [i || (group && !list) ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, icon('chevron_right', 14)) : null,
-      i < trail.length - 1 && c.path ? h('a', { class: 'crumb', href: `#${c.path}` }, c.label) : h('span', { class: 'crumb now', 'aria-current': 'page' }, c.label)]));
+      i < trail.length - 1
+        // A step with no path ("Engage") reads as the group label, and phones drop it like the shell's own group.
+        ? (c.path ? h('a', { class: 'crumb', href: `#${c.path}` }, c.label) : h('span', { class: 'crumb-group' }, c.label))
+        : h('span', { class: 'crumb now', 'aria-current': 'page' }, c.label)]));
   document.title = `${trail.at(-1)?.label ? `${trail.at(-1).label} · ` : ''}JK Studio`;
 }
 

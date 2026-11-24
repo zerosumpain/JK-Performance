@@ -64,8 +64,10 @@ function coreItems(db, coach) {
   const unread = db.prepare(`SELECT m.id, m.client_id, m.text, m.kind, m.at FROM messages m
     JOIN users u ON u.id=m.client_id AND u.role='client' AND u.coach_id=?
     WHERE m.from_role='client' AND m.read_at IS NULL ORDER BY m.at`).all(coach.id);
+  // With the voice feature loaded, its inbox hook lists each client voice note (with the analysis), so threads leave them out.
+  const voiceListed = featureNames().includes('voice');
   const threads = new Map();
-  for (const m of unread) threads.set(m.client_id, [...(threads.get(m.client_id) ?? []), m]);
+  for (const m of unread) if (!(voiceListed && m.kind === 'voice')) threads.set(m.client_id, [...(threads.get(m.client_id) ?? []), m]);
   for (const [clientId, list] of threads) {
     const newest = list.at(-1);
     const pain = list.find(m => URGENT_WORDS.test(m.text ?? ''));

@@ -831,6 +831,8 @@ function addBankHolidays(_req, ctx) {
 const SEVERITY_ORDER = { high: 0, medium: 1 };
 const item = (type, i, extra = {}) => ({ type, id: i.id, ...(i.key ? { key: i.key } : {}), start: i.start, end: i.end, title: i.title, ...extra });
 const fmtWhen = iso => shortWhen(iso).replace(/^(\w+) \d+ \w+ /, '$1 ');
+/** "2026-11-24" → "24 Nov". */
+const dayWords = day => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 
 /**
  * Every clash between `fromIso` and `toIso`: booking × booking (overlap or
@@ -1230,7 +1232,7 @@ function inboxItems(db, coach) {
     if (freeCheck(db, coach.id, w.match_start, end, w.match_kind ?? 'inperson')) continue; // taken again since
     out.push({
       key: `waitlist:${w.id}:${w.match_start}`, kind: 'waitlist', clientId: w.client_id,
-      title: `${firstName(w.name)} is waiting for a slot`, preview: `Freed ${shortWhen(w.match_start)} matches their waitlist (${w.from_day.slice(5)}–${w.to_day.slice(5)}, ${w.prefer}).`,
+      title: `${firstName(w.name)} is waiting for a slot`, preview: `Freed ${shortWhen(w.match_start)} matches their waitlist (${dayWords(w.from_day)} to ${dayWords(w.to_day)}, ${w.prefer === 'any' ? 'any time' : w.prefer}).`,
       at: w.updated_at, icon: 'event_available', tone: 'attention', path: '/schedule/waitlist',
       actions: [{ id: 'offer', label: 'Offer this slot', method: 'POST', url: `/api/waitlist/${w.id}/offer`, body: { start: w.match_start } }],
     });

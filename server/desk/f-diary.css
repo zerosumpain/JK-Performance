@@ -113,7 +113,7 @@
 .dy-sess-d{font:500 20px/1 var(--serif);color:var(--text)}
 .dy-sess-shared{color:var(--on-track);display:inline-flex}
 
-@media (max-width:1100px){.dy-cols{grid-template-columns:1fr}.dy-journal{position:static}}
+@media (max-width:1100px){.dy-cols{grid-template-columns:minmax(0,1fr)}.dy-journal{position:static}}
 @media (max-width:820px){.dy-cl-cols{grid-template-columns:1fr}}
 @media (max-width:560px){
   .dy-grid{grid-template-columns:1fr}
