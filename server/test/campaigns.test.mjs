@@ -236,6 +236,21 @@ describe('capacity', () => {
     await w.ok('POST', at(`/api/campaigns/mine/${enrolmentOf(c.id, rory.id).id}/accept`), { as: rory, body: {} });
     assert.equal(enrolmentOf(c.id, rory.id).status, 'active');
   });
+
+  test('a freed place that is declined goes to the next on the waitlist, once', async () => {
+    const c = await campaign({ capacity: 1, waitlist: true });
+    const d1 = w.user('Dee One', 'client', w.coach.id), d2 = w.user('Dee Two', 'client', w.coach.id);
+    await invite(c, [priya.id, rory.id, d1.id, d2.id]);
+    await w.ok('POST', at(`/api/campaigns/mine/${enrolmentOf(c.id, priya.id).id}/accept`), { as: priya, body: {} });
+    await w.ok('POST', at(`/api/campaigns/mine/${enrolmentOf(c.id, rory.id).id}/accept`), { as: rory, body: {} });
+    await w.ok('POST', at(`/api/campaigns/mine/${enrolmentOf(c.id, d1.id).id}/accept`, new Date(now.getTime() + 60_000)), { as: d1, body: {} });
+    await w.ok('POST', at(`/api/campaigns/mine/${enrolmentOf(c.id, d2.id).id}/accept`, new Date(now.getTime() + 120_000)), { as: d2, body: {} });
+    await w.ok('DELETE', at(`/api/campaigns/${c.id}/enrolments/${enrolmentOf(c.id, priya.id).id}`), { as: w.coach });
+    assert.deepEqual([rory, d1, d2].map(x => enrolmentOf(c.id, x.id).status), ['invited', 'waitlisted', 'waitlisted']);
+    // Rory turns the place down: Dee One (next oldest) is offered it, Dee Two still waits.
+    await w.ok('POST', at(`/api/campaigns/mine/${enrolmentOf(c.id, rory.id).id}/decline`), { as: rory, body: {} });
+    assert.deepEqual([rory, d1, d2].map(x => enrolmentOf(c.id, x.id).status), ['declined', 'invited', 'waitlisted']);
+  });
 });
 
 describe('progress', () => {

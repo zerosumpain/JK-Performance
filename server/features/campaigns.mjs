@@ -236,10 +236,11 @@ export function invitationText(db, config, c, e, client, now = new Date()) {
     `${first(client.name)}, you're invited to ${c.name}${c.tagline ? `: ${c.tagline}` : ''}.`,
     `Dates: ${dates}.`,
     `${fee}.`,
-    req.length ? `Required kit: ${req.map(k => `${k.name} ${money(k.est_pence)}`).join(', ')} (${money(t.requiredPence)}).` : 'Required kit: none.',
-    `Optional kit: ${money(t.optionalPence)} in total.`,
-    `Expected spend: ${money(expectedSpend(kit, acts))}${purchases.length ? ' including planned purchases' : ''}${e.fee_pence ? ', plus the fee' : ''}.`,
-  ];
+    // Kit and spend lines only when there is kit or something to buy.
+    req.length ? `Required kit: ${req.map(k => `${k.name} ${money(k.est_pence)}`).join(', ')} (${money(t.requiredPence)}).` : kit.length ? 'Required kit: none.' : null,
+    t.optionalPence ? `Optional kit: ${money(t.optionalPence)} in total.` : null,
+    expectedSpend(kit, acts) ? `Expected spend: ${money(expectedSpend(kit, acts))}${purchases.length ? ' including planned purchases' : ''}${e.fee_pence ? ', plus the fee' : ''}.` : null,
+  ].filter(Boolean);
   const left = placesLeft(db, c);
   if (left !== null) {
     const pending = db.prepare("SELECT COUNT(*) n FROM campaign_enrolments WHERE campaign_id=? AND status='invited'").get(c.id).n;
@@ -300,17 +301,19 @@ export function acceptEnrolment(db, config, c, e, { via, startOn = null, now = n
     if (row.lay_program) layLinkedPrograms(db, c, row);
     const invoice = row.fee_pence > 0 && !!row.invoice_wanted;
     evt(db, 'campaign.enrolled', c, row, `Joined ${c.name}`, { feePence: row.fee_pence, invoice, campaignName: c.name, startOn: start, via,
-      ...(row.discount_code ? { discountCode: row.discount_code } : {}) });
+      ...(row.discount_code ? { discountCode: row.discount_code } : {}), ...(row.discount_pence ? { discountPence: row.discount_pence } : {}) });
     return row;
   });
 }
 
-export function declineEnrolment(db, c, e, { now = new Date(), note = null } = {}) {
+export function declineEnrolment(db, c, e, { now = new Date(), note = null, config = null } = {}) {
   return tx(db, () => {
     e = reload(db, e.id);
     if (!['invited', 'waitlisted'].includes(e.status)) fail(409, 'This invitation has already been answered');
     db.prepare("UPDATE campaign_enrolments SET status='declined', responded_at=?, note=COALESCE(?, note) WHERE id=?").run(now.toISOString(), note, e.id);
     evt(db, 'campaign.declined', c, e, `Declined ${c.name}`, note ? { reason: note } : {});
+    // A freed place someone turned down goes to the next on the waitlist.
+    if (config && e.status === 'invited') offerFreedPlace(db, config, c, now);
     return reload(db, e.id);
   });
 }
@@ -318,7 +321,10 @@ export function declineEnrolment(db, c, e, { now = new Date(), note = null } = {
 /** A place came free: the oldest waitlisted client is offered it by a new invitation. */
 function offerFreedPlace(db, config, c, now) {
   if (!c.capacity || !c.waitlist || c.status !== 'live') return null;
-  if (takenPlaces(db, c) >= c.capacity) return null;
+  const free = c.capacity - takenPlaces(db, c);
+  if (free <= 0) return null;
+  // One outstanding offer per free place: a decline or expiry re-offers it, never doubles it.
+  if (db.prepare("SELECT COUNT(*) n FROM campaign_enrolments WHERE campaign_id=? AND status='invited' AND note='A place came free'").get(c.id).n >= free) return null;
   const next = enrolmentsOf(db, c, ['waitlisted']).sort((a, b) => (a.responded_at ?? a.invited_at).localeCompare(b.responded_at ?? b.invited_at))[0];
   if (!next) return null;
   db.prepare("UPDATE campaign_enrolments SET status='invited', invited_at=?, responded_at=NULL, note='A place came free' WHERE id=?").run(now.toISOString(), next.id);
@@ -372,6 +378,7 @@ export function sweep(db, config, now = new Date(), { coachId = null } = {}) {
             db.prepare("UPDATE campaign_enrolments SET status='declined', responded_at=?, note='Invitation expired' WHERE id=? AND status='invited'").run(now.toISOString(), e.id);
             evt(db, 'campaign.declined', c, e, `Invitation to ${c.name} expired`, { reason: 'expired' });
             out.expired++;
+            offerFreedPlace(db, config, c, now);
           }
         }
         for (const e of enrolmentsOf(db, c, ['active'])) {
@@ -824,7 +831,8 @@ function enrol(_req, ctx) {
 function preview(_req, ctx) {
   const c = ownCampaign(ctx);
   const b = ctx.body;
-  const client = b.clientId ? clientFor(ctx, b.clientId) : { name: 'Sam' };
+  // Before anyone is picked the preview greets "{first}", the placeholder their name fills.
+  const client = b.clientId ? clientFor(ctx, b.clientId) : { name: '{first}' };
   const fake = { id: 'ce_preview', fee_pence: c.fee_pence, discount_code: b.discountCode ? String(b.discountCode).slice(0, 40).toUpperCase() : null,
     discount_pence: b.discountPence ? intIn(b.discountPence, 'discountPence', 0, c.fee_pence) : 0, start_on: c.start_mode === 'rolling' ? dayParam(b.startOn, 'startOn', { optional: true }) : null };
   return { text: invitationText(ctx.db, ctx.config, c, fake, client, requestNow(ctx)) };
@@ -1002,7 +1010,7 @@ function myAccept(_req, ctx) {
 
 function myDecline(_req, ctx) {
   const { e, c } = mine(ctx);
-  declineEnrolment(ctx.db, c, e, { now: requestNow(ctx) });
+  declineEnrolment(ctx.db, c, e, { now: requestNow(ctx), config: ctx.config });
   return { ok: true };
 }
 
@@ -1272,7 +1280,7 @@ function planPost(_req, ctx) {
       const row = acceptEnrolment(ctx.db, ctx.config, t.c, t.e, { via: 'plan', now });
       return raw(303, { location: `/plan/${token}?done=${row.status === 'waitlisted' ? 'waitlisted' : 'accepted'}`, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }, '');
     }
-    declineEnrolment(ctx.db, t.c, t.e, { now });
+    declineEnrolment(ctx.db, t.c, t.e, { now, config: ctx.config });
     return raw(303, { location: `/plan/${token}?done=declined`, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }, '');
   } catch (err) {
     if (err.status === 409) return enrolmentPage(ctx.db, ctx.config, { ...t, e: reload(ctx.db, t.e.id) }, token, now, err.message, 409);
@@ -1543,7 +1551,7 @@ export const feature = {
     'campaign.invited': { label: 'A client was invited to a campaign', payload: ['enrolmentId', 'campaignId'] },
     'campaign.declined': { label: 'A client declined a campaign (or the invitation expired)', payload: ['enrolmentId', 'campaignId', 'reason'] },
     'campaign.waitlisted': { label: 'A client joined a campaign waitlist', payload: ['enrolmentId', 'campaignId'] },
-    'campaign.enrolled': { label: 'A client accepted a campaign', payload: ['enrolmentId', 'campaignId', 'feePence', 'invoice', 'campaignName', 'discountCode', 'startOn', 'via'] },
+    'campaign.enrolled': { label: 'A client accepted a campaign', payload: ['enrolmentId', 'campaignId', 'feePence', 'invoice', 'campaignName', 'discountCode', 'discountPence', 'startOn', 'via'] },
     'campaign.activityDue': { label: 'Campaign activities are due today', payload: ['enrolmentId', 'campaignId', 'day', 'count'] },
     'campaign.activityDone': { label: 'A client ticked a campaign activity', payload: ['enrolmentId', 'campaignId', 'itemId'] },
     'campaign.behind': { label: 'A client fell behind pace on a campaign', payload: ['enrolmentId', 'campaignId', 'pace'] },

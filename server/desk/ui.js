@@ -848,7 +848,7 @@ const BANDS = [[70, 'ok', 'Healthy'], [45, 'attention', 'Watch'], [0, 'urgent', 
  * number in the centre and the band word beneath. `band` is {word, tone} (tone:
  * ok | attention | urgent | data); without it the bands are 70+ / 45+ / below.
  */
-export function scoreRing(score, { size = 56, label = 'Health', band = null } = {}) {
+export function scoreRing(score, { size = 56, label = 'Health', band = null, unit = '' } = {}) {
   const v = score === null || score === undefined ? null : Math.max(0, Math.min(100, Math.round(score)));
   const [, tone, word] = band ? [0, band.tone, band.word] : v === null ? [0, 'data', 'No score'] : BANDS.find(([min]) => v >= min);
   const stroke = Math.max(3, Math.round(size / 14));
@@ -858,7 +858,7 @@ export function scoreRing(score, { size = 56, label = 'Health', band = null } = 
     svgNode('circle', { class: 'ui-ring-arc', cx: size / 2, cy: size / 2, r, fill: 'none', 'stroke-width': stroke, 'stroke-linecap': 'round',
       'stroke-dasharray': `${(c * (v ?? 0) / 100).toFixed(2)} ${c.toFixed(2)}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }));
   return h('span', { class: `ui-score tone-${tone}`, role: 'img', 'aria-label': `${label}: ${v ?? 'none'}${v === null ? '' : ' of 100'}, ${word}` },
-    h('span', { class: 'ui-score-ring', style: { width: `${size}px`, height: `${size}px` } }, svg, h('span', { class: 'ui-score-n', style: { fontSize: `${Math.round(size * 0.32)}px` } }, v === null ? '–' : String(v))),
+    h('span', { class: 'ui-score-ring', style: { width: `${size}px`, height: `${size}px` } }, svg, h('span', { class: 'ui-score-n', style: { fontSize: `${Math.round(size * (unit ? 0.27 : 0.32))}px` } }, v === null ? '–' : `${v}${unit}`)),
     h('span', { class: 'ui-score-word' }, word));
 }
 

@@ -41,7 +41,7 @@ export function stateLine(v, { coachView = true } = {}) {
   switch (v?.status) {
     case 'pending': return 'Transcribing…';
     case 'done': return v.transcript === null || v.transcript === undefined ? 'Transcript removed'
-      : v.provider === 'stub' ? 'Sample transcript (AI is off)' : 'Automatic transcript, may contain mistakes';
+      : v.provider === 'stub' ? 'Sample transcript (AI stub)' : 'Automatic transcript, may contain mistakes';
     case 'off': return v.reason === 'aiOff' ? 'Transcripts are off' : v.reason === 'quota' ? 'Transcript not available today'
       : coachView ? 'Not transcribed' : 'You chose no transcription';
     case 'deleted': return 'Voice note deleted';

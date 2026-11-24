@@ -259,6 +259,7 @@ function buildInTx(db, today, config, fixtures) {
     const settings = coachSettings(db, coach.id);
     saveCoachSettings(db, coach.id, { ...settings, formChecks: true, challenges: true });
     db.prepare("INSERT INTO meta (key, value) VALUES ('demo_built', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(today);
+    db.prepare("INSERT INTO meta (key, value) VALUES ('demo_features', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(demoFeatureKey());
   });
 }
 
@@ -335,9 +336,13 @@ function library(db, coach, byName, today) {
 }
 
 /** Build the demo world if it isn't there or wasn't built today. Returns whether it built. */
+/** Which features' demo builders made the demo world: a deploy that adds a feature rebuilds it the same day. */
+const demoFeatureKey = () => FEATURES.filter(f => f.demo?.build).map(f => f.name).sort().join(',');
+
 export function seedDemo(db, today = londonDay(), config = null) {
   const built = db.prepare("SELECT value FROM meta WHERE key='demo_built'").get()?.value;
-  if (built === today && db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-client'").get()) {
+  const features = db.prepare("SELECT value FROM meta WHERE key='demo_features'").get()?.value ?? '';
+  if (built === today && features === demoFeatureKey() && db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-client'").get()) {
     demoPortrait(db, config);
     return false;
   }

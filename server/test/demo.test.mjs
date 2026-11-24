@@ -11,6 +11,10 @@ test('the demo world has months of history and a nightly rebuild keeps everyone 
   seedCatalogue(db);
   assert.equal(seedDemo(db), true);
   assert.equal(seedDemo(db), false, 'once a day');
+  // A deploy that brings new demo builders rebuilds the same day (the stored list of features no longer matches).
+  db.prepare("UPDATE meta SET value='an-older-release' WHERE key='demo_features'").run();
+  assert.equal(seedDemo(db), true, 'rebuilt for the new features');
+  assert.equal(seedDemo(db), false);
   const sam = db.prepare("SELECT * FROM users WHERE apple_sub='demo-client'").get();
   const token = issueSession(db, sam.id);
   const count = sql => db.prepare(sql).get(sam.id).n;

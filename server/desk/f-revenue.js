@@ -79,7 +79,7 @@ async function overview(body, sub, view) {
         h('div', { class: `rv-delta ${delta === null ? '' : delta >= 0 ? 'tone-ok' : 'tone-attention'}` }, delta === null ? 'No payments last month to compare' : [icon(delta >= 0 ? 'trending_up' : 'trending_down', 16), `${delta >= 0 ? '+' : ''}${delta}% on last month, same days`]),
         s.target ? h('div', { class: 'small muted' }, pct >= 100 ? 'Target reached. Lovely month.' : `${money(Math.max(0, s.target - m.collectedPence))} to go · on pace would be ${money(pace)} by today`) : null,
         setTarget),
-      s.target ? h('div', { class: 'rv-ring' }, scoreRing(Math.min(100, pct), { size: 132, label: 'Monthly target', band: { word: `% of ${roundMoney(s.target)}`, tone: pct >= 100 ? 'ok' : pct * m.daysInMonth >= 100 * Number(m.day.slice(8, 10)) ? 'ok' : 'attention' } })) : null),
+      s.target ? h('div', { class: 'rv-ring' }, scoreRing(Math.min(100, pct), { size: 132, unit: '%', label: 'Monthly target', band: { word: `of ${roundMoney(s.target)}`, tone: pct >= 100 ? 'ok' : pct * m.daysInMonth >= 100 * Number(m.day.slice(8, 10)) ? 'ok' : 'attention' } })) : null),
     h('div', { class: 'rv-hero-split' },
       h('div', null, h('div', { class: 'bl-k' }, 'Last month'), h('div', { class: 'bl-v t-num' }, roundMoney(m.lastMonthPence))),
       h('div', null, h('div', { class: 'bl-k' }, 'Billed MRR'), h('div', { class: 'bl-v t-num' }, money(s.totals.billedMrrPence))),

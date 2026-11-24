@@ -13,6 +13,7 @@ import {
 } from './core.js';
 import { invalidate, londonAt, londonNow, onRefresh } from './f-command-core.js';
 import { markAllDone } from './f-command.js';
+import { voiceBubble } from './f-voice.js';
 import { threadPane } from './messages.js';
 import { dateField, emptyHero, flash, kbd, menu, pageHead, popover, skeleton, splitView, timeField } from './ui.js';
 
@@ -247,11 +248,12 @@ route('/inbox/:filter?', async (el, params, view) => {
       h('button', { type: 'button', class: 'ui-icon-btn cmd-ib-back', 'aria-label': 'Back to the list', onclick: () => { opened = null; drawDetailEmpty(); drawList(); listEl.focus(); } }, icon('chevron_left', 20)),
       h('span', { class: `cmd-ib-dkind ib-${item.tone}` }, icon(item.icon || 'inbox', 16), KIND_LABEL[item.kind] || item.kind),
       h('span', { class: 'grow' }),
-      item.status === 'open'
-        ? [h('button', { type: 'button', class: 'btn small', title: 'Snooze (s)', onclick: e => snoozeMenu(e.currentTarget, [item.key]) }, icon('snooze', 16), 'Snooze'),
-          h('button', { type: 'button', class: 'btn small primary', title: 'Done (e)', onclick: () => change([item.key], 'done') }, icon('check', 16), 'Done')]
-        : h('button', { type: 'button', class: 'btn small', onclick: () => change([item.key], 'open') }, icon('undo', 16), 'Back to inbox'),
-      c && item.ref?.type !== 'thread' ? link(`/clients/${enc(c.id)}`, { class: 'btn small text' }, `Open ${firstName(c.name)}`) : null);
+      h('span', { class: 'cmd-ib-dacts' },
+        c && item.ref?.type !== 'thread' ? link(`/clients/${enc(c.id)}`, { class: 'btn small', title: `Open ${c.name}` }, icon('person', 16), firstName(c.name)) : null,
+        item.status === 'open'
+          ? [h('button', { type: 'button', class: 'btn small', title: 'Snooze (s)', onclick: e => snoozeMenu(e.currentTarget, [item.key]) }, icon('snooze', 16), 'Snooze'),
+            h('button', { type: 'button', class: 'btn small primary', title: 'Done (e)', onclick: () => change([item.key], 'done') }, icon('check', 16), 'Done')]
+          : h('button', { type: 'button', class: 'btn small', onclick: () => change([item.key], 'open') }, icon('undo', 16), 'Back to inbox')));
   }
 
   async function open(item, { focus = true } = {}) {
@@ -367,11 +369,22 @@ route('/inbox/:filter?', async (el, params, view) => {
       });
       return b;
     });
+    // A voice note plays here, with its transcript and analysis (WP6's bubble), so the coach needn't leave the Inbox.
+    const player = item.kind === 'voice' && item.clientId ? h('div', { class: 'cmd-ib-voice' }, skeleton('lines', { rows: 2 })) : null;
     fill(pane, h('div', { class: 'cmd-review', tabindex: '-1' },
       h('div', { class: 'cmd-review-who' }, item.client ? avatar(item.client.initials || item.client.name, 44) : h('span', { class: 'avatar cmd-ib-noav big' }, icon(item.icon || 'inbox', 22)),
         h('div', null, h('div', { class: 'cmd-review-name' }, item.title), h('div', { class: 'small muted' }, [item.client?.name, KIND_LABEL[item.kind] || item.kind].filter(Boolean).join(' · ')))),
-      item.preview ? h('blockquote', { class: 'cmd-quote' }, item.preview) : null,
+      player ?? (item.preview ? h('blockquote', { class: 'cmd-quote' }, item.preview) : null),
       h('div', { class: 'row end cmd-review-act' }, actions, item.path ? link(item.path, { class: 'btn primary' }, 'Open', icon('chevron_right', 16)) : null)));
+    if (player) {
+      const id = String(item.key).replace(/^voice:/, '');
+      api('GET', `/api/voice?clientId=${enc(item.clientId)}&limit=50`).then(r => {
+        const m = r.items?.find(x => x.message.id === id)?.message;
+        if (!player.isConnected) return;
+        if (m) fill(player, voiceBubble({ ...m, clientName: item.client?.name }, { coachView: true, onChanged: () => { invalidate(); reload(); } }));
+        else fill(player, item.preview ? h('blockquote', { class: 'cmd-quote' }, item.preview) : null);
+      }).catch(() => { if (player.isConnected) fill(player, item.preview ? h('blockquote', { class: 'cmd-quote' }, item.preview) : null); });
+    }
   }
 
   // MARK: Keyboard: j/k move, Enter open, e done, s snooze, r reply, x select

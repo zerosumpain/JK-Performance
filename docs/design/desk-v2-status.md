@@ -9,17 +9,19 @@ The wave-1 branches were merged with merge commits in the order the spec gives: 
 `wp1`, then `desk-v2-ios` and `desk-v2-android`. All eleven branches existed. None of the merges had a conflict, so no package broke file
 ownership.
 
-Integration work is in two commits after the merges:
+Integration work is in commits after the merges:
 - `Apply wave-1 integration requests and add the End coaching cross-package test`
 - `Polish the integrated desk from the preview pass`
+- `Word automation trigger values on the server and write the desk v2 status`
+- `Fix the review findings: AI taint chains, billing edge cases, desk polish` (see "Review fixes" below)
 
 ## Validation (section 7)
 
 | Check | Result |
 |---|---|
-| `node --test server/test/*.test.mjs`, real day | 492 of 492 pass (36 files) |
-| Same, `TZ=Europe/London FAKE_TODAY=monday` | 492 of 492 pass |
-| Same, `TZ=Europe/London FAKE_TODAY=sunday` | 492 of 492 pass |
+| `node --test server/test/*.test.mjs`, real day | 502 of 502 pass (36 files) |
+| Same, `TZ=Europe/London FAKE_TODAY=monday` | 502 of 502 pass |
+| Same, `TZ=Europe/London FAKE_TODAY=sunday` | 502 of 502 pass |
 | `demo-features.test.mjs` with every feature loaded | passes (all 20 feature files are in `server/features/`) |
 | Cross-package End coaching test (`server/test/integration.test.mjs`) | passes |
 | `node --check` on every server `.mjs` and desk module | clean |
@@ -27,7 +29,7 @@ Integration work is in two commits after the merges:
 | `node scripts/contrast-check.mjs desk`, `ios`, `android` | 51 pairs pass on each |
 | `scripts/export-symbols.mjs --check` and `--desk --check` | 113 glyphs (226 drawables) and 174 desk glyphs current |
 | Start-up migration on a temp copy of the latest prod backup (`backup-before-f3802da6277f.sqlite`, 6.9) | about 150 ms in total: core 22 ms, loading features 114 ms, feature schemas 18 ms. The copy was deleted afterwards. |
-| Local preview at `http://100.83.68.108:5671` | Rebuilt, demo rebuilt. Desktop and phone screenshots of all 25 nav items had no console errors. No route scrolls sideways at 390 px. |
+| Local preview at `http://100.83.68.108:5671` | Rebuilt, demo rebuilt. Desktop and phone screenshots of all 25 nav items had no console errors. No route scrolls sideways at 390 px. After the review fixes: rebuilt again with a fresh demo world; 11 screens on desktop and phone plus the AI check, trigger sheet, Go live, slot finder, Propose, Inbox voice, invoice lines and Add lead flows re-shot, no console errors. |
 
 **End coaching (F8) done condition.** `integration.test.mjs` sets up a recurring schedule, an issued invoice, a live campaign with a 09:00
 nudge and a hand-started automation that is waiting. It then ends coaching through WP2's real `POST /api/coach/clients/:id/end`. After that,
@@ -45,7 +47,7 @@ is `dropped`, the run is `stopped`, and that re-enrolling the client starts noth
 | F2 | Palette, search, shortcuts | ✓ (gap) | The Clients group can't show stage or score yet: `palette.js` has no detail hook. |
 | F3 | Notifications | ✓ | `notifyCoach` now honours `notify.prefs[kind] === false` for every kind. Settings › Notifications lists every loaded package's kinds. |
 | F4 | Inbox | ✓ | Voice notes are listed once (WP6's item, with the analysis). There are new Testimonials and Waitlist filters, which show only when they have items. |
-| F5 | Client 360 and health score | ✓ (partial) | Only the Overview's top row is a bento; the sections below keep two columns. The AI brief tile and voice-consent chip are in. |
+| F5 | Client 360 and health score | ✓ (partial) | Only the Overview's top row is a bento; the sections below keep two columns. The AI brief tile and voice-consent chip are in. Voice sentiment is shown, not scored (D5, see decisions). |
 | F6 | Leads and enquiry form | ✓ (partial) | Plan consult or trial uses WP11's own day and time sheet, because WP7 has no desk entry point for its slot finder. |
 | F7 | Lifecycle, tags, segments | ✓ | |
 | F8 | Retention, pause, End coaching, win-back | ✓ | The cross-package test passes. The radar's Offer play now opens a "send a personal code" sheet on `/offers?client=`. The plays use WP5 templates by category. |
@@ -113,6 +115,9 @@ Lint allow-list: no package asked for an entry, so `scripts/lint-design-allow.tx
 
 ## Decisions WP-Z made
 
+- **Voice sentiment is shown but not scored** in the F5 health score (review fix; D5 over the spec's formula).
+- **AI-added tags are coach-side only.** `client_tags.added_by='ai'` tags never count towards audiences or client-facing automation rules.
+
 - **January Reset is live in the demo, not a draft.** The spec says draft in F13, but F28 needs it as a public offer with 3 interested leads, and
   `publicOffers` lists live campaigns only. A draft should never be on a public page, so it is safer to make the demo campaign live (open for
   sign-ups, nobody in it yet) than to let drafts be public.
@@ -120,7 +125,50 @@ Lint allow-list: no package asked for an entry, so `scripts/lint-design-allow.tx
 - **Phones show only the current breadcrumb.** A breadcrumb step with no link ("Engage") is drawn as a group label, the same as the shell's own.
 - **The Inbox lists each voice note once**, as WP6's item. WP1's thread item now leaves out voice messages when the voice feature is loaded.
 
+## Review fixes (second review, 24 November)
+
+Each finding was checked against the code first. All were real; none was skipped.
+
+| Finding | Severity | What changed |
+|---|---|---|
+| Automations launder AI judgements through `tag.add` and `task.create` | major | A run is tainted when its automation uses an AI input, when the event that started it carried `aiDerived` (stored on the run as `automation_runs.ai_derived`), or when a tag it looks at was added by the AI. A tainted run only does coach-side steps, and those carry the taint on: `tag.add`/`tag.remove` write `added_by='ai'` and emit `client.tagged`/`client.untagged` with `aiDerived: true`; `task.create` emits `task.created` with `aiDerived: true` (also for voice- and AI-sourced tasks). Facts used to decide anything client-facing (`forSending`: broadcast and automated audiences, client-facing automations' rules) leave AI-added tags out, and leave out segments built on AI facts. `aiFactsIn` follows `core.segments` into a segment's own rules, so an AI segment can't be smuggled into an audience. Test: `integration.test.mjs` chains voice.flagged → tag.add → client.tagged → message.send, voice.flagged → task.create → task.created → message.send, and an "enters" on the AI's tag; zero messages. |
+| CRM health score uses voice sentiment but is not `aiDerived` | major | **Decision:** voice sentiment no longer moves the score. The score feeds `crm.band`, `crm.stage`, `client.stageChanged` and `crm.bandChanged`, which automations and audiences use to message clients, so marking only the score as AI would still leak through the stage. The breakdown shows "Low mood in voice notes (AI, not scored)". This drops the spec's −0.25 sentiment term on purpose (D5 wins). |
+| Client text can switch off the AI check | major | Every reviewer, draft and summary prompt now wraps the client facts in `<client_facts>` and the system prompt says never to follow instructions inside them. A deterministic floor (`safetyFloor`) runs after any real provider: a reported pain the draft ignores is at least caution, telling someone in pain to push on (or medical advice) is a stop. Test with a fake provider that answers ok. |
+| Stub misses "push through the pain" | major | `stubReview` stops on push/train through, "all in your head", "no excuses" and similar when there is pain; the rewrite drops those sentences and leads with "How is the knee today? Let's adjust the session around it." |
+| Unknown template variables reach clients | blocker | Turning an automation on refuses any `{name}` the variable catalogue doesn't know (400 "Step 1: unknown variable {firstName}…"). The builder's checklist and the step card say so before Save, and the sentence draws the unknown chip in red. |
+| Refund at end of coaching credits a draft package invoice | blocker | Credit only for issued or paid package invoices, capped at what is left to credit. A draft is cut to the sessions used, or voided when none were. The offboarding preview uses the same figure. |
+| Zero-total recurring invoice sticks the schedule | blocker | With auto-issue, a discount that covers the whole bill issues it settled (`paid`, nothing sent). The auto-issue runs in its own savepoint: a failure leaves the draft, tells the coach, and the schedule still moves on. |
+| Schedule discounts limited by per-client max | major | A recurring invoice whose discount is its schedule's is limited by `discount_cycles` only (per-client max and first-invoice-only are skipped), on draft and on issue. |
+| Voiding an invoice with a credit note leaves phantom credit | major | 409 "This invoice has credit notes: credit the rest instead of voiding it". |
+| Campaign per-enrolment discount not billed | major | `campaign.enrolled` carries `discountPence`; billing bills the net fee ("(£49 less £9 discount)") unless a valid code already applies. A 100% discount raises no invoice. |
+| Freed waitlist place not re-offered after a decline or expiry | major | A declined or expired freed-place invitation offers the place to the next waitlisted client, at most one open offer per free place. Raising capacity still doesn't offer places (see known issues). |
+| Reminders not re-armed after a reschedule | minor | calsync forgets a booking's sent reminders on `booking.rescheduled`. |
+| Plan credits vs packages disagree on forfeited late cancels | minor | `coveredByPlan` counts what `credits()` counts. |
+| Demo not rebuilt after a deploy the same day | minor | `meta.demo_features` records which feature builders made the demo; a different set rebuilds it. |
+| Enquiry form rate limit | minor | `cf-connecting-ip` is believed only from a loopback or private-network peer (the tunnel); a cap of 30 an hour per form; past three enquiries an hour the coach gets one "New enquiries" notification per hour. |
+| AI check panel buttons off-screen | major | The decision row is sticky at the bottom of the scrolling review; Send original and Use rewrite wrap as a pair; the scheduled-message tray steps aside while a review is open, so the composer stays in view on desktop and phone. |
+| Pain from voice notes hidden in the thread rail | major | "Pain (14 d)" reads "Voice note (AI)" in the attention tone when only `voice.pain14` is set. `core.pain14` stays non-AI. |
+| Trigger sheet shows payload keys | major | Typed, labelled filters ("Session type", "Done by", "Late", "Credit given back"), ids/times/money left out. "When something happens" creates an event-less draft (`trigger.event: null` is allowed in drafts; going live needs one) and opens the event picker. |
+| Campaign Go live dead end | minor | A fixed-dates draft without a start asks "When does it start?", saves it and goes live. |
+| Demo calendar buttons fail | minor | In the demo, Sync now is hidden and Connect is a note: "Demo: these calendars are simulated." |
+| Slot finder ranking | minor | Days the client already has a session drop down with "Already seeing Alex at 12:15"; the finder warns when the client is paused or ended. |
+| Propose sends without preview | minor | Propose opens a composer (send guards apply); the text says the slot isn't held. |
+| Inbox voice item can't play | minor | The detail pane plays the note with WP6's bubble; the client link sits in the button row. |
+| Today and Billing disagree on money due | minor | New fact `billing.outstanding` (owed on issued invoices); Today's "due" uses it, so both say the same. |
+| Retention cards mix stage and health words | minor | The ring is captioned "Health" in its band colour, the chip reads "Stage …", and a client at the At risk stage sits in the At risk column. |
+| Breadcrumbs inconsistent | minor | Every page leads with its nav group in one style; a page's own group step is folded in; only the current crumb truncates. Default tabs (Insights, Marketing) no longer replace the title on phones. |
+| Money input inconsistent | minor | The invoice line's £ field matches its neighbours; no second box inside the field in dialogs. |
+| Copy polish | minor | "A session is coming up (24 hours before)"; "Sample transcript (AI stub)"; "0%" and "19%" inside rings (`scoreRing` takes `unit`); the invitation preview greets "{first}" and leaves out kit lines when there is no kit. |
+| Phone layout details | minor | Sparkline inset; heatmap fades at the edge with "Swipe for later hours"; the Sequences (legacy) tab hides when there are none; the thread reaches the bottom bar. |
+| Review side effects on the local demo | minor | The demo world was rebuilt (twice) after the fixes. |
+
 ## Known gaps and issues
+
+- **AI taint:**
+  - An AI-driven `tag.remove` is marked on its event, but a "does not have tag X" rule can't tell the tag was removed by the AI.
+  - The taint test for AI tags is per tag the automation looks at: an automation that reads a tag the AI added is coach-side only for that client.
+- **Campaigns:** raising capacity on a live campaign doesn't offer the new places to the waitlist; the coach invites them.
+- **Enquiry form:** the per-form cap (30 an hour) also turns away real people during a flood.
 
 - **Demo data:**
   - Every demo voice note plays the same 3.2 s clip, so the player stops at 0:03.

@@ -110,8 +110,8 @@
 .bl-line-amount{text-align:right;font-weight:600}
 .bl-line input,.bl-line select{width:100%;min-width:0;background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r-control);padding:7px 9px;min-height:36px}
 .bl-line input:focus,.bl-line select:focus{outline:none;border-color:var(--accent);box-shadow:var(--focus)}
-.bl-line .ui-money{width:100%}
-.bl-line .ui-money input{border:0;background:none;box-shadow:none;padding:0 0 0 2px;min-height:0}
+.bl-line .ui-money{width:100%;min-height:36px;padding:0 9px;background:var(--surface);border-color:var(--hairline)}
+.bl-line .ui-money>.ui-money-sign+input{padding:7px 0 7px 2px;width:100%;min-width:0}
 /* Narrow containers (the paper, the wizard, phones): the description gets its own row. */
 @container bl-lines (max-width:660px){
   .bl-line-headrow{display:none}

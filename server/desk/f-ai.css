@@ -92,3 +92,12 @@
 }
 .ai-check-panel{background:var(--sheen),var(--surface)}
 .ai-check-panel .ai-pop-head{margin-bottom:10px}
+.ai-buttons-main{display:flex;align-items:center;gap:8px;margin-left:auto}
+/* The review scrolls inside the composer; its decision row stays in view at the bottom. */
+.cmp-panel[data-guard="ai-review"]{max-height:min(60dvh,600px);overflow-y:auto;overscroll-behavior:contain}
+.ai-check-panel .ai-buttons,.cmp-panel[data-guard="ai-review"] .ai-buttons{position:sticky;bottom:-14px;z-index:1;margin:0 -18px -16px;padding:10px 18px 14px;background:var(--surface);border-top:1px solid var(--hairline)}
+@media (max-width:820px){
+  .cmp-panel.ai-check-panel,.cmp-panel[data-guard="ai-review"]{max-height:min(44dvh,460px)}
+}
+/* The review needs the room: the scheduled-message tray steps aside while it is open, so the composer stays in view. */
+.thread-pane:has(.ai-check-panel,.cmp-panel[data-guard="ai-review"]) .ob-tray{display:none}

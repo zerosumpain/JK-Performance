@@ -69,7 +69,7 @@ function anniversaryIn(createdAt, today) {
 }
 
 /** The built-in core.* facts for a batch of clients. */
-function coreFacts(db, coachId, clients, { today, now, want }) {
+function coreFacts(db, coachId, clients, { today, now, want, forSending = false }) {
   const ids = clients.map(c => c.id);
   const json = JSON.stringify(ids);
   const out = new Map(clients.map(c => [c.id, {}]));
@@ -128,7 +128,9 @@ function coreFacts(db, coachId, clients, { today, now, want }) {
   }
   if (needs('core.tags')) {
     const tags = new Map();
-    for (const r of db.prepare(`SELECT ct.client_id, ct.tag_id FROM client_tags ct JOIN tags t ON t.id=ct.tag_id WHERE t.coach_id=? AND ct.client_id IN (${IDS}) ORDER BY t.name`).all(coachId, json)) {
+    // forSending leaves out tags an AI-driven automation added (added_by 'ai'): they may drive coach-side steps only (6.3).
+    for (const r of db.prepare(`SELECT ct.client_id, ct.tag_id FROM client_tags ct JOIN tags t ON t.id=ct.tag_id WHERE t.coach_id=? AND ct.client_id IN (${IDS})
+        ${forSending ? "AND ct.added_by<>'ai'" : ''} ORDER BY t.name`).all(coachId, json)) {
       tags.set(r.client_id, [...(tags.get(r.client_id) ?? []), r.tag_id]);
     }
     for (const c of clients) out.get(c.id)['core.tags'] = tags.get(c.id) ?? [];
@@ -153,14 +155,14 @@ function coreFacts(db, coachId, clients, { today, now, want }) {
  * which is computed only when asked for. A provider that throws gives null for
  * its fact (and is logged). Client ids that are not this coach's are ignored.
  */
-export function clientFacts(db, coachId, clientIds, { only = null, today = null, now = new Date() } = {}) {
+export function clientFacts(db, coachId, clientIds, { only = null, today = null, now = new Date(), forSending = false } = {}) {
   const day = today ?? londonDay(now);
   const catalogue = allFacts();
   const want = new Set(only ?? catalogue.map(f => f.id).filter(id => id !== 'core.segments'));
   const clients = clientIds.length
     ? db.prepare(`SELECT * FROM users WHERE role='client' AND coach_id=? AND id IN (${IDS})`).all(coachId, JSON.stringify([...new Set(clientIds)]))
     : [];
-  const out = coreFacts(db, coachId, clients, { today: day, now, want });
+  const out = coreFacts(db, coachId, clients, { today: day, now, want, forSending });
   const ids = clients.map(c => c.id);
   for (const f of catalogue) {
     if (f.feature === 'core' || !want.has(f.id)) continue;
@@ -172,9 +174,12 @@ export function clientFacts(db, coachId, clientIds, { only = null, today = null,
     }
   }
   if (want.has('core.segments')) {
-    const segments = db.prepare('SELECT id, rules FROM segments WHERE coach_id=?').all(coachId).map(s => ({ id: s.id, rules: JSON.parse(s.rules) }));
+    const ai = new Set(allFacts().filter(f => f.aiDerived).map(f => f.id));
+    // forSending: a segment built on AI judgements never counts towards something that reaches a client (6.3).
+    const segments = db.prepare('SELECT id, rules FROM segments WHERE coach_id=?').all(coachId).map(s => ({ id: s.id, rules: JSON.parse(s.rules) }))
+      .filter(s => !forSending || !factsIn(s.rules).some(id => ai.has(id)));
     const referenced = [...new Set(segments.flatMap(s => factsIn(s.rules)))].filter(id => id !== 'core.segments' && !want.has(id));
-    const extra = referenced.length ? clientFacts(db, coachId, ids, { only: referenced, today: day, now }) : null;
+    const extra = referenced.length ? clientFacts(db, coachId, ids, { only: referenced, today: day, now, forSending }) : null;
     for (const id of ids) {
       const facts = { ...out.get(id), ...(extra?.get(id) ?? {}) };
       out.get(id)['core.segments'] = segments.filter(s => { try { return evaluate(s.rules, facts); } catch { return false; } }).map(s => s.id);
@@ -193,6 +198,23 @@ export function factsIn(rules) {
   if (!rules || typeof rules !== 'object') return [];
   if (Array.isArray(rules.rules)) return rules.rules.flatMap(factsIn);
   return typeof rules.fact === 'string' ? [rules.fact] : [];
+}
+
+/**
+ * The AI-derived facts (6.3) a rules object leans on, including through the
+ * segments it names with core.segments (a segment can't name segments).
+ */
+export function aiFactsIn(db, coachId, rules) {
+  const ai = new Set(allFacts().filter(f => f.aiDerived).map(f => f.id));
+  const out = new Set(factsIn(rules).filter(id => ai.has(id)));
+  const segIds = [];
+  const walk = r => { if (!r || typeof r !== 'object') return; if (Array.isArray(r.rules)) r.rules.forEach(walk); else if (r.fact === 'core.segments') segIds.push(...[r.value].flat()); };
+  walk(rules);
+  for (const id of segIds.filter(x => typeof x === 'string')) {
+    const seg = db.prepare('SELECT rules FROM segments WHERE id=? AND coach_id=?').get(id, coachId);
+    if (seg) for (const f of factsIn(JSON.parse(seg.rules))) if (ai.has(f)) out.add(f);
+  }
+  return [...out];
 }
 
 /**
@@ -282,10 +304,8 @@ export function resolveAudience(db, coachId, audience, { purpose = 'any', now = 
     if (!seg) fail(404, 'Not found');
     ruleSets.push(JSON.parse(seg.rules));
   }
-  if (['broadcast', 'automated'].includes(purpose)) {
-    const ai = new Set(allFacts().filter(f => f.aiDerived).map(f => f.id));
-    if (ruleSets.some(r => factsIn(r).some(id => ai.has(id)))) fail(400, 'Audiences that message clients can\'t use AI judgements');
-  }
+  const sending = ['broadcast', 'automated'].includes(purpose);
+  if (sending && ruleSets.some(r => aiFactsIn(db, coachId, r).length)) fail(400, 'Audiences that message clients can\'t use AI judgements');
   const all = db.prepare("SELECT * FROM users WHERE role='client' AND coach_id=? AND is_demo=? ORDER BY name").all(coachId, coach.is_demo);
   const chosen = new Set();
   if (audience.clientIds !== undefined) {
@@ -294,7 +314,7 @@ export function resolveAudience(db, coachId, audience, { purpose = 'any', now = 
     for (const c of all) if (wanted.has(c.id)) chosen.add(c.id);
   }
   if (ruleSets.length) {
-    const facts = clientFacts(db, coachId, all.map(c => c.id), { only: [...new Set(ruleSets.flatMap(factsIn))], now, today });
+    const facts = clientFacts(db, coachId, all.map(c => c.id), { only: [...new Set(ruleSets.flatMap(factsIn))], now, today, forSending: sending });
     for (const c of all) if (ruleSets.some(r => evaluate(r, facts.get(c.id) ?? {}))) chosen.add(c.id);
   }
   const skipped = { outreachPaused: 0, noBroadcasts: 0 };
@@ -319,7 +339,8 @@ export function setClientTag(db, { coachId, clientId, tagId, on, by = 'coach' })
   const changed = on
     ? db.prepare('INSERT OR IGNORE INTO client_tags (client_id, tag_id, added_at, added_by) VALUES (?,?,?,?)').run(clientId, tagId, nowIso(), by).changes
     : db.prepare('DELETE FROM client_tags WHERE client_id=? AND tag_id=?').run(clientId, tagId).changes;
-  if (changed) emit(db, on ? 'client.tagged' : 'client.untagged', { coachId, clientId, summary: `${on ? 'Tagged' : 'Untagged'} ${tag?.name ?? ''}`.trim(), tagId, by });
+  // by 'ai': an automation acting on an AI judgement. Its events carry the taint so nothing downstream can message the client (6.3).
+  if (changed) emit(db, on ? 'client.tagged' : 'client.untagged', { coachId, clientId, summary: `${on ? 'Tagged' : 'Untagged'} ${tag?.name ?? ''}`.trim(), tagId, by, ...(by === 'ai' ? { aiDerived: true } : {}) });
   return changed > 0;
 }
 
@@ -570,11 +591,11 @@ const BUILTIN = {
   },
   'tag.add': (db, _config, ctx) => {
     if (!db.prepare('SELECT 1 FROM tags WHERE id=? AND coach_id=?').get(ctx.params.tagId, ctx.coachId)) return 'Skipped: no tag';
-    return setClientTag(db, { coachId: ctx.coachId, clientId: ctx.client.id, tagId: ctx.params.tagId, on: true, by: 'automation' }) ? 'Tagged' : 'Already tagged';
+    return setClientTag(db, { coachId: ctx.coachId, clientId: ctx.client.id, tagId: ctx.params.tagId, on: true, by: ctx.aiDerived ? 'ai' : 'automation' }) ? 'Tagged' : 'Already tagged';
   },
   'tag.remove': (db, _config, ctx) => {
     if (!db.prepare('SELECT 1 FROM tags WHERE id=? AND coach_id=?').get(ctx.params.tagId, ctx.coachId)) return 'Skipped: no tag';
-    return setClientTag(db, { coachId: ctx.coachId, clientId: ctx.client.id, tagId: ctx.params.tagId, on: false, by: 'automation' }) ? 'Untagged' : 'Not tagged';
+    return setClientTag(db, { coachId: ctx.coachId, clientId: ctx.client.id, tagId: ctx.params.tagId, on: false, by: ctx.aiDerived ? 'ai' : 'automation' }) ? 'Untagged' : 'Not tagged';
   },
   'coach.notify': (db, config, ctx) => {
     const body = ctx.params.body ? render(db, ctx.coachId, ctx.client, ctx.params.body, { extra: ctx.extra }).text : '';

@@ -10,8 +10,9 @@
 import {
   addDays, api, busy, button, clientById, clients, confirmBox, errorLine, field, fill, firstName, fmtRelative, go, h, icon,
   londonParts, mondayOf, prefs as deskPrefs, q, registerClientAction, registerCommand, registerNav, registerPanel, registerQuickCreate,
-  registerSettingsSection, registerWidget, sheet, switchRow, toast, todayLondon,
+  registerSettingsSection, registerWidget, sheet, state as deskState, switchRow, toast, todayLondon,
 } from './core.js';
+import { composer } from './composer.js';
 import { emptyHero, menu, moneyInput, segmentedNav, skeleton, slideOver } from './ui.js';
 import { HOLD_WORD, KIND_WORD, londonIso, longDay, shortDay, spanOf, whenOf } from './f-calendar-lib.js';
 
@@ -78,14 +79,15 @@ export function openFinder({ client = null, hold = null, from = null, to = null,
       try {
         const out = await api('GET', `/api/calendar/find?${q({ clientId: hold ? null : st.clientId, kind: hold ? null : st.kind, minutes: st.minutes, from: st.from, to: st.to, prefer: st.prefer })}`);
         if (mine !== seq) return;
-        drawResults(out.suggestions);
+        drawResults(out.suggestions, out.warning);
       } catch (err) { if (mine === seq) fill(results, errorLine(err)); }
     };
     const who = () => clientById(st.clientId) || (client && client.id === st.clientId ? client : null);
-    function drawResults(list) {
-      if (!list.length) { fill(results, emptyHero({ icon: 'event_busy', title: 'Nothing free.', line: 'Try a longer range, another kind of session, or any time of day.' })); return; }
+    function drawResults(list, warning = null) {
+      const warn = warning ? h('div', { class: 'cal-finder-warn' }, icon('pause_circle', 16), warning) : null;
+      if (!list.length) { fill(results, warn, emptyHero({ icon: 'event_busy', title: 'Nothing free.', line: 'Try a longer range, another kind of session, or any time of day.' })); return; }
       const best = Math.max(...list.map(s => s.score)), worst = Math.min(...list.map(s => s.score));
-      fill(results, h('div', { class: 'cal-eyebrow' }, `Top ${list.length} times`), list.map((s, i) => {
+      fill(results, warn, h('div', { class: 'cal-eyebrow' }, `Top ${list.length} times`), list.map((s, i) => {
         const p = londonParts(s.start);
         const pct = best === worst ? 100 : Math.round(30 + 70 * (s.score - worst) / (best - worst));
         const status = h('div');
@@ -99,10 +101,8 @@ export function openFinder({ client = null, hold = null, from = null, to = null,
             await api('POST', '/api/bookings', { clientId: st.clientId, kind: s.kind, start: s.start });
             toast(`Booked ${firstName(who()?.name)} · ${whenOf(s.start)}`); changed(); close(); onDone?.(s);
           }), { kind: i === 0 ? 'primary' : '', small: true }),
-          button('Propose', e => act(e.currentTarget, async () => {
-            await api('POST', '/api/messages', { clientId: st.clientId, text: `Hi ${firstName(who()?.name)}, how does ${whenOf(s.start).replace(' · ', ' at ')} look for our next ${KIND_WORD[s.kind] === 'Video' ? 'video call' : 'session'}? If it suits, book it in the app.` });
-            toast('Proposed in their messages');
-          }), { small: true })];
+          // Propose opens a composer the coach reads and sends (the normal send guards run); nothing goes until they press Send.
+          button('Propose', () => proposeSlot(who() ?? { id: st.clientId, name: '' }, s), { small: true })];
         return h('article', { class: 'cal-sugg' + (i === 0 ? ' best' : '') },
           h('div', { class: 'cal-sugg-when' },
             h('div', { class: 'cal-sugg-day' }, shortDay(p.day)),
@@ -133,6 +133,24 @@ export function openFinder({ client = null, hold = null, from = null, to = null,
     }
     drawForm().then(run);
   }, { wide: false, className: 'cal-panel', deepLink: client ? `finder:${client.id}` : hold ? null : 'finder:any' });
+}
+
+/** A proposal for one suggested time, in a composer: read, edit, Send. The slot isn't held. */
+function proposeSlot(client, s) {
+  const name = firstName(client.name) || 'there';
+  const text = `Hi ${name}, how does ${whenOf(s.start).replace(' · ', ' at ')} look for our next ${KIND_WORD[s.kind] === 'Video' ? 'video call' : 'session'}? If it suits, book it in the app soon: the slot isn't held for you.`;
+  slideOver(`Propose a time to ${name}`, (body, close) => {
+    const c = composer({
+      clientId: client.id, initial: text, label: `Message to ${client.name || name}`, placeholder: `Write to ${name}`,
+      onSend: async ({ text: t, mediaId, kind }) => {
+        await api('POST', '/api/messages', { clientId: client.id, text: t, ...(mediaId ? { mediaId } : {}), ...(kind && kind !== 'text' ? { kind } : {}) });
+        toast(`Proposed to ${name}`);
+        close();
+      },
+    });
+    body.append(h('p', { class: 'small muted' }, `${shortDay(londonParts(s.start).day)} ${londonParts(s.start).time} · ${KIND_WORD[s.kind] ?? s.kind}. Nothing is sent until you press Send.`), c.el);
+    requestAnimationFrame(() => c.focus());
+  });
 }
 
 // The deep link reopens the real finder (the panel host calls this when ?panel=finder:<id> is pasted).
@@ -504,7 +522,8 @@ function sourceRow(s, reload) {
     } },
   ], { label: s.label }) }, icon('more_horiz', 18));
   const patch = body => busy(null, status, async () => { await api('PATCH', `/api/calendar/sources/${enc(s.id)}`, body); changed(); reload(); });
-  const sync = h('button', { type: 'button', class: 'btn small', onclick: () => busy(sync, status, async () => { await api('POST', `/api/calendar/sources/${enc(s.id)}/sync`); toast('Synced'); changed(); reload(); }) }, icon('sync', 16), 'Sync now');
+  // The demo's calendars are simulated: nothing to fetch, so no button that can only fail.
+  const sync = deskState.me?.isDemo ? null : h('button', { type: 'button', class: 'btn small', onclick: () => busy(sync, status, async () => { await api('POST', `/api/calendar/sources/${enc(s.id)}/sync`); toast('Synced'); changed(); reload(); }) }, icon('sync', 16), 'Sync now');
   return h('div', { class: 'cal-source' },
     colorSwatch(s.color, { class: 'cal-swatch big' }),
     h('div', { class: 'grow' },
@@ -518,6 +537,10 @@ function sourceRow(s, reload) {
 }
 
 function drawConnect(box, onAdded) {
+  if (deskState.me?.isDemo) {
+    fill(box, h('div', { class: 'cal-demo-note' }, icon('lightbulb', 18), h('p', { class: 'small muted' }, 'Demo: these calendars are simulated. Sign in as a real coach to connect Google, Outlook or Apple.')));
+    return;
+  }
   let provider = PROVIDERS[0];
   const st = { label: '', url: '', color: 'chart-4', showTitles: false };
   const status = h('div');

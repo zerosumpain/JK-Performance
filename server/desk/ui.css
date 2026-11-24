@@ -220,6 +220,8 @@ table.ui-sr{display:block;clip-path:inset(50%)}
 .ui-score-word{font-size:12px;font-weight:600}
 .ui-money{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--input-border);border-radius:var(--r-control);padding:0 10px;background:var(--bg)}
 .ui-money input{border:none;background:none;padding:9px 0;box-shadow:none;font-variant-numeric:tabular-nums;width:9ch}
+/* Stronger than a dialog's or sheet's own input rule, so no second box is painted inside the field. */
+.ui-money>.ui-money-sign+input,.ui-money>.ui-money-sign+input:focus{border:none;background:none;box-shadow:none;outline:none;min-height:0;border-radius:0}
 .ui-money:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
 .ui-money input[aria-invalid="true"]{color:var(--error)}
 .ui-money-sign{color:var(--text-secondary)}

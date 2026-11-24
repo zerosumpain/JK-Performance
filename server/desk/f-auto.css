@@ -11,7 +11,8 @@
 .au-kpi-warn .au-kpi-n{color:var(--attention)}
 .au-kpi-detail{font-size:13px;color:var(--text-secondary)}
 .au-kpi-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
-.au-kpi-spark{color:var(--accent);line-height:0}
+.au-kpi-spark{color:var(--accent);line-height:0;padding-right:6px;min-width:0;flex:0 1 auto}
+.au-kpi-spark svg{max-width:100%;height:auto;overflow:visible}
 .au-tabbody{margin-top:18px}
 .au-section-title{display:flex;align-items:center;gap:8px;font-size:11px;line-height:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin:26px 0 12px}
 .au-section-title:first-child{margin-top:4px}
@@ -219,8 +220,8 @@
 .au-tpl-opt .clamp2{grid-column:1/-1}
 .au-tpl-sc{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)}
 .au-where{display:flex;flex-direction:column;gap:6px}
-.au-where-row{display:grid;grid-template-columns:110px 96px 1fr;gap:8px;align-items:center}
-.au-where-key{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis}
+.au-where-row{display:grid;grid-template-columns:minmax(110px,40%) 1fr;gap:10px;align-items:center}
+.au-where-key{font-size:13px;font-weight:600;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .au-days{display:flex;gap:6px;flex-wrap:wrap}
 .au-day{width:38px;height:38px;border-radius:50%;border:1px solid var(--input-border);background:var(--bg);color:var(--text-secondary);font-weight:600;cursor:pointer}
 .au-day.on{background:var(--accent-control);color:var(--primary-label);border-color:var(--accent-control)}
@@ -283,8 +284,9 @@
   .au-legacy-row{flex-direction:column}
   .au-legacy-actions{flex-direction:row;align-items:center;flex-wrap:wrap}
   .au-blank-grid{grid-template-columns:minmax(0,1fr)}
-  .au-where-row{grid-template-columns:90px 84px 1fr}
+  .au-where-row{grid-template-columns:minmax(96px,40%) 1fr}
   .au-side{grid-template-columns:minmax(0,1fr)}
 }
 .au-v{display:inline-block;font:600 .86em/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;font-style:normal;color:var(--accent);padding:0 5px;margin:0 1px;border-radius:6px;background:var(--accent-wash);vertical-align:.06em}
 .au-v::before{content:"{"}.au-v::after{content:"}"}
+.au-v.au-v-bad{color:var(--urgent);background:color-mix(in srgb,var(--urgent) 14%,transparent);text-decoration:underline wavy color-mix(in srgb,var(--urgent) 60%,transparent);text-underline-offset:3px}

@@ -278,7 +278,7 @@ function putSettings(_req, ctx) {
  * {ok, amountPence, reason}. Percent rounds down; both kinds are capped at
  * the eligible lines' sum. Limits count redemptions (written on issue).
  */
-export function checkDiscount(db, discount, { clientId, lines, today, invoiceId = null }) {
+export function checkDiscount(db, discount, { clientId, lines, today, invoiceId = null, scheduled = false }) {
   if (!discount) return { ok: false, reason: 'No such code' };
   if (!discount.active) return { ok: false, reason: 'That offer is switched off' };
   if (discount.client_id && discount.client_id !== clientId) return { ok: false, reason: 'That code belongs to another client' };
@@ -287,8 +287,9 @@ export function checkDiscount(db, discount, { clientId, lines, today, invoiceId 
   const used = db.prepare('SELECT COUNT(*) n FROM discount_redemptions WHERE discount_id=? AND (? IS NULL OR invoice_id IS NOT ?)').get(discount.id, invoiceId, invoiceId).n;
   if (discount.max_redemptions !== null && discount.max_redemptions !== undefined && used >= discount.max_redemptions) return { ok: false, reason: 'That offer has been used up' };
   const mine = db.prepare('SELECT COUNT(*) n FROM discount_redemptions WHERE discount_id=? AND client_id=? AND (? IS NULL OR invoice_id IS NOT ?)').get(discount.id, clientId, invoiceId, invoiceId).n;
-  if (mine >= discount.per_client_max) return { ok: false, reason: 'Already used by this client' };
-  if (discount.first_invoice_only) {
+  // A recurring schedule's discount is limited by its own discount_cycles, not the per-client limit.
+  if (!scheduled && mine >= discount.per_client_max) return { ok: false, reason: 'Already used by this client' };
+  if (discount.first_invoice_only && !scheduled) {
     const before = db.prepare("SELECT COUNT(*) n FROM invoices WHERE client_id=? AND status IN ('issued','paid') AND id IS NOT ?").get(clientId, invoiceId).n;
     if (before) return { ok: false, reason: 'Only for a client\'s first invoice' };
   }
@@ -306,6 +307,12 @@ export const discountByCode = (db, coachId, code) => (code ? db.prepare('SELECT 
 const lineOut = l => ({ id: l.id, position: l.position, description: l.description, quantity: l.quantity, unitPence: l.unit_pence, amountPence: l.amount_pence, kind: l.kind, ref: l.ref });
 const linesOf = (db, invoiceId) => db.prepare('SELECT * FROM invoice_lines WHERE invoice_id=? ORDER BY position').all(invoiceId);
 const creditedOf = (db, invoiceId) => db.prepare('SELECT COALESCE(SUM(amount_pence),0) n FROM credit_notes WHERE invoice_id=?').get(invoiceId).n;
+/** Is this invoice's discount the one its recurring schedule carries (so discount_cycles, not per_client_max, limits it)? */
+const scheduledDiscount = (db, inv) => {
+  if (inv.source !== 'recurring' || !inv.discount_id || !inv.source_ref) return false;
+  const sid = String(inv.source_ref).split(':')[0];
+  return !!db.prepare('SELECT 1 FROM billing_schedules WHERE id=? AND discount_id=?').get(sid, inv.discount_id);
+};
 
 /** What the client still owes on one invoice (never below zero). */
 const outstandingOf = (inv, credited) => (['issued', 'paid'].includes(inv.status) ? Math.max(0, inv.total_pence - inv.paid_pence - credited) : 0);
@@ -423,7 +430,7 @@ function retotal(db, invoiceId, today) {
   let discountPence = 0, dropped = null;
   if (inv.discount_id) {
     const d = db.prepare('SELECT * FROM discounts WHERE id=?').get(inv.discount_id);
-    const check = checkDiscount(db, d, { clientId: inv.client_id, lines, today, invoiceId });
+    const check = checkDiscount(db, d, { clientId: inv.client_id, lines, today, invoiceId, scheduled: scheduledDiscount(db, inv) });
     if (check.ok) discountPence = check.amountPence;
     else { dropped = check.reason; db.prepare('UPDATE invoices SET discount_id=NULL WHERE id=?').run(invoiceId); }
   }
@@ -470,18 +477,20 @@ function invoiceMessage(db, inv) {
  * the client's thread through sendMessage (`via`, default coachAction).
  * Runs inside the caller's transaction. Returns the fresh row.
  */
-export function issueInvoice(db, config, inv, { today, dueOn = null, send = false, via = 'coachAction', now = new Date(), actingCoachId = inv.coach_id }) {
+export function issueInvoice(db, config, inv, { today, dueOn = null, send = false, via = 'coachAction', now = new Date(), actingCoachId = inv.coach_id, settleZero = false }) {
   if (inv.status !== 'draft') fail(409, 'Only a draft can be issued');
   const lines = linesOf(db, inv.id);
   if (!lines.length) fail(400, 'Add at least one line');
   if (inv.discount_id) {
     const d = db.prepare('SELECT * FROM discounts WHERE id=?').get(inv.discount_id);
-    const check = checkDiscount(db, d, { clientId: inv.client_id, lines, today, invoiceId: inv.id });
+    const check = checkDiscount(db, d, { clientId: inv.client_id, lines, today, invoiceId: inv.id, scheduled: scheduledDiscount(db, inv) });
     if (!check.ok) fail(409, `Discount: ${check.reason}`);
   }
   retotal(db, inv.id, today);
   const fresh = db.prepare('SELECT * FROM invoices WHERE id=?').get(inv.id);
-  if (fresh.total_pence <= 0) fail(400, 'There is nothing to bill');
+  // settleZero (the recurring clock): a discount that covers the whole bill ("first month free") issues it as settled, with nothing sent.
+  const zero = fresh.total_pence <= 0;
+  if (zero && !(settleZero && fresh.subtotal_pence > 0 && fresh.total_pence === 0)) fail(400, 'There is nothing to bill');
   const s = ensureSettings(db, actingCoachId);
   const number = takeNumber(db, actingCoachId, today);
   const due = dueOn ?? fresh.due_on ?? addDays(today, s.due_days);
@@ -490,11 +499,12 @@ export function issueInvoice(db, config, inv, { today, dueOn = null, send = fals
     db.prepare('INSERT INTO discount_redemptions (id, discount_id, coach_id, client_id, invoice_id, amount_pence, at) VALUES (?,?,?,?,?,?,?)')
       .run(newId('dr'), fresh.discount_id, actingCoachId, inv.client_id, inv.id, fresh.discount_pence, now.toISOString());
   }
+  if (zero) db.prepare("UPDATE invoices SET status='paid', paid_at=? WHERE id=?").run(now.toISOString(), inv.id);
   const issued = db.prepare('SELECT * FROM invoices WHERE id=?').get(inv.id);
   emit(db, 'invoice.issued', { coachId: actingCoachId, clientId: inv.client_id, summary: `Invoice ${number} · ${money(issued.total_pence)}`,
     invoiceId: inv.id, totalPence: issued.total_pence, dueOn: due, source: issued.source,
     ...(issued.discount_id && issued.discount_pence ? { discountId: issued.discount_id, discountPence: issued.discount_pence } : {}) });
-  if (send) {
+  if (send && !zero) {
     const out = sendMessage(db, config, { coachId: actingCoachId, clientId: inv.client_id, text: invoiceMessage(db, issued), via, now });
     if (out.message) db.prepare('UPDATE invoices SET sent_message_id=? WHERE id=?').run(out.message.id, inv.id);
   }
@@ -648,6 +658,7 @@ function voidRoute(_req, ctx) {
 function voidInvoice(db, inv, reason) {
   if (inv.status === 'void') fail(409, 'Already void');
   if (db.prepare('SELECT 1 FROM payments WHERE invoice_id=? AND voided_at IS NULL').get(inv.id)) fail(409, 'This invoice has payments: remove them or raise a credit note instead');
+  if (db.prepare('SELECT 1 FROM credit_notes WHERE invoice_id=?').get(inv.id)) fail(409, 'This invoice has credit notes: credit the rest instead of voiding it');
   tx(db, () => {
     db.prepare("UPDATE invoices SET status='void', voided_at=?, void_reason=? WHERE id=?").run(nowIso(), reason || null, inv.id);
     db.prepare('DELETE FROM discount_redemptions WHERE invoice_id=?').run(inv.id);
@@ -1104,7 +1115,8 @@ function coveredByPlan(db, client, booking) {
   const allowance = planOf(db, client)?.credits ?? 0;
   if (!allowance) return false;
   const { first: mFirst, next } = monthBounds(londonDay(new Date(booking.start)));
-  const rank = db.prepare(`SELECT COUNT(*) n FROM bookings WHERE client_id=? AND uses_credit=1 AND cancelled_at IS NULL AND start>=? AND start<? AND (start<? OR (start=? AND id<=?))`)
+  // Counted exactly as bookings.credits() counts: a forfeited late cancel keeps its plan credit (refunded cancels are deleted rows).
+  const rank = db.prepare(`SELECT COUNT(*) n FROM bookings WHERE client_id=? AND uses_credit=1 AND start>=? AND start<? AND (start<? OR (start=? AND id<=?))`)
     .get(client.id, londonToUtc(mFirst).toISOString(), londonToUtc(next).toISOString(), booking.start, booking.start, booking.id).n;
   return rank <= allowance;
 }
@@ -1220,6 +1232,38 @@ function unusedValue(db, cp) {
   return Math.round(price * left / cp.sessions_total);
 }
 
+/**
+ * What ending coaching with packages:'refund' credits for one package: the
+ * unused share, only when its invoice was issued or paid (a draft was never
+ * billed, a void one is cancelled), capped at what is left to credit on it.
+ */
+function refundOf(db, cp) {
+  if (!cp.invoice_id) return 0;
+  const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(cp.invoice_id);
+  if (!inv || !['issued', 'paid'].includes(inv.status)) return 0;
+  return Math.max(0, Math.min(unusedValue(db, cp), inv.total_pence - creditedOf(db, inv.id)));
+}
+
+/**
+ * A package ended before its draft invoice was issued: bill only the sessions
+ * used. Unused → the package line goes (and an empty draft is voided); partly
+ * used → the line is cut to the used share.
+ */
+function trimPackageDraft(db, cp, today) {
+  const inv = cp.invoice_id ? db.prepare("SELECT * FROM invoices WHERE id=? AND status='draft'").get(cp.invoice_id) : null;
+  if (!inv) return;
+  const lines = linesOf(db, inv.id).filter(l => l.kind === 'package');
+  const used = Math.min(cp.sessions_used, cp.sessions_total);
+  for (const l of lines) {
+    if (!used) { db.prepare('DELETE FROM invoice_lines WHERE id=?').run(l.id); continue; }
+    const amount = Math.round(l.amount_pence * used / cp.sessions_total);
+    db.prepare('UPDATE invoice_lines SET description=?, quantity=1, unit_pence=?, amount_pence=? WHERE id=?')
+      .run(`${l.description} (${used} of ${cp.sessions_total} sessions used)`.slice(0, 200), amount, amount, l.id);
+  }
+  if (!linesOf(db, inv.id).length) voidInvoice(db, inv, 'Coaching ended before the package was billed');
+  else retotal(db, inv.id, today);
+}
+
 function onOffboarded(db, config, e) {
   if (!e.clientId) return;
   const client = db.prepare("SELECT * FROM users WHERE id=? AND role='client'").get(e.clientId);
@@ -1232,8 +1276,9 @@ function onOffboarded(db, config, e) {
   db.prepare("UPDATE billing_schedules SET status='ended', ends_on=?, paused_until=NULL WHERE client_id=? AND status IN ('active','paused')").run(today, client.id);
   for (const cp of db.prepare("SELECT * FROM client_packages WHERE client_id=? AND status='active'").all(client.id)) {
     if (p.packages === 'refund') {
-      const value = unusedValue(db, cp);
+      const value = refundOf(db, cp);
       if (value > 0) addCreditNote(db, { coachId: client.coach_id, clientId: client.id, invoiceId: cp.invoice_id, amountPence: value, reason: `Unused sessions refunded: ${cp.name}` });
+      else trimPackageDraft(db, cp, today);
       db.prepare("UPDATE client_packages SET status='cancelled' WHERE id=?").run(cp.id);
     } else {
       db.prepare("UPDATE client_packages SET status='expired' WHERE id=?").run(cp.id);
@@ -1276,11 +1321,18 @@ function onCampaignEnrolled(db, config, e) {
     if (check.ok) discountId = d.id;
     else note = `Code ${String(p.discountCode).slice(0, 40)} not applied: ${check.reason}.`;
   }
+  // The coach's own per-enrolment discount, promised in the invitation ("£40 (£49 less your discount)"): billed at the net price.
+  const promised = Number.isInteger(p.discountPence) && p.discountPence > 0 ? Math.min(fee, p.discountPence) : 0;
+  if (promised && !discountId) {
+    if (promised >= fee) return;
+    Object.assign(lines[0], { description: `${lines[0].description} (${money(fee)} less ${money(promised)} discount)`.slice(0, 200), unit_pence: fee - promised, amount_pence: fee - promised });
+    if (note) note = `${note} The agreed ${money(promised)} discount is applied.`;
+  }
   const { invoice } = createDraft(db, { coachId: client.coach_id, clientId: client.id, lines, source: 'campaign', sourceRef: String(p.enrolmentId), discountId, note, today });
   if (settingsRow(db, client.coach_id).auto_issue_recurring) {
     try { tx(db, () => issueInvoice(db, config, invoice, { today, send: true, via: 'dunning', actingCoachId: client.coach_id })); } catch (err) { console.warn(`Campaign invoice not issued: ${err.message}`); }
   } else {
-    notifyCoach(db, config, client.coach_id, { clientId: client.id, kind: 'invoiceDraft', title: `Campaign fee ready to issue: ${client.name}`, body: `${lines[0].description} · ${money(fee)}`, path: `/billing/invoices/${invoice.id}`, icon: 'receipt_long', tone: 'data', dedupe: `campaignfee:${invoice.id}` });
+    notifyCoach(db, config, client.coach_id, { clientId: client.id, kind: 'invoiceDraft', title: `Campaign fee ready to issue: ${client.name}`, body: `${lines[0].description} · ${money(lines[0].amount_pence)}`, path: `/billing/invoices/${invoice.id}`, icon: 'receipt_long', tone: 'data', dedupe: `campaignfee:${invoice.id}` });
   }
 }
 
@@ -1403,7 +1455,13 @@ export function runRecurring(db, config, now = new Date()) {
           if (discountId && fresh.discount_id) db.prepare('UPDATE billing_schedules SET discount_used=discount_used+1 WHERE id=?').run(s.id);
           const client = db.prepare('SELECT * FROM users WHERE id=?').get(s.client_id);
           if (settingsRow(db, coachId).auto_issue_recurring) {
-            issueInvoice(db, config, fresh, { today, send: true, via: 'dunning', now, actingCoachId: coachId });
+            // Its own savepoint: an issue that fails leaves the draft, tells the coach and still moves the schedule on.
+            try { tx(db, () => issueInvoice(db, config, fresh, { today, send: true, via: 'dunning', now, actingCoachId: coachId, settleZero: true })); }
+            catch (err) {
+              console.warn(`Recurring invoice ${invoice.id} not issued: ${err.message}`);
+              notifyCoach(db, config, coachId, { clientId: s.client_id, kind: 'invoiceDraft', title: `Recurring invoice needs you: ${client.name}`, body: `${s.label} · not issued: ${String(err.message).slice(0, 120)}`,
+                path: `/billing/invoices/${invoice.id}`, icon: 'receipt_long', tone: 'attention', dedupe: `recurring:${ref}`, now });
+            }
           } else {
             notifyCoach(db, config, coachId, { clientId: s.client_id, kind: 'invoiceDraft', title: `Recurring invoice ready: ${client.name}`, body: `${s.label} · ${money(fresh.total_pence)}`,
               path: `/billing/invoices/${invoice.id}`, icon: 'receipt_long', tone: 'data', dedupe: `recurring:${ref}`, now });
@@ -1568,6 +1626,14 @@ const IN = 'IN (SELECT value FROM json_each(?))';
 function factBalance(db, _coachId, clientIds) {
   const out = new Map();
   for (const id of clientIds) out.set(id, balanceOf(db, id));
+  return out;
+}
+
+/** What is still owed on issued invoices (the Billing overview's "outstanding", per client; account credit isn't netted off). */
+function factOutstanding(db, _coachId, clientIds) {
+  const out = new Map(clientIds.map(id => [id, 0]));
+  const rows = db.prepare("SELECT * FROM invoices WHERE status='issued' AND client_id IN (SELECT value FROM json_each(?))").all(JSON.stringify(clientIds));
+  for (const inv of rows) out.set(inv.client_id, out.get(inv.client_id) + outstandingOf(inv, creditedOf(db, inv.id)));
   return out;
 }
 
@@ -1766,7 +1832,7 @@ function offboarding(db, coach, client) {
     balancePence: balanceOf(db, client.id),
     schedules: db.prepare("SELECT * FROM billing_schedules WHERE client_id=? AND status IN ('active','paused')").all(client.id).map(s => scheduleOut(db, s, today)),
     packages: db.prepare("SELECT * FROM client_packages WHERE client_id=? AND status='active' AND sessions_used<sessions_total").all(client.id)
-      .map(p => ({ ...packageOut(db, p, today), refundPence: unusedValue(db, p) })),
+      .map(p => ({ ...packageOut(db, p, today), refundPence: refundOf(db, p) })),
     openInvoices: db.prepare("SELECT COUNT(*) n FROM invoices WHERE client_id=? AND status IN ('draft','issued')").get(client.id).n,
   };
 }
@@ -2053,6 +2119,7 @@ export const feature = {
   },
   facts: {
     'billing.balance': { label: 'Balance owed', type: 'money', compute: factBalance },
+    'billing.outstanding': { label: 'Owed on issued invoices', type: 'money', compute: factOutstanding },
     'billing.overdueDays': { label: 'Days the oldest invoice is overdue', type: 'days', compute: factOverdueDays },
     'billing.ltv': { label: 'Lifetime value (paid)', type: 'money', compute: factLtv },
     'billing.paid12': { label: 'Paid in the last 12 months', type: 'money', compute: factPaid12 },

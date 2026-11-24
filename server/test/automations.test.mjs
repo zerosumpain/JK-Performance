@@ -291,6 +291,23 @@ test('AI judgements can only notify, task, tag or draft: save and turn-on refuse
   for (const t of ['messages', 'scheduled_messages', 'deferred_messages', 'broadcasts']) assert.equal(count(t), 0, `${t} stays empty`);
 });
 
+test('an unknown {variable} can be saved in a draft but never goes live, so the client never sees "{firstName}"', async () => {
+  const a = await make({ trigger: { type: 'manual' }, steps: [msg('Hi {firstName}, sorry we missed you today. Want to rebook?')] }, { live: false });
+  const r = await w.call('POST', `/api/automations/${a.id}/status`, { as: w.coach, body: { status: 'live' } });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /Step 1: unknown variable \{firstName\}/);
+  await w.ok('PUT', `/api/automations/${a.id}`, { as: w.coach, body: { steps: [msg('Hi {first}, sorry we missed you today. Want to rebook?')] } });
+  await w.ok('POST', `/api/automations/${a.id}/status`, { as: w.coach, body: { status: 'live' } });
+});
+
+test('an event draft may wait for its event; it can\'t go live until one is chosen', async () => {
+  const a = await make({ trigger: { type: 'event', event: null }, steps: [msg('Hi {first}')] }, { live: false });
+  assert.equal(a.trigger.event, null);
+  const r = await w.call('POST', `/api/automations/${a.id}/status`, { as: w.coach, body: { status: 'live' } });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /Choose the event/);
+});
+
 test('every message step is governed: the 4th automated message of the day is held, and a paused client is skipped', async () => {
   const a = await make({ trigger: { type: 'manual' }, steps: [msg('One'), msg('Two'), msg('Three'), msg('Four')], settings: { reentry: 'always' } });
   await w.ok('POST', `/api/automations/${a.id}/enrol${at(NOW.toISOString())}`, { as: w.coach, body: { clientIds: [w.client.id] } });

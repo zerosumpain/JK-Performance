@@ -253,10 +253,12 @@ export function pruneInbox(db, now = new Date()) {
 export function commandSummary(db, coach, now = new Date()) {
   const n = needsYou(db, coach, now);
   let duePence = null;
-  if (allFacts().some(f => f.id === 'billing.balance')) {
+  // The same total as Billing's "outstanding": what is owed on issued invoices (billing.outstanding), else the balances.
+  const dueFact = ['billing.outstanding', 'billing.balance'].find(id => allFacts().some(f => f.id === id));
+  if (dueFact) {
     const ids = db.prepare("SELECT id FROM users WHERE role='client' AND coach_id=?").all(coach.id).map(c => c.id);
-    const facts = clientFacts(db, coach.id, ids, { only: ['billing.balance'], now });
-    duePence = [...facts.values()].reduce((s, f) => s + Math.max(0, Number(f['billing.balance']) || 0), 0);
+    const facts = clientFacts(db, coach.id, ids, { only: [dueFact], now });
+    duePence = [...facts.values()].reduce((s, f) => s + Math.max(0, Number(f[dueFact]) || 0), 0);
   }
   return {
     needs: n.items.length, urgent: n.items.filter(i => i.rank === 1).length,

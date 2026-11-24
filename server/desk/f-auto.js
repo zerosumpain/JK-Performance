@@ -7,7 +7,7 @@ import {
   api, busy, button, fill, go, h, icon, link, registerBulkAction, registerClientAction, registerCommand,
   registerNav, registerQuickCreate, route, setCrumbs, sparkline, toast,
 } from './core.js';
-import { ago, enc, miniFlow, plural, statusPill, triggerIcon } from './f-auto-common.js';
+import { ago, enc, miniFlow, pendingOpen, plural, statusPill, triggerIcon } from './f-auto-common.js';
 import { countUp, emptyHero, pageHead, skeleton, slideOver, tabs } from './ui.js';
 
 registerNav({ id: 'automations', label: 'Automations', icon: 'bolt', group: 'engage', order: 30, path: '/automations' });
@@ -26,7 +26,7 @@ export async function createFromRecipe(id) {
 }
 
 const BLANKS = [
-  { id: 'event', glyph: 'bolt', title: 'When something happens', line: 'A booking, a message, a check-in, a payment…', trigger: { type: 'event', event: 'booking.cancelled', where: {} } },
+  { id: 'event', glyph: 'bolt', title: 'When something happens', line: 'A booking, a message, a check-in, a payment…', trigger: { type: 'event', event: null, where: {} } },
   { id: 'schedule', glyph: 'event_repeat', title: 'On a schedule', line: 'Every Monday at 08:00, for a segment or a tag.', trigger: { type: 'schedule', days: [1], at: '08:00', audience: { everyone: true } } },
   { id: 'enters', glyph: 'filter_alt', title: 'When someone starts to match', line: 'Quiet for 5 days, a month in, a package running low.', trigger: { type: 'enters', rules: { match: 'all', rules: [{ fact: 'core.daysQuiet', op: 'gte', value: 5 }] } } },
   { id: 'manual', glyph: 'person_add', title: 'When I add someone', line: 'A sequence you start by hand for chosen clients.', trigger: { type: 'manual' } },
@@ -55,6 +55,7 @@ export function newAutomation() {
       const b = BLANKS.find(x => x.id === pick);
       const r = await api('POST', '/api/automations', { name: name.value.trim() || 'Untitled automation', trigger: b.trigger, steps: [] });
       close();
+      if (b.id === 'event') pendingOpen.triggerFor = r.automation.id;
       go(`/automations/${enc(r.automation.id)}`);
     }) }, icon('add', 16), 'Create draft');
     name.addEventListener('keydown', e => { if (e.key === 'Enter') create.click(); });
@@ -144,14 +145,22 @@ route('/automations', async (el, _p, view) => {
   const kpis = h('div', { class: 'au-kpis' }, [1, 2, 3, 4].map(() => h('div', { class: 'au-kpi' }, skeleton('lines', { rows: 2 }))));
   const box = h('div', { class: 'au-tabbody' });
   let tab = 'automations';
-  const bar = tabs([{ id: 'automations', label: 'Automations' }, { id: 'recipes', label: 'Recipes' }, { id: 'sequences', label: 'Sequences (legacy)' }], tab, id => { tab = id; draw(); }, { sync: 'tab', label: 'Automation views' });
+  const bar = tabs([{ id: 'automations', label: 'Automations' }, { id: 'recipes', label: 'Recipes' }, { id: 'sequences', label: 'Sequences (legacy)' }], tab, id => { tab = id; hideSequences(); draw(); }, { sync: 'tab', label: 'Automation views' });
+  let noSequences = false;
   tab = bar.value();
   fill(el, head, kpis, bar, box);
 
   let data = null;
   async function load() {
-    const [list, recipes] = await Promise.all([api('GET', '/api/automations'), api('GET', '/api/automations/recipes')]);
+    const [list, recipes, flows] = await Promise.all([api('GET', '/api/automations'), api('GET', '/api/automations/recipes'), api('GET', '/api/autoflows').catch(() => null)]);
     data = { list: list.automations, recipes: recipes.recipes };
+    // The legacy tab only matters to a coach who still has sequences.
+    noSequences = !!flows && !flows.autoflows?.length;
+    hideSequences();
+  }
+  function hideSequences() {
+    const seqTab = [...bar.children].find(b => b.textContent.startsWith('Sequences'));
+    if (seqTab) seqTab.hidden = noSequences && tab !== 'sequences';
   }
 
   function drawKpis() {

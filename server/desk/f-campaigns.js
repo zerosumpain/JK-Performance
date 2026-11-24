@@ -7,7 +7,7 @@
  */
 import {
   api, busy, button, confirmBox, fill, fmtDay, go, h, icon, link, live, registerBulkAction, registerClientAction, registerClientTab, registerCommand,
-  registerNav, registerQuickCreate, registerWidget, ring, route, setCrumbs, toast,
+  registerNav, registerQuickCreate, registerWidget, ring, route, setCrumbs, toast, todayLondon,
 } from './core.js';
 import { renderBoard, renderEnrol } from './f-campaigns-board.js';
 import { datesLine, enc, enrolPill, kindBadge, money, plural, statusPill, todayIndex, weeksWord } from './f-campaigns-common.js';
@@ -141,6 +141,9 @@ route('/campaigns/:id/:tab?', async (el, params, view) => {
     discard() { drafts.delete(id); },
     redraw: () => drawTab(),
     async setStatus(s) {
+      // Fixed dates need a start before going live: ask for it here rather than fail.
+      const cc = state.doc.campaign;
+      if (s === 'live' && cc.startMode === 'fixed' && !cc.startsOn) { askStart(); return; }
       if (state.dirty) await save();
       try {
         const r = await api('POST', `/api/campaigns/${enc(id)}/status`, { status: s });
@@ -152,6 +155,26 @@ route('/campaigns/:id/:tab?', async (el, params, view) => {
     },
   };
   ctx.guides().then(() => { if (tab === 'design' && view.fresh()) drawTab(); });
+
+  /** "When does it start?": a fixed-dates draft going live without a start date. */
+  function askStart() {
+    slideOver('When does it start?', (body, close) => {
+      const status = h('div');
+      const date = h('input', { type: 'date', id: 'cg-start-ask', min: todayLondon(), value: '' });
+      body.append(h('p', { class: 'muted' }, 'Everyone on fixed dates starts together. Pick the first day, then it goes live. Nothing is sent until you invite people.'),
+        h('div', { class: 'field' }, h('label', { for: 'cg-start-ask' }, 'Starts on'), date), status);
+      requestAnimationFrame(() => date.focus());
+      const ok = h('button', { type: 'button', class: 'btn primary', onclick: e => busy(e.currentTarget, status, async () => {
+        if (!date.value) throw new Error('Pick the first day');
+        state.doc.campaign = { ...state.doc.campaign, startsOn: date.value };
+        ctx.markDirty();
+        if (!(await save())) throw new Error('The start date was not saved');
+        close();
+        await ctx.setStatus('live');
+      }) }, icon('play_arrow', 18), 'Save and go live');
+      return h('div', { class: 'cg-slide-foot' }, h('span', { class: 'grow' }), button('Cancel', () => close()), ok);
+    });
+  }
 
   /** The design document as the server wants it: no UI-only keys. */
   const payload = () => {

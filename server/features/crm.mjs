@@ -55,7 +55,11 @@ export function bandOf(score) {
  *   engagement  (30) = min(1, (messages + check-ins×3 + habit days met/2 + sessions attended×3) / 12)   (14 days)
  *   adherence   (30) = adherence28 / 100   (null → 0.5)
  *   consistency (20) = min(1, minimum-day streak / 14)
- *   wellbeing   (20) = 1 − 0.5×pain14 − 0.25×(missed / max(1, set) commitments, 4 weeks) − 0.25×(voice sentiment < −0.3)
+ *   wellbeing   (20) = 1 − 0.5×pain14 − 0.25×(missed / max(1, set) commitments, 4 weeks)
+ * Voice sentiment is AI-derived, so it is shown as a note but never scored:
+ * the score feeds crm.band, crm.stage and their events, which automations and
+ * broadcast audiences may use to message clients (D5, 6.3). The spec's
+ * "−0.25×(voice sentiment < −0.3)" term is left out on purpose.
  */
 export function scoreFrom(x) {
   const engagement = Math.min(1, ((x.messages14 ?? 0) + (x.checkins14 ?? 0) * 3 + (x.habitDays14 ?? 0) / 2 + (x.sessions14 ?? 0) * 3) / 12);
@@ -63,7 +67,7 @@ export function scoreFrom(x) {
   const consistency = Math.min(1, (x.streak ?? 0) / 14);
   const missedShare = (x.commitmentsMissed ?? 0) / Math.max(1, x.commitmentsSet ?? 0);
   const lowMood = typeof x.sentiment14 === 'number' && x.sentiment14 < -0.3;
-  const wellbeing = Math.max(0, 1 - 0.5 * (x.pain14 ? 1 : 0) - 0.25 * missedShare - 0.25 * (lowMood ? 1 : 0));
+  const wellbeing = Math.max(0, 1 - 0.5 * (x.pain14 ? 1 : 0) - 0.25 * missedShare);
   const health = Math.round(100 * (0.3 * engagement + 0.3 * adherence + 0.2 * consistency + 0.2 * wellbeing));
   const parts = [
     { key: 'engagement', points: Math.round(engagement * 30), max: 30 },
@@ -86,7 +90,7 @@ export function scoreFrom(x) {
       const bits = [];
       if (x.pain14) bits.push('Pain flagged');
       if (x.commitmentsSet) bits.push(`Kept ${x.commitmentsSet - (x.commitmentsMissed ?? 0)}/${x.commitmentsSet} commitments`);
-      if (lowMood) bits.push('Low mood in voice notes');
+      if (lowMood) bits.push('Low mood in voice notes (AI, not scored)');
       return bits.join(' · ') || 'No pain flags';
     },
   };
@@ -664,9 +668,8 @@ function retention(db, coach, today) {
     card.play = playFor(card, { hasOffer });
     // Columns by band first; the At risk stage (quiet, or a sharp fall) lifts a healthier band into At risk.
     if (card.suggested) suggested.push(card);
-    else if (card.band === 'atRisk') atRisk.push(card);
+    else if (card.band === 'atRisk' || card.stage === 'atRisk') atRisk.push(card);
     else if (card.band === 'watch') watch.push(card);
-    else if (card.stage === 'atRisk') atRisk.push(card);
   }
   const byHealth = (a, b) => (a.health ?? 101) - (b.health ?? 101);
   return { watch: watch.sort(byHealth), atRisk: atRisk.sort(byHealth), suggested: suggested.sort(byHealth), stats: retentionStats(db, coach, today) };

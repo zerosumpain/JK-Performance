@@ -1,11 +1,11 @@
 import { initials, ownRow, requestNow, requireCoach } from '../access.mjs';
 import { emit } from '../events.mjs';
-import { actionCatalogue, checkParams, clientFacts, evaluate, factCatalogue, factsIn, foundationLookups, ownClients, resolveAudience, runAction, validateRules } from '../facts.mjs';
+import { actionCatalogue, aiFactsIn, checkParams, clientFacts, evaluate, factCatalogue, factsIn, foundationLookups, ownClients, resolveAudience, runAction, validateRules } from '../facts.mjs';
 import { clock as clockField, fail, num, oneOf, str } from '../http.mjs';
 import { outreachOf, outreachSettings } from '../messages.mjs';
 import { inWindow, notifyCoach, windowEnd } from '../notifications.mjs';
 import { allActions, allEvents, allFacts, featureNames } from '../registry.mjs';
-import { newId, nowIso, tx } from '../store.mjs';
+import { addColumn, newId, nowIso, tx } from '../store.mjs';
 import { render, variableCatalogue } from '../templating.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, weekday } from '../time.mjs';
 
@@ -77,6 +77,8 @@ function cleanTrigger(db, coachId, t) {
   if (!t || typeof t !== 'object' || Array.isArray(t)) fail(400, 'trigger is required');
   const type = oneOf(t.type, 'trigger.type', ['event', 'schedule', 'enters', 'manual']);
   if (type === 'event') {
+    // A draft may not have picked its event yet (the builder opens the event picker straight away).
+    if (t.event === undefined || t.event === null || t.event === '') return { type, event: null, where: {} };
     if (typeof t.event !== 'string' || !EVENT_ID.test(t.event)) fail(400, 'trigger.event must be an event type');
     if (t.event.startsWith('automation.')) fail(400, 'An automation can\'t start from another automation');
     return { type, event: t.event, where: cleanWhere(t.where) };
@@ -133,6 +135,15 @@ function cleanSteps(list, { strict = false } = {}) {
         if (strict) fail(400, `${name}: ${e.message}`);
       }
     }
+    if (strict && known) {
+      // A variable the server doesn't know would reach the client as "{firstName}": refuse it before going live.
+      const names = new Set(variableCatalogue().map(v => v.name));
+      for (const p of known.params ?? []) {
+        if (p.type !== 'template' || typeof params[p.key] !== 'string') continue;
+        const bad = [...params[p.key].matchAll(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g)].map(m => m[1]).find(n => !names.has(n));
+        if (bad) fail(400, `Step ${i + 1}: unknown variable {${bad}}. Use one from the list, such as {first}`);
+      }
+    }
     const out = { id, type, action: s.action, params };
     if (s.if) {
       const rules = validateRules(s.if, { name: `${name}.if` });
@@ -169,14 +180,41 @@ function cleanSettings(s) {
 /** The AI-derived inputs an automation uses: its trigger event, its rules' facts, segment rules (6.3). */
 export function aiInputs(db, a) {
   const events = new Map(allEvents().map(e => [e.type, e]));
-  const aiFacts = new Set(allFacts().filter(f => f.aiDerived).map(f => f.id));
   const out = [];
   const t = a.trigger ?? {};
   if (t.type === 'event' && events.get(t.event)?.aiDerived) out.push(t.event);
   const rules = [t.rules, a.conditions, ...(a.steps ?? []).map(s => s.if)];
   if (t.audience?.segmentId) rules.push(parse(db.prepare('SELECT rules FROM segments WHERE id=?').get(t.audience.segmentId)?.rules));
-  for (const r of rules) for (const id of factsIn(r)) if (aiFacts.has(id)) out.push(id);
+  // aiFactsIn also follows core.segments into the segments' own rules.
+  for (const r of rules) out.push(...aiFactsIn(db, a.coach_id, r));
   return [...new Set(out)];
+}
+
+/** Tag ids an automation's rules and audience look at (core.tags, and through core.segments the segments' tags). */
+function tagIdsOf(db, a) {
+  const ids = new Set();
+  const segRules = id => parse(db.prepare('SELECT rules FROM segments WHERE id=?').get(id)?.rules);
+  const walk = (r, deep = true) => {
+    if (!r || typeof r !== 'object') return;
+    if (Array.isArray(r.rules)) { r.rules.forEach(x => walk(x, deep)); return; }
+    if (r.fact === 'core.tags') for (const v of [r.value].flat()) ids.add(v);
+    if (r.fact === 'core.segments' && deep) for (const v of [r.value].flat()) if (typeof v === 'string') walk(segRules(v), false);
+  };
+  const t = a.trigger ?? {};
+  for (const r of [t.rules, a.conditions, ...(a.steps ?? []).map(s => s.if)]) walk(r);
+  for (const id of t.audience?.tagIds ?? []) ids.add(id);
+  if (t.audience?.segmentId) walk(segRules(t.audience.segmentId), false);
+  return [...ids].filter(x => typeof x === 'string');
+}
+
+/**
+ * Does an AI-added tag (added_by 'ai') take part in this client's run? Then the
+ * run is tainted like any other AI input: coach-side steps only, and what they
+ * do carries the taint on (6.3).
+ */
+function aiTagged(db, a, clientId) {
+  const ids = tagIdsOf(db, a);
+  return ids.length > 0 && !!db.prepare("SELECT 1 FROM client_tags WHERE client_id=? AND added_by='ai' AND tag_id IN (SELECT value FROM json_each(?))").get(clientId, JSON.stringify(ids));
 }
 
 /** Refuse (400) an automation that would let an AI judgement make something reach a client. */
@@ -189,6 +227,7 @@ function aiGuard(db, a) {
 function validateLive(db, a) {
   const steps = cleanSteps(a.steps, { strict: true });
   if (!steps.some(s => s.type === 'action')) fail(400, 'Add at least one action before turning it on');
+  if (a.trigger.type === 'event' && !a.trigger.event) fail(400, 'Choose the event that starts it');
   if (a.trigger.type === 'event' && !allEvents().some(e => e.type === a.trigger.event)) fail(400, `The event ${a.trigger.event} is not available`);
   for (const e of a.settings.stopOn ?? []) if (!allEvents().some(x => x.type === e)) fail(400, `settings.stopOn: ${e} is not available`);
   aiGuard(db, { ...a, steps });
@@ -207,7 +246,7 @@ function cleanAutomation(db, coachId, b, current = null) {
     settings: has('settings') || !current ? cleanSettings(b.settings) : current.settings,
   };
   if (out.conditions && !out.conditions.rules.length) out.conditions = null;
-  aiGuard(db, out);
+  aiGuard(db, { ...out, coach_id: coachId });
   return out;
 }
 
@@ -254,6 +293,7 @@ function rulesWords(rules) {
 
 export function triggerWords(db, coachId, t) {
   if (t.type === 'event') {
+    if (!t.event) return 'When something happens (choose the event)';
     const w = whereWords(t.where);
     return `When ${lower(eventLabel(t.event))}${w ? ` (${w})` : ''}`;
   }
@@ -353,14 +393,14 @@ function startBlocker(db, a, client, now) {
   if (last && re?.cooldownDays && Date.parse(last) > now.getTime() - re.cooldownDays * DAY_MS) return `started it in the last ${plural(re.cooldownDays, 'day')}`;
   if (hasClientFacing(a) && outreachOf(db, client.id).paused) return 'outreach paused';
   if (a.conditions) {
-    const facts = clientFacts(db, a.coach_id, [client.id], { only: factsIn(a.conditions), now }).get(client.id) ?? {};
+    const facts = clientFacts(db, a.coach_id, [client.id], { only: factsIn(a.conditions), now, forSending: hasClientFacing(a) }).get(client.id) ?? {};
     if (!evaluate(a.conditions, facts)) return 'conditions not met';
   }
   return null;
 }
 
 /** Start a run for one client (inside the caller's tx). Returns {run} or {skipped: reason}. */
-function startRun(db, config, a, client, { now, source = '', triggerSeq = null }) {
+function startRun(db, config, a, client, { now, source = '', triggerSeq = null, aiDerived = false }) {
   const blocked = startBlocker(db, a, client, now);
   if (blocked) return { skipped: blocked };
   const day = londonDay(now);
@@ -382,8 +422,8 @@ function startRun(db, config, a, client, { now, source = '', triggerSeq = null }
     }
   }
   const id = newId('aur');
-  db.prepare("INSERT INTO automation_runs (id, automation_id, coach_id, client_id, status, step_index, next_at, trigger_seq, log, started_at) VALUES (?,?,?,?,'active',0,?,?,?,?)")
-    .run(id, a.id, a.coach_id, client.id, nextAt.toISOString(), triggerSeq, JSON.stringify(log), now.toISOString());
+  db.prepare("INSERT INTO automation_runs (id, automation_id, coach_id, client_id, status, step_index, next_at, trigger_seq, log, started_at, ai_derived) VALUES (?,?,?,?,'active',0,?,?,?,?,?)")
+    .run(id, a.id, a.coach_id, client.id, nextAt.toISOString(), triggerSeq, JSON.stringify(log), now.toISOString(), aiDerived ? 1 : 0);
   db.prepare(`INSERT INTO automation_state (automation_id, client_id, inside, last_started_at) VALUES (?,?,0,?)
     ON CONFLICT(automation_id, client_id) DO UPDATE SET last_started_at=excluded.last_started_at`).run(a.id, client.id, now.toISOString());
   emit(db, 'automation.started', { coachId: a.coach_id, clientId: client.id, summary: `Started · ${a.name}`, automationId: a.id, runId: id });
@@ -425,17 +465,21 @@ function stepOnce(db, config, runId, now) {
     }
   }
   if (step.if) {
-    const facts = clientFacts(db, run.coach_id, [client.id], { only: factsIn(step.if), now }).get(client.id) ?? {};
+    const facts = clientFacts(db, run.coach_id, [client.id], { only: factsIn(step.if), now, forSending: !AI_SAFE_ACTIONS.includes(step.action) }).get(client.id) ?? {};
     if (!evaluate(step.if, facts)) { logRun(db, run, { stepId: step.id, at, outcome: 'Skipped: condition not met' }, { step_index: next }); return 'continue'; }
   }
   const action = actionOf(step.action);
+  // A run is AI-tainted when the automation uses an AI judgement or the event that started it carried one (6.3):
+  // it may only do coach-side steps, and what those steps do carries the taint on.
+  const tainted = !!run.ai_derived || aiInputs(db, a).length > 0 || aiTagged(db, a, client.id);
   let outcome;
   let broke = false;
   if (!action) { outcome = `failed: ${step.action} is not available`; broke = true; }
-  else if (aiInputs(db, a).length && !AI_SAFE_ACTIONS.includes(step.action)) outcome = 'refused: aiDerived';
+  else if (tainted && !AI_SAFE_ACTIONS.includes(step.action)) outcome = 'refused: aiDerived';
   else {
     try {
-      outcome = tx(db, () => runAction(db, config, step.action, { coachId: run.coach_id, client, params: step.params ?? {}, now, via: 'automation', dedupe: `aur:${run.id}:${step.id}` }));
+      outcome = tx(db, () => runAction(db, config, step.action, { coachId: run.coach_id, client, params: step.params ?? {}, now, via: 'automation', dedupe: `aur:${run.id}:${step.id}`,
+        automationId: a.id, ...(tainted ? { aiDerived: true } : {}) }));
     } catch (e) {
       outcome = `failed: ${String(e?.message ?? e).slice(0, 160)}`;
       broke = true;
@@ -501,7 +545,7 @@ function onEvent(db, config, e) {
   for (const a of live) {
     const where = a.trigger.where ?? {};
     if (!Object.entries(where).every(([k, v]) => e.payload?.[k] === v)) continue;
-    startRun(db, config, a, client, { now, source: e.summary || eventLabel(e.type), triggerSeq: e.seq });
+    startRun(db, config, a, client, { now, source: e.summary || eventLabel(e.type), triggerSeq: e.seq, aiDerived: !!e.payload?.aiDerived || !!allEvents().find(x => x.type === e.type)?.aiDerived });
   }
 }
 
@@ -511,7 +555,7 @@ export function evaluateEnters(db, config, now = new Date()) {
   for (const a of db.prepare("SELECT * FROM automations WHERE status='live' AND json_extract(trigger, '$.type')='enters'").all().map(rowParts)) {
     try {
       const clients = db.prepare("SELECT * FROM users WHERE role='client' AND coach_id=?").all(a.coach_id);
-      const facts = clientFacts(db, a.coach_id, clients.map(c => c.id), { only: factsIn(a.trigger.rules), now });
+      const facts = clientFacts(db, a.coach_id, clients.map(c => c.id), { only: factsIn(a.trigger.rules), now, forSending: hasClientFacing(a) });
       const first = !a.evaluated_at;
       tx(db, () => {
         for (const c of clients) {
@@ -568,7 +612,7 @@ function simulate(db, a, client, { now, event = null }) {
     else if (!Object.entries(a.trigger.where ?? {}).every(([k, v]) => event.payload?.[k] === v)) { willRun = false; reason = `the event does not match (${whereWords(a.trigger.where)})`; }
   }
   if (willRun) { const b = startBlocker(db, a, client, now); if (b) { willRun = false; reason = b; } }
-  const ai = aiInputs(db, a).length > 0;
+  const ai = aiInputs(db, a).length > 0 || !!event?.payload?.aiDerived;
   const quiet = outreachSettings(db, a.coach_id).quietHours;
   let t = now;
   const timeline = [{ at: t.toISOString(), stepId: null, description: `${triggerWords(db, a.coach_id, a.trigger)}${a.conditions ? `, if ${rulesWords(a.conditions)}` : ''}`, kind: 'trigger' }];
@@ -587,7 +631,7 @@ function simulate(db, a, client, { now, event = null }) {
     if (!action) item.skipped = `${s.action} is not available`;
     else if (ai && !AI_SAFE_ACTIONS.includes(s.action)) item.skipped = 'refused: AI-derived automations can\'t message clients';
     else if (s.if) {
-      const facts = clientFacts(db, a.coach_id, [client.id], { only: factsIn(s.if), now }).get(client.id) ?? {};
+      const facts = clientFacts(db, a.coach_id, [client.id], { only: factsIn(s.if), now, forSending: !AI_SAFE_ACTIONS.includes(s.action) }).get(client.id) ?? {};
       if (!evaluate(s.if, facts)) item.skipped = 'condition not met today';
     }
     const p = s.params ?? {};
@@ -626,7 +670,7 @@ function missingOf(a) {
   const actions = new Set(allActions().map(x => x.id));
   const facts = new Set(allFacts().map(f => f.id));
   const out = [];
-  if (a.trigger.type === 'event' && !events.has(a.trigger.event)) out.push(a.trigger.event);
+  if (a.trigger.type === 'event' && a.trigger.event && !events.has(a.trigger.event)) out.push(a.trigger.event);
   for (const s of a.steps) if (s.type === 'action' && !actions.has(s.action)) out.push(s.action);
   for (const r of [a.trigger.rules, a.conditions, ...a.steps.map(s => s.if)]) for (const f of factsIn(r)) if (!facts.has(f)) out.push(f);
   return [...new Set(out)];
@@ -955,6 +999,8 @@ function schema(db) {
   CREATE TABLE IF NOT EXISTS automation_slots (
     automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
     slot TEXT NOT NULL, PRIMARY KEY (automation_id, slot));`);
+  // 1: the run was started by an event that carried an AI judgement (payload.aiDerived).
+  addColumn(db, 'automation_runs', 'ai_derived', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 // MARK: - Demo

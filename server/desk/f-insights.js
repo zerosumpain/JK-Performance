@@ -53,7 +53,9 @@ async function engagementTab(box, ctx) {
       tile({ id: 'kpi-events', size: 's', eyebrow: 'Activity', body: bigNumber(d.summary.events, { format: v => Math.round(v).toLocaleString('en-GB'), label: `things clients did in ${d.days} days` }) }),
       tile({ id: 'kpi-peak', size: 's', eyebrow: 'Busiest hour', body: bigNumber(d.summary.peak ? `${d.summary.peak.weekday} ${pad(d.summary.peak.hour)}:00` : '–', { label: d.summary.peak ? `${plural(d.summary.peak.n, 'thing')} in that hour` : '' }) }),
       tile({ id: 'heat', size: 'xl', title: 'When clients are active', icon: 'grid_view',
-        body: h('div', { class: 'in-heat' }, heatmap({ rows: d.rows, cols: hours, values: d.heatmap, ariaLabel: 'Client activity by London weekday and hour', format: v => plural(v ?? 0, 'thing') })) }),
+        body: [h('div', { class: 'in-heat', onscroll: e => { const x = e.currentTarget; x.classList.toggle('end', x.scrollLeft + x.clientWidth >= x.scrollWidth - 2); } },
+          heatmap({ rows: d.rows, cols: hours, values: d.heatmap, ariaLabel: 'Client activity by London weekday and hour', format: v => plural(v ?? 0, 'thing') })),
+        h('p', { class: 'in-heat-hint tiny faint' }, icon('east', 14), 'Swipe for later hours')] }),
       tile({ id: 'mix', size: 'm', title: 'What they do', icon: 'donut_large',
         body: donut({ parts: d.mix.filter(m => m.n).map(m => ({ label: m.label, value: m.n, tone: KIND_TONE[m.kind] })), centre: { value: mixTotal.toLocaleString('en-GB'), label: 'in total' }, size: 150, ariaLabel: 'Activity by kind' }) }),
       tile({ id: 'daily', size: 'xl', title: 'Daily active clients', icon: 'trending_up',
@@ -221,7 +223,7 @@ route('/insights/:tab?', async (el, params, view) => {
   const sub = h('span', null, ' ');
   const body = h('div', { class: 'in-body' });
   const ctx = { setSub: text => { sub.textContent = text; }, days: 90 };
-  const crumbs = () => setCrumbs([{ label: 'Business' }, { label: 'Insights', path: '/insights' }, { label: TABS.find(t => t.id === tab).label }]);
+  const crumbs = () => setCrumbs([{ label: 'Business' }, { label: 'Insights', path: '/insights' }, ...(tab === TABS[0].id ? [] : [{ label: TABS.find(t => t.id === tab).label }])]);
   const show = async () => {
     crumbs();
     body.replaceChildren();

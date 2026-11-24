@@ -51,7 +51,7 @@ export async function renderBoard(box, ctx) {
   const kpis = h('div', { class: 'cg-kpis' },
     tile({ eyebrow: 'Enrolled', icon: 'group', hero: true, body: [h('div', { class: 'ui-tile-num' }, String(active.length), c.capacity ? h('span', { class: 'cg-of' }, ` of ${c.capacity}`) : null),
       h('div', { class: 'small muted' }, [c.placesLeft !== null ? plural(c.placesLeft, 'place') + ' left' : 'No limit', b.invited.filter(x => x.enrolment.status === 'invited').length ? `${b.invited.filter(x => x.enrolment.status === 'invited').length} invited` : null].filter(Boolean).join(' · '))] }),
-    tile({ eyebrow: 'Average progress', icon: 'donut_large', body: h('div', { class: 'cg-kpi-ring' }, scoreRing(avg, { size: 64, label: 'Average progress', band: { word: c.today ? `Day ${c.today} of ${c.lengthDays}` : `${c.lengthDays} days`, tone: 'data' } })) }),
+    tile({ eyebrow: 'Average progress', icon: 'donut_large', body: h('div', { class: 'cg-kpi-ring' }, scoreRing(avg, { size: 64, unit: '%', label: 'Average progress', band: { word: c.today ? `Day ${c.today} of ${c.lengthDays}` : `${c.lengthDays} days`, tone: 'data' } })) }),
     tile({ eyebrow: 'Behind pace', icon: 'flag', body: [h('div', { class: 'ui-tile-num' + (behind.length ? ' cg-warn' : '') }, String(behind.length)), h('div', { class: 'small muted' }, behind.length ? behind.map(r => r.client.name.split(' ')[0]).join(', ') : 'Everyone on pace')] }),
     tile({ eyebrow: 'Spend reported', icon: 'payments', body: [h('div', { class: 'ui-tile-num' }, money(spentAll)), h('div', { class: 'small muted' }, `of ${money(expAll)} expected`),
       h('div', { class: 'ui-progress-track cg-mini' }, h('div', { class: 'ui-progress-fill bg-accent', style: { '--pct': `${Math.min(100, expAll ? (spentAll / expAll) * 100 : 0)}%` } }))] }));
@@ -129,7 +129,7 @@ export async function renderEnrol(box, ctx) {
   const c = ctx.doc.campaign;
   if (c.status !== 'live') {
     box.append(emptyHero({ icon: 'rocket_launch', title: c.status === 'draft' ? 'Make it live to invite people' : 'This campaign is not running',
-      line: c.status === 'draft' ? 'Check the design, the kit and the dates, then go live. Nothing is sent until you invite.' : 'Reopen it from the header to invite more people.',
+      line: c.status === 'draft' ? `Check the design, the kit and the dates${c.startMode === 'fixed' && !c.startsOn ? ' (it needs a start date: you can set it as you go live)' : ''}, then go live. Nothing is sent until you invite.` : 'Reopen it from the header to invite more people.',
       action: c.status === 'draft' ? { label: 'Go live', onclick: () => ctx.setStatus('live') } : null }));
     return;
   }

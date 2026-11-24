@@ -307,9 +307,14 @@ function drawCrumbs(list) {
   shell.crumbsSet = !!list;
   const nav = navForKey(shell.current);
   const group = NAV_GROUPS.find(([g]) => g === nav?.group)?.[1];
-  const trail = list || (nav ? [{ label: nav.label, path: navPath(nav) }] : []);
-  fill(shell.crumbs, group && !list ? h('span', { class: 'crumb-group' }, group) : null,
-    trail.map((c, i) => [i || (group && !list) ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, icon('chevron_right', 14)) : null,
+  let trail = list || (nav ? [{ label: nav.label, path: navPath(nav) }] : []);
+  // Every page leads with its nav group, drawn the same way. A page's own leading group step ("Engage", "Clients")
+  // is folded into it; a lone crumb that is the group itself ("Settings") stands alone.
+  const same = c => !!group && String(c?.label ?? '').toLowerCase() === group.toLowerCase();
+  if (trail.length > 1 && same(trail[0])) trail = trail.slice(1);
+  const lead = group && !(trail.length === 1 && same(trail[0])) && !(trail.length > 1 && !trail[0].path);
+  fill(shell.crumbs, lead ? h('span', { class: 'crumb-group' }, group) : null,
+    trail.map((c, i) => [i || lead ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, icon('chevron_right', 14)) : null,
       i < trail.length - 1
         // A step with no path ("Engage") reads as the group label, and phones drop it like the shell's own group.
         ? (c.path ? h('a', { class: 'crumb', href: `#${c.path}` }, c.label) : h('span', { class: 'crumb-group' }, c.label))

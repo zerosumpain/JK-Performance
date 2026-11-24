@@ -18,6 +18,12 @@
 .in-heat{overflow-x:auto;padding-bottom:4px}
 .in-heat .ch-heatmap{min-width:560px}
 .in-heat .ch-cell{height:24px}
+.in-heat-hint{display:none;align-items:center;gap:4px;margin:6px 0 0}
+@media (max-width:820px){
+  /* The day runs off the right edge on a phone: fade it so the scroll reads, and say so. */
+  .in-heat:not(.end){-webkit-mask-image:linear-gradient(to right,black calc(100% - 36px),transparent);mask-image:linear-gradient(to right,black calc(100% - 36px),transparent)}
+  .in-heat-hint{display:flex}
+}
 @media (max-width:1400px){.in-heat .ch-heat-col:not(:nth-child(3n+2)){color:transparent}}
 
 .in-days{display:inline-flex;align-items:center;gap:10px;justify-content:flex-end}

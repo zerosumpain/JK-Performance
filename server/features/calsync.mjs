@@ -9,10 +9,12 @@ import {
   busyIntervals, calendarPrefs, clashOf, freeCheck, hasTable, insertBooking, PREF_DEFAULTS, rulesOf, shortWhen, slotsFor,
 } from '../bookings.mjs';
 import { emit } from '../events.mjs';
+import { clientFacts } from '../facts.mjs';
 import { day as dayArg, fail, instant, num, oneOf, str } from '../http.mjs';
 import { sendMessage } from '../messages.mjs';
 import { notifyCoach } from '../notifications.mjs';
 import { notify } from '../push.mjs';
+import { allFacts } from '../registry.mjs';
 import { newId, nowIso, tx } from '../store.mjs';
 import { addDays, daysBetween, londonClock, londonDay, londonToUtc, weekday } from '../time.mjs';
 
@@ -1028,6 +1030,15 @@ export function findSlots(db, coachId, { client = null, kind = null, minutes = n
     try { likes = JSON.parse(client.profile ?? 'null')?.preferredTime ?? null; } catch { likes = null; }
     if (!PERIODS.includes(likes)) likes = null;
   }
+  // Days the client already has a session: a second one the same day is rarely what anyone wants.
+  const booked = new Map();
+  if (client) {
+    for (const b of db.prepare(`SELECT start FROM bookings WHERE cancelled_at IS NULL AND start>=? AND start<? AND (client_id=? OR id IN (SELECT booking_id FROM class_attendees WHERE user_id=?)) ORDER BY start`)
+      .all(londonToUtc(from).toISOString(), londonToUtc(addDays(to, 1)).toISOString(), client.id, client.id)) {
+      const d = londonDay(new Date(b.start));
+      if (!booked.has(d)) booked.set(d, londonClock(new Date(b.start)));
+    }
+  }
   const lastOfDay = new Map();
   for (const s of slots) { const d = londonDay(new Date(s.start)); if (!lastOfDay.has(d) || s.start > lastOfDay.get(d)) lastOfDay.set(d, s.start); }
   const out = [];
@@ -1050,6 +1061,7 @@ export function findSlots(db, coachId, { client = null, kind = null, minutes = n
       reasons.push(next ? `Free before your ${londonClock(new Date(next.start))}` : `Right after ${prev.title} at ${londonClock(new Date(prev.start))}`);
       if (prefs.bufferAfter || prefs.bufferBefore) reasons.push('No buffer clash');
     }
+    if (booked.has(d)) { score -= 6; reasons.unshift(`Already seeing ${who} at ${booked.get(d)}`); }
     if (lastOfDay.get(d) === s.start) { score -= 2; reasons.push('Last slot of the day'); }
     const ahead = Math.max(0, daysBetween(londonDay(now), d));
     score -= ahead;
@@ -1071,7 +1083,14 @@ function find(_req, ctx) {
   const to = dayArg(q.to, 'to', { optional: true }) ?? addDays(from, 13);
   if (to < from) fail(400, 'to is before from');
   if (daysBetween(from, to) > 62) fail(400, 'At most 62 days at a time');
-  return { suggestions: findSlots(ctx.db, ctx.user.id, { client, kind, minutes, from: from < today ? today : from, to, prefer }) };
+  // A paused or ended client: say so above the times (crm.stage, when the CRM is loaded).
+  let warning = null;
+  if (client && allFacts().some(f => f.id === 'crm.stage')) {
+    const stage = clientFacts(ctx.db, ctx.user.id, [client.id], { only: ['crm.stage'] }).get(client.id)?.['crm.stage'];
+    if (stage === 'paused') warning = `${firstName(client.name)} is paused`;
+    else if (stage === 'churned' || stage === 'alumni') warning = `${firstName(client.name)}'s coaching has ended`;
+  }
+  return { suggestions: findSlots(ctx.db, ctx.user.id, { client, kind, minutes, from: from < today ? today : from, to, prefer }), warning };
 }
 
 // MARK: - Waitlist (F21)
@@ -1461,6 +1480,8 @@ export const feature = {
   on: {
     'booking.cancelled': onCancelled,
     'lead.deleted': onLeadDeleted,
+    // A moved session re-arms its 24 h and 2 h reminders for the new time.
+    'booking.rescheduled': (db, _config, e) => { if (e.payload?.bookingId) db.prepare('DELETE FROM booking_reminders WHERE booking_id=?').run(e.payload.bookingId); },
   },
 
   emits: {
@@ -1469,7 +1490,7 @@ export const feature = {
     'waitlist.matched': { label: 'A freed slot matches a waitlist entry', payload: ['waitlistId', 'start', 'kind'] },
     'booking.series': { label: 'Standing sessions were booked', payload: ['seriesId', 'count'] },
     'booking.rescheduled': { label: 'A session was moved', payload: ['bookingId', 'from', 'to', 'byRole'] },
-    'booking.upcoming': { label: 'A session is coming up (24 h or 2 h)', payload: ['bookingId', 'hoursBefore'] },
+    'booking.upcoming': { label: 'A session is coming up', payload: ['bookingId', 'hoursBefore'] },
   },
 
   inbox: inboxItems,

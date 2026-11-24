@@ -34,7 +34,7 @@ registerCommand({ id: 'ask-testimonial', label: 'Ask a client for a testimonial�
 
 route('/marketing/:tab?', async (el, params, view) => {
   const tab = TABS.some(t => t[0] === params.tab) ? params.tab : 'sources';
-  setCrumbs([{ label: 'Marketing', path: '/marketing' }, { label: TABS.find(t => t[0] === tab)[1] }]);
+  setCrumbs([{ label: 'Marketing', path: '/marketing' }, ...(tab === TABS[0][0] ? [] : [{ label: TABS.find(t => t[0] === tab)[1] }])]);
   const sub = h('p', { class: 'ui-head-sub' }, ' ');
   const head = pageHead({
     eyebrow: 'Clients · Growth', title: 'Marketing', accent: { sources: 'that pays', followups: 'that follows up', testimonials: 'in their words', offers: 'out in the open' }[tab],

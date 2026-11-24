@@ -483,14 +483,27 @@ function referralCodeKnown(db, coachId, code) {
 
 const clip = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 
+/**
+ * The submitter's address. cf-connecting-ip is believed only when the request
+ * came from a proxy on this machine or its private network (the Cloudflare
+ * tunnel); a request straight from the internet can't pick its own address.
+ */
+const PRIVATE = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1$|fc|fd|::ffff:(127|10|192\.168|172\.(1[6-9]|2\d|3[01]))\.)/i;
+function clientIp(req) {
+  const peer = String(req.socket?.remoteAddress ?? '');
+  const forwarded = req.headers['cf-connecting-ip'];
+  return String(forwarded && PRIVATE.test(peer) ? forwarded : peer || 'unknown').slice(0, 64);
+}
+
 function enquireSubmit(req, ctx) {
   const form = formFor(ctx.db, ctx.params.slug);
   if (!form) return gone();
   const coach = ctx.db.prepare("SELECT * FROM users WHERE id=? AND role='coach'").get(form.coach_id);
   if (!coach) return gone();
   if (coach.is_demo) return notice(403, 'Demo', 'This is a demo page', 'The demo studio shows the enquiry form but does not take enquiries. Nothing you typed was kept.');
-  const ip = String(req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown').slice(0, 64);
-  if (!limit(`enquire:${form.slug}:${ip}`, { max: 5, perMs: 3_600_000 })) {
+  const ip = clientIp(req);
+  // Per address, and an overall cap per form, so a flood (spoofed addresses included) can't fill the pipeline.
+  if (!limit(`enquire:${form.slug}:${ip}`, { max: 5, perMs: 3_600_000 }) || !limit(`enquire:${form.slug}`, { max: 30, perMs: 3_600_000 })) {
     return notice(429, 'Enquiries', 'Too many enquiries', 'We’ve had several enquiries from this connection in the last hour. Please try again a little later.');
   }
   if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/x-www-form-urlencoded')) {
@@ -534,10 +547,14 @@ function enquireSubmit(req, ctx) {
     }, { activity: offer ? `Enquiry form: ${offer.name}` : referral ? `Enquiry form, referred with ${ref}` : 'Enquiry form', now });
     const prefsOn = coachPref(ctx.db, coach.id, 'notify.prefs', {});
     if (prefsOn?.lead !== false) {
-      notifyCoach(ctx.db, ctx.config, coach.id, {
-        kind: 'lead', title: `New enquiry: ${values.name}`, body: offer ? `Interested in ${offer.name}` : values.goal ? values.goal.slice(0, 140) : SOURCE_LABEL[lead.source],
-        path: `/pipeline/${lead.id}`, icon: 'person_add', tone: 'attention', dedupe: `lead:${lead.id}`, now,
-      });
+      // Past a few form enquiries an hour, one "new enquiries" notification per hour instead of one each.
+      const recent = ctx.db.prepare("SELECT COUNT(*) n FROM leads WHERE coach_id=? AND source IN ('enquiryForm','referral') AND created_at>=?")
+        .get(coach.id, new Date(now.getTime() - 3_600_000).toISOString()).n;
+      notifyCoach(ctx.db, ctx.config, coach.id, recent > 3
+        ? { kind: 'lead', title: 'New enquiries', body: `${recent} enquiries in the last hour. Open the pipeline to sort them.`, path: '/pipeline', icon: 'person_add', tone: 'attention',
+          dedupe: `leadflood:${coach.id}:${now.toISOString().slice(0, 13)}`, now }
+        : { kind: 'lead', title: `New enquiry: ${values.name}`, body: offer ? `Interested in ${offer.name}` : values.goal ? values.goal.slice(0, 140) : SOURCE_LABEL[lead.source],
+          path: `/pipeline/${lead.id}`, icon: 'person_add', tone: 'attention', dedupe: `lead:${lead.id}`, now });
     }
   });
   return thanks();

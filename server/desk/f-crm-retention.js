@@ -8,8 +8,8 @@ import {
   api, avatar, errorLine, fill, firstName, fmtRelative, fmtShort, go, h, hasFeature, icon, link, londonParts, route, setCrumbs, sparkline,
 } from './core.js';
 import { barChart, donut } from './charts.js';
-import { emptyHero, menu, pageHead, skeleton, tabs } from './ui.js';
-import { BAND, EXIT, exitTone, healthRing, inDays, openEnd, openMessage, openPause, stagePill, trendChip } from './f-crm.js';
+import { emptyHero, menu, pageHead, scoreRing, skeleton, tabs } from './ui.js';
+import { BAND, EXIT, exitTone, inDays, openEnd, openMessage, openPause, stagePill, trendChip } from './f-crm.js';
 
 const enc = encodeURIComponent;
 const TABS = [{ id: 'radar', label: 'Radar' }, { id: 'renewals', label: 'Renewals' }, { id: 'ended', label: 'Ended' }];
@@ -81,8 +81,9 @@ function radarCard(c, { offer, reload }) {
   return h('article', { class: 'rt-card' },
     h('div', { class: 'rt-card-top' },
       link(`/clients/${enc(client.id)}`, { class: 'rt-who' }, avatar(client.initials || client.name, 36),
-        h('div', { class: 'grow' }, h('div', { class: 'strong clamp1' }, client.name), h('div', { class: 'row gap4' }, stagePill(c.stage, { small: true })))),
-      healthRing(c.health, c.band, { size: 46 })),
+        h('div', { class: 'grow' }, h('div', { class: 'strong clamp1' }, client.name), h('div', { class: 'row gap4' }, h('span', { class: 'tiny faint' }, 'Stage'), stagePill(c.stage, { small: true })))),
+      // The ring is the score, captioned "Health" in its band's colour: the column and the Stage chip carry the words.
+      scoreRing(c.health, { size: 46, label: `Health score, ${BAND[c.band]?.word ?? 'no score'}`, band: { word: 'Health', tone: BAND[c.band]?.tone ?? 'data' } })),
     h('div', { class: 'rt-spark' }, h('span', { class: `tone-${tone}` }, sparkline(c.series, { width: 200, height: 34, label: `Health over 30 days, now ${c.health ?? 'unknown'}` })), trendChip(c.trend)),
     c.suggested && c.why ? h('p', { class: 'rt-why' }, icon('heart_broken', 16), `Looks like ${firstName(client.name)} has stopped: ${c.why}.`) : null,
     c.reasons.length ? h('ul', { class: 'rt-reasons' }, c.reasons.map(t => h('li', null, t))) : null,

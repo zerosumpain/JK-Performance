@@ -14,7 +14,7 @@ import {
 } from './core.js';
 import {
   AI_SAFE, DAY_NAMES, DAY_SHORT, actionIcon, ago, catalogue, enc, rulesWords, runPill, sentence, statusPill, stepParts, stepProblem,
-  triggerIcon, triggerWords, usesAi, waitWords, whereWords, withVars,
+  pendingOpen, triggerIcon, triggerWords, usesAi, waitWords, whereFields, whereWords, withVars,
 } from './f-auto-common.js';
 import { dataTable, emptyHero, inlineEdit, menu, moneyInput, popover, ruleBuilder, segmentedNav, skeleton, slideOver, tabs, timeline } from './ui.js';
 
@@ -365,7 +365,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
       const box = h('div', { class: 'au-insp-sec' });
       const pick = segmentedNav([['event', 'An event'], ['schedule', 'A schedule'], ['enters', 'Starts to match'], ['manual', 'By hand']], t.type, type => {
         if (type === a.trigger.type) return;
-        a.trigger = type === 'event' ? { type, event: cat.events[0]?.type, where: {} }
+        a.trigger = type === 'event' ? { type, event: null, where: {} }
           : type === 'schedule' ? { type, days: [1], at: '08:00', audience: { everyone: true } }
             : type === 'enters' ? { type, rules: { match: 'all', rules: [{ fact: 'core.daysQuiet', op: 'gte', value: 5 }] } } : { type };
         changed();
@@ -378,37 +378,33 @@ route('/automations/:id/:tab?', async (el, p, view) => {
           const groups = new Map();
           for (const e of cat.events) { const g = e.feature === 'core' ? 'Everyday' : e.feature[0].toUpperCase() + e.feature.slice(1); groups.set(g, [...(groups.get(g) ?? []), e]); }
           const sel = h('select', { id: 'au-ev', onchange: e => { tr.event = e.target.value; tr.where = {}; changed(); drawFields(); } },
+            tr.event ? null : h('option', { value: '', selected: true, disabled: true }, 'Choose what starts it…'),
             [...groups].map(([g, list]) => h('optgroup', { label: g }, list.map(e => h('option', { value: e.type, selected: e.type === tr.event }, `${e.label}${e.aiDerived ? ' (AI)' : ''}`)))));
           const ev = cat.events.find(e => e.type === tr.event);
+          const fields = whereFields(ev, cat);
           const where = h('div', { class: 'au-where' });
-          const modes = {};
-          const drawWhere = () => fill(where, (ev?.payload ?? []).filter(k => !/Id$/.test(k) && k !== 'email').map(k => {
-            const cur = tr.where?.[k];
-            const mode = modes[k] ?? (cur === undefined ? 'any' : cur === true ? 'true' : cur === false ? 'false' : 'is');
-            const input = h('input', { type: 'text', value: mode === 'is' && cur !== undefined ? String(cur) : '', placeholder: 'value', 'aria-label': `${k} value`, hidden: mode !== 'is',
-              oninput: e => {
-                const v = e.target.value.trim();
-                tr.where = { ...tr.where };
-                if (v === '') delete tr.where[k]; else tr.where[k] = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v;
-                changed();
-              } });
-            return h('div', { class: 'au-where-row' }, h('span', { class: 'au-where-key' }, k),
-              h('select', { 'aria-label': k, onchange: e => {
-                const m = e.target.value;
-                modes[k] = m;
-                tr.where = { ...tr.where };
-                delete tr.where[k];
-                if (m === 'true') tr.where[k] = true;
-                else if (m === 'false') tr.where[k] = false;
-                changed();
-                drawWhere();
-                if (m === 'is') where.querySelector(`input[aria-label="${k} value"]`)?.focus();
-              } }, [['any', 'any'], ['true', 'yes'], ['false', 'no'], ['is', 'is…']].map(([v, l]) => h('option', { value: v, selected: v === mode }, l))), input);
+          const set = (k, v) => { tr.where = { ...tr.where }; if (v === undefined) delete tr.where[k]; else tr.where[k] = v; changed(); };
+          fill(where, fields.map(f => {
+            const cur = tr.where?.[f.key];
+            const id = `au-where-${f.key}`;
+            let control;
+            if (f.type === 'bool' || f.type === 'enum') {
+              const opts = f.type === 'bool' ? [['true', 'Yes'], ['false', 'No']] : f.options.map(([v, l]) => [String(v), l]);
+              control = h('select', { id, onchange: e => {
+                const v = e.target.value;
+                if (v === '') set(f.key, undefined);
+                else if (f.type === 'bool') set(f.key, v === 'true');
+                else { const o = f.options.find(([x]) => String(x) === v); set(f.key, o ? o[0] : v); }
+              } }, h('option', { value: '', selected: cur === undefined }, 'Any'), opts.map(([v, l]) => h('option', { value: v, selected: cur !== undefined && String(cur) === v }, l)));
+            } else {
+              control = h('input', { id, type: f.type === 'number' ? 'number' : 'text', value: cur === undefined ? '' : String(cur), placeholder: 'Any',
+                oninput: e => { const v = e.target.value.trim(); set(f.key, v === '' ? undefined : f.type === 'number' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v); } });
+            }
+            return h('div', { class: 'au-where-row' }, h('label', { class: 'au-where-key', for: id }, f.label), control);
           }));
-          drawWhere();
           fill(box, h('div', { class: 'field' }, h('label', { for: 'au-ev' }, 'When this happens'), sel),
             ev?.aiDerived ? h('p', { class: 'au-ai-note' }, icon('auto_awesome', 16), 'This comes from an AI judgement. Automations that start from it can only notify you, add a task, tag or draft: never message the client.') : null,
-            ev?.payload?.some(k => !/Id$/.test(k) && k !== 'email') ? h('div', { class: 'field' }, h('label', null, 'Only when the event says'), where) : null);
+            fields.length ? h('div', { class: 'field' }, h('label', null, 'Only when'), where) : null);
         } else if (tr.type === 'schedule') {
           const days = h('div', { class: 'au-days', role: 'group', 'aria-label': 'Days' }, DAY_SHORT.map((d, i) => h('button', {
             type: 'button', class: 'au-day' + (tr.days.includes(i + 1) ? ' on' : ''), 'aria-pressed': String(tr.days.includes(i + 1)), 'aria-label': DAY_NAMES[i],
@@ -501,6 +497,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
     if (!a.steps.some(s => s.type === 'action')) problems.push('Add at least one action');
     a.steps.forEach((s, i) => { const pr = stepProblem(s, cat); if (pr) problems.push(`Step ${i + 1}: ${pr}`); });
     if (a.trigger.type === 'schedule' && !a.trigger.days?.length) problems.push('Pick at least one day');
+    if (a.trigger.type === 'event' && !a.trigger.event) problems.push('Choose the event that starts it');
     for (const n of saved.needs ?? []) problems.push(`Needs ${n}`);
     const govern = h('p', { class: 'small muted au-govern' }, icon('verified', 15), 'Messages follow your outreach rules.');
     summaryP ??= api('GET', '/api/outreach/summary').catch(() => null);
@@ -636,5 +633,10 @@ route('/automations/:id/:tab?', async (el, p, view) => {
 
   drawHead();
   drawBody();
+  // A fresh "When something happens" draft: pick its event first.
+  if (pendingOpen.triggerFor === id) {
+    pendingOpen.triggerFor = null;
+    if (tab === 'build') { inspectTrigger(); requestAnimationFrame(() => document.getElementById('au-ev')?.focus()); }
+  }
 });
 

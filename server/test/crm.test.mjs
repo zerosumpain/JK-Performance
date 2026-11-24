@@ -80,9 +80,11 @@ describe('health score (F5)', () => {
     assert.equal(s.band, 'thriving');
     assert.deepEqual([s.factors.engagement, s.factors.adherence, s.factors.consistency, s.factors.wellbeing], [30, 24, 10, 19]);
     assert.ok(s.factors.notes.some(n => n === 'Kept 3/4 commitments'), s.factors.notes.join(' | '));
-    // Null adherence counts 0.5, pain halves wellbeing, low voice sentiment takes a quarter.
+    // Null adherence counts 0.5 and pain halves wellbeing. Low voice sentiment is AI-derived: a note, never points (D5).
     const low = scoreFrom({ adherence28: null, pain14: true, sentiment14: -0.6 });
-    assert.equal(low.health, Math.round(100 * (0.3 * 0.5 + 0.2 * 0.25)));
+    assert.equal(low.health, Math.round(100 * (0.3 * 0.5 + 0.2 * 0.5)));
+    assert.equal(low.health, scoreFrom({ adherence28: null, pain14: true }).health);
+    assert.ok(low.factors.notes.some(n => /voice notes \(AI, not scored\)/.test(n)), low.factors.notes.join(' | '));
     // Sentiment is ignored when the fact is absent.
     assert.equal(scoreFrom({ adherence28: null }).health, Math.round(100 * (0.3 * 0.5 + 0.2)));
   });

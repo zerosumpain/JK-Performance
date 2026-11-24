@@ -8,9 +8,21 @@ import { api, h, icon, pill } from './core.js';
 
 let catalogueP = null;
 /** GET /api/automations/catalogue, once (force to reload after creating a tag or form). */
+let knownVars = null;
 export function catalogue(force = false) {
-  if (!catalogueP || force) catalogueP = api('GET', '/api/automations/catalogue').catch(err => { catalogueP = null; throw err; });
+  if (!catalogueP || force) {
+    catalogueP = api('GET', '/api/automations/catalogue')
+      .then(c => { knownVars = new Set((c.variables ?? []).map(v => v.name)); return c; })
+      .catch(err => { catalogueP = null; throw err; });
+  }
   return catalogueP;
+}
+
+/** Variable names in a text that the server doesn't know (they would reach the client as written). */
+export function unknownVars(text, cat) {
+  const known = cat?.variables ? new Set(cat.variables.map(v => v.name)) : knownVars;
+  if (!known) return [];
+  return [...new Set([...String(text ?? '').matchAll(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g)].map(m => m[1]).filter(n => !known.has(n)))];
 }
 
 export const enc = encodeURIComponent;
@@ -48,8 +60,56 @@ export const runPill = s => pill(...(RUN_STATUS[s] ?? [s, 'data']));
 
 const OP_WORD = { eq: 'is', ne: 'is not', gt: '>', gte: '≥', lt: '<', lte: '≤', in: 'is any of', notIn: 'is none of', has: 'has', hasNot: 'does not have', isSet: 'is set', isNotSet: 'is not set', between: 'between' };
 
+/**
+ * How the builder offers an event's payload keys: a label and a typed control
+ * (bool, enum with options, number, text). Keys that hold ids, times or money
+ * can't usefully be matched exactly, so they are not offered.
+ */
+const BOOL = label => ({ label, type: 'bool' });
+const ENUM = (label, options) => ({ label, type: 'enum', options });
+const SESSION_KINDS = [['inperson', 'In person'], ['video', 'Video call'], ['group', 'Group class']];
+const WHERE_INFO = {
+  late: BOOL('Late'), refunded: BOOL('Credit given back'), flagged: BOOL('Flagged'), pain: BOOL('Pain reported'), manual: BOOL('Set by hand'),
+  deferred: BOOL('Held for quiet hours'), keepChasing: BOOL('Still chasing money'), invoice: BOOL('Invoice wanted'),
+  byRole: ENUM('Done by', [['client', 'The client'], ['coach', 'You']]),
+  by: ENUM('Tagged by', [['coach', 'You'], ['automation', 'An automation'], ['ai', 'An AI-driven automation']]),
+  hoursBefore: ENUM('Reminder', [[24, '24 hours before'], [2, '2 hours before']]),
+  method: ENUM('Paid by', [['bank', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['other', 'Other']]),
+  verdict: ENUM('Verdict', [['ok', 'Looks good'], ['caution', 'Worth a look'], ['stop', 'Stop and check']]),
+  money: ENUM('Money owed', [['leave', 'Left as it is'], ['invoice', 'Invoiced'], ['writeOff', 'Written off']]),
+  packages: ENUM('Packages', [['refund', 'Refunded'], ['expire', 'Expired']]),
+  purpose: ENUM('Session purpose', [['planning', 'Planning'], ['review', 'Review']]),
+  left: { label: 'Sessions left', type: 'number' }, daysOverdue: { label: 'Days overdue', type: 'number' }, days: { label: 'Days', type: 'number' },
+  streak: { label: 'Streak (days)', type: 'number' }, score: { label: 'Score', type: 'number' },
+  severity: ENUM('Severity', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]),
+  direction: ENUM('From', [['client', 'The client'], ['coach', 'You']]),
+};
+const WHERE_SKIP = /Id$|^(email|start|end|at|until|dueOn|startOn|day|week|key|campaignName|discountCode|words|count|recipients|health|pace|totalPence|amountPence|feePence|discountPence|referralCode|nextStep|step|reason|kinds|attendance|policy|source|via|feel|outcome|exitReason|rewardKind|decision|pausedDays)$/;
+const humanKey = k => { const t = k.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase(); return t[0].toUpperCase() + t.slice(1); };
+
+/** The payload keys of an event the coach can filter on: [{key, label, type, options?}]. */
+export function whereFields(ev, cat) {
+  if (!ev) return [];
+  const factOptions = id => (cat?.facts ?? []).find(f => f.id === id)?.options?.map(o => [o.value, o.label]) ?? null;
+  return (ev.payload ?? []).filter(k => typeof k === 'string' && !WHERE_SKIP.test(k)).map(k => {
+    if (k === 'kind') return /^booking\./.test(ev.type) ? { key: k, ...ENUM('Session type', SESSION_KINDS) } : null;
+    if (k === 'from' || k === 'to') {
+      const opts = ev.type === 'client.stageChanged' ? factOptions('crm.stage') : ev.type === 'crm.bandChanged' ? factOptions('crm.band') : null;
+      return opts ? { key: k, ...ENUM(k === 'from' ? 'From' : 'To', opts) } : null;
+    }
+    return { key: k, ...(WHERE_INFO[k] ?? { label: humanKey(k), type: 'text' }) };
+  }).filter(Boolean);
+}
+
+/** Set by "Create draft" so the new automation's builder opens its event picker straight away. */
+export const pendingOpen = { triggerFor: null };
+
+const WHERE_SAID = { late: ['late', 'not late'], refunded: ['credit given back', 'credit kept'], flagged: ['flagged', 'not flagged'], pain: ['pain reported', 'no pain'],
+  manual: ['set by hand', 'set automatically'], deferred: ['held for quiet hours', 'not held'], keepChasing: ['still chasing money', 'not chasing'], invoice: ['invoice wanted', 'no invoice'] };
+
 export function whereWords(where = {}) {
   return Object.entries(where ?? {}).map(([k, v]) => {
+    if (typeof v === 'boolean' && WHERE_SAID[k]) return WHERE_SAID[k][v ? 0 : 1];
     if (v === true) return k === 'byRole' ? '' : k;
     if (v === false) return `not ${k}`;
     if (k === 'byRole') return `by the ${v}`;
@@ -160,6 +220,8 @@ export function stepProblem(s, cat) {
   for (const p of spec.params ?? []) {
     const v = s.params?.[p.key];
     if (p.required && (v === undefined || v === null || v === '')) return `${p.type === 'template' || p.type === 'text' || p.type === 'longtext' ? 'Write' : 'Choose'} ${lower(p.label)}`;
+    const bad = p.type === 'template' ? unknownVars(v, cat)[0] : null;
+    if (bad) return `Unknown variable {${bad}}: pick one from the list, such as {first}`;
   }
   return null;
 }
@@ -213,7 +275,8 @@ export function withVars(text) {
   let last = 0;
   for (const m of String(text ?? '').matchAll(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g)) {
     if (m.index > last) out.push(text.slice(last, m.index));
-    out.push(h('span', { class: 'au-v' }, m[1]));
+    const bad = knownVars && !knownVars.has(m[1]);
+    out.push(h('span', { class: bad ? 'au-v au-v-bad' : 'au-v', ...(bad ? { title: 'Unknown variable: it would be sent as written' } : {}) }, m[1]));
     last = m.index + m[0].length;
   }
   if (last < String(text ?? '').length) out.push(String(text).slice(last));

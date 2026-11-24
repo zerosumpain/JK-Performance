@@ -252,13 +252,14 @@ function cleanDue(b, prev = null, now = new Date()) {
 }
 
 /** Insert a task (HTTP, the task.create action, other code). Returns the row. Emits task.created. */
-export function createTask(db, { coachId, clientId = null, title, notes = '', dueOn = null, dueAt = null, priority = 'normal', tags = [], source = 'manual', sourceRef = null, now = new Date() }) {
+export function createTask(db, { coachId, clientId = null, title, notes = '', dueOn = null, dueAt = null, priority = 'normal', tags = [], source = 'manual', sourceRef = null, now = new Date(), aiDerived = false }) {
   const id = newId('tk');
   const at = now.toISOString();
   const top = db.prepare('SELECT MIN(position) p FROM tasks WHERE coach_id=?').get(coachId).p;
   db.prepare(`INSERT INTO tasks (id, coach_id, client_id, title, notes, due_on, due_at, priority, tags, status, source, source_ref, created_at, position)
     VALUES (?,?,?,?,?,?,?,?,?,'open',?,?,?,?)`).run(id, coachId, clientId, title, notes, dueOn, dueAt, priority, JSON.stringify(tags), source, sourceRef, at, (top ?? 0) - 1);
-  emit(db, 'task.created', { coachId, clientId, summary: `Task: ${title.slice(0, 80)}`, taskId: id, source });
+  // A task made from an AI judgement (voice analysis, an AI-driven automation) carries the taint: task.created can't make anything message the client (6.3).
+  emit(db, 'task.created', { coachId, clientId, summary: `Task: ${title.slice(0, 80)}`, taskId: id, source, ...(aiDerived || ['voice', 'ai'].includes(source) ? { aiDerived: true } : {}) });
   return reload(db, id);
 }
 
@@ -516,7 +517,8 @@ export const feature = {
         const source = ctx.source && SOURCES.includes(ctx.source) ? ctx.source
           : type.startsWith('voice.') ? 'voice' : type.startsWith('ai.') ? 'ai' : /^(invoice|billing|payment)\./.test(type) ? 'dunning' : 'automation';
         const ref = ctx.sourceRef ?? (source === 'voice' ? ctx.event?.payload?.messageId : source === 'dunning' ? ctx.event?.payload?.invoiceId : ctx.automationId) ?? null;
-        createTask(db, { coachId: ctx.coachId, clientId: ctx.client.id, title, notes, dueOn: addDays(londonDay(ctx.now), days), priority: PRIORITIES.includes(ctx.params.priority) ? ctx.params.priority : 'normal', source, sourceRef: ref ? String(ref).slice(0, 80) : null, now: ctx.now });
+        createTask(db, { coachId: ctx.coachId, clientId: ctx.client.id, title, notes, dueOn: addDays(londonDay(ctx.now), days), priority: PRIORITIES.includes(ctx.params.priority) ? ctx.params.priority : 'normal', source, sourceRef: ref ? String(ref).slice(0, 80) : null, now: ctx.now,
+          aiDerived: !!ctx.aiDerived || !!ctx.event?.payload?.aiDerived });
         return 'Created task';
       },
     },

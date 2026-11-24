@@ -204,7 +204,8 @@ async function contextPane(box, clientId, getMessages) {
     row('calendar_month', 'Next session', daysLabel(v['core.nextSessionDays'])),
     row('bedtime_off', 'Quiet for', v['core.daysQuiet'] === null || v['core.daysQuiet'] === undefined ? '—' : `${v['core.daysQuiet']} day${v['core.daysQuiet'] === 1 ? '' : 's'}`, v['core.daysQuiet'] >= 7 ? 'attention' : null),
     row('task_alt', 'Adherence (28 d)', v['core.adherence28'] === null || v['core.adherence28'] === undefined ? '—' : `${Math.round(v['core.adherence28'])}%`),
-    row('healing', 'Pain (14 d)', v['core.pain14'] ? 'Flagged' : 'None', v['core.pain14'] ? 'urgent' : null),
+    // core.pain14 is check-ins and forms; a pain mention in a voice note (AI-derived, voice.pain14) shows as its own answer.
+    row('healing', 'Pain (14 d)', v['core.pain14'] ? 'Flagged' : v['voice.pain14'] ? 'Voice note (AI)' : 'None', v['core.pain14'] ? 'urgent' : v['voice.pain14'] ? 'attention' : null),
     sentiment !== null && sentiment !== undefined ? row('graphic_eq', 'Voice mood (14 d)', sentiment > 0.25 ? 'Positive' : sentiment < -0.25 ? 'Low' : 'Steady', sentiment < -0.25 ? 'attention' : sentiment > 0.25 ? 'ok' : null) : null,
     campaign ? row('campaign', 'Campaign', campaign) : null,
     tagNames.length ? h('div', { class: 'ctx-tags' }, tagNames.map(t => h('span', { class: `ctx-tag tag-${t.color || 'chart-1'}` }, t.name))) : null,

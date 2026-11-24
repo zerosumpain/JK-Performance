@@ -134,9 +134,10 @@ export function reviewPanel(r, { draft, transcript = null, onSendOriginal, onUse
   el.append(h('div', { class: 'ai-buttons' },
     onDismiss ? h('button', { type: 'button', class: 'btn text small', onclick: () => onDismiss() }, 'Dismiss') : null,
     onEdit ? h('button', { type: 'button', class: 'btn small', onclick: () => onEdit() }, icon('edit', 16), 'Edit') : null,
-    h('span', { class: 'grow' }),
-    sendBtn,
-    r.rewrite && onUseRewrite ? h('button', { type: 'button', class: 'btn primary small', onclick: () => onUseRewrite() }, icon('auto_awesome', 16), 'Use rewrite') : null));
+    // The decision pair wraps as one, so the primary action never sits alone on a second row.
+    h('span', { class: 'ai-buttons-main' },
+      sendBtn,
+      r.rewrite && onUseRewrite ? h('button', { type: 'button', class: 'btn primary small', onclick: () => onUseRewrite() }, icon('auto_awesome', 16), 'Use rewrite') : null)));
   return el;
 }
 
