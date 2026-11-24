@@ -1,0 +1,43 @@
+{
+  "guide": {
+    "id": "gb_GqImph4czhXs",
+    "title": "Your first week",
+    "summary": "How the campaign works, what to tick, and how to tell me how it went.",
+    "tags": [
+      "start"
+    ],
+    "readMinutes": 1,
+    "blocks": [
+      {
+        "t": "h",
+        "text": "Welcome in"
+      },
+      {
+        "t": "p",
+        "text": "Each day shows what to do. Tick it when it is done; _partly done_ counts if you did the important bit."
+      },
+      {
+        "t": "list",
+        "style": "check",
+        "items": [
+          "Read today's plan each morning",
+          "Tick as you go",
+          "Log what you spend on kit"
+        ]
+      },
+      {
+        "t": "callout",
+        "tone": "tip",
+        "text": "Miss a day? Do not double up. Carry on with today."
+      },
+      {
+        "t": "divider"
+      },
+      {
+        "t": "p",
+        "text": "Questions go to me in Messages, any time."
+      }
+    ],
+    "updatedAt": "2026-11-10T09:00:00.000Z"
+  }
+}

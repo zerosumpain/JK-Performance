@@ -3,6 +3,7 @@ import { dayStates, habitDay, habitsOf } from './daily.mjs';
 import { activeGoalRow } from './goals.mjs';
 import { healthDay } from './health.mjs';
 import { day, fail, num, oneOf, str } from './http.mjs';
+import { emit } from './events.mjs';
 import { notify } from './push.mjs';
 import { deliverDue, feedbackWeek } from './reports.mjs';
 import { featuresOf } from './settings.mjs';
@@ -387,7 +388,12 @@ function saveReflection(_req, ctx) {
   let first = false;
   tx(db, () => {
     const at = nowIso();
-    for (const [id, v] of outcomes) db.prepare('UPDATE commitments SET outcome=?, updated_at=? WHERE id=?').run(v, at, id);
+    const WORDS = { kept: 'Commitment kept', mostly: 'Commitment mostly kept', missed: 'Commitment missed' };
+    for (const [id, v] of outcomes) {
+      const before = db.prepare('SELECT outcome FROM commitments WHERE id=?').get(id)?.outcome ?? null;
+      db.prepare('UPDATE commitments SET outcome=?, updated_at=? WHERE id=?').run(v, at, id);
+      if (v && v !== before) emit(db, 'commitment.reviewed', { coachId: user.coach_id, clientId: user.id, summary: WORDS[v], commitmentId: id, outcome: v });
+    }
     if (feeling !== undefined || noticed !== undefined) {
       const d = db.prepare('SELECT * FROM reflection_drafts WHERE client_id=? AND week=?').get(user.id, week);
       db.prepare(`INSERT INTO reflection_drafts (client_id, week, feeling, noticed, updated_at) VALUES (?,?,?,?,?)

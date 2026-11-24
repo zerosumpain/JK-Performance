@@ -1,0 +1,37 @@
+/* The composer (composer.js): one box for threads, inbox replies, broadcasts and scheduled sends. */
+.cmp{display:flex;flex-direction:column;gap:8px}
+.cmp-box{display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--input-border);border-radius:var(--r-float);transition:border-color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease)}
+.cmp-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.cmp.busy .cmp-box{opacity:.7}
+.cmp-input{border:none;background:none;box-shadow:none!important;resize:none;min-height:44px;max-height:220px;padding:12px 14px 4px;line-height:1.45;font-size:15px}
+.cmp-bar{display:flex;align-items:center;gap:4px;padding:4px 6px 6px}
+.cmp-tools{display:flex;gap:2px;flex-wrap:wrap}
+.cmp-tool{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 9px;border-radius:var(--r-pill);border:none;background:none;color:var(--text-secondary);font-size:13px;font-weight:500;cursor:pointer}
+.cmp-tool:hover{background:var(--surface);color:var(--text)}
+.cmp-count{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums;padding:0 6px}
+.cmp-send{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:none;background:var(--primary-fill);color:var(--primary-label);cursor:pointer;flex:none;transition:transform var(--dur-fast) var(--ease),opacity var(--dur-fast) var(--ease)}
+.cmp-send:hover:not(:disabled){background:var(--primary-pressed)}
+.cmp-send:active:not(:disabled){transform:scale(.94)}
+.cmp-send:disabled{opacity:.35;cursor:default}
+.cmp-attach{display:flex;gap:6px;padding:10px 12px 0}
+.cmp-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--hairline);font-size:13px}
+.cmp-chip-x{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:none;background:none;color:var(--text-secondary);cursor:pointer}
+.cmp-chip-x:hover{background:var(--track);color:var(--text)}
+.cmp-error .error{margin:0}
+.cmp-panels:empty{display:none}
+.cmp-panel{padding:14px 16px;border-radius:var(--r-float);background:var(--surface);border:1px solid var(--hairline);animation:toast-in var(--dur) var(--ease)}
+.cmp.compact .cmp-input{min-height:38px;padding:9px 12px 2px;font-size:14px}
+.cmp.compact .cmp-tool{padding:0 7px}
+/* The `/` menu */
+.cmp-slash{min-width:280px;padding:4px}
+.cmp-slash{max-width:min(460px,calc(100vw - 16px))}
+.cmp-slash-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-chip);cursor:pointer;font-size:14px}
+/* A long detail shrinks and ellipses instead of running over the label. */
+.cmp-slash-item>*{min-width:0}
+.cmp-slash-item>.grow{flex:1 0 auto;max-width:55%}
+.cmp-slash-item>.clamp1{flex:0 1 auto}
+.cmp-slash-item.sel{background:var(--accent-wash)}
+.cmp-slash-label{font:600 12px/1 var(--sans);color:var(--accent);min-width:7ch}
+/* A thread's composer row (messages.js threadPane) */
+.thread-compose{padding:10px 14px 12px;border-top:1px solid var(--hairline)}
+.thread-pane.compact .thread-head{padding:10px 12px}

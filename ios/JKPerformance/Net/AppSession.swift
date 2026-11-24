@@ -94,6 +94,8 @@ final class AppSession {
 
     private func adopt(_ session: Session) {
         TabRouter.shared.reset()
+        VoicePlayback.shared.stop()
+        MediaFiles.shared.clear()
         api.setToken(session.token)
         Outbox.shared.adopt(userId: session.me.id)
         me = session.me
@@ -125,6 +127,8 @@ final class AppSession {
         guard let coachToken = Keychain.read(account: Self.coachSlot) else { return }
         let _: OK? = try? await api.send("POST", "/api/auth/logout")
         Keychain.save(nil, account: Self.coachSlot)
+        VoicePlayback.shared.stop()
+        MediaFiles.shared.clear()
         api.setToken(coachToken)
         me = nil
         phase = .restoring
@@ -150,6 +154,9 @@ final class AppSession {
         TabRouter.shared.reset()
         Reminders.shared.clearPending()
         PortraitStore.shared.clear()
+        // Downloaded voice notes, guide media and clips leave with the person.
+        VoicePlayback.shared.stop()
+        MediaFiles.shared.clear()
         api.setToken(nil)
         Keychain.save(nil, account: Self.coachSlot)
         me = nil

@@ -2,10 +2,14 @@ import { recordPlan } from './account.mjs';
 import { setUpClient } from './auth.mjs';
 import { WELCOME_MESSAGE } from './catalogue.mjs';
 import { FORM_TEMPLATES } from './forms.mjs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { coachSettings, saveCoachSettings } from './settings.mjs';
-import { storeMedia } from './media.mjs';
-import { newId, nowIso, tx } from './store.mjs';
+import { insertMediaRow, mediaFilePath, storeMedia, writeMediaFile } from './media.mjs';
+import { FEATURES, ensureFeatureSchemas } from './registry.mjs';
+import { rng } from './rng.mjs';
+import { afterCommit, newId, nowIso, tx } from './store.mjs';
 import { buildPerson, programWorkouts, sampleProfile } from './testclients.mjs';
 import { addDays, londonClock, londonDay, londonToUtc, mondayOf } from './time.mjs';
 
@@ -102,12 +106,73 @@ const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_ent
 const USER_TABLES = ['measurements', 'health_samples', 'health_activities', 'challenge_members', 'class_attendees', 'membership_events'];
 const COACH_TABLES = ['bookings', 'programs', 'challenges', 'forms', 'autoflows', 'plan_settings', 'plan_price_events'];
 
-function wipe(db, coach, clients) {
+// Media that survive a rebuild: the reusable demo fixtures (purpose demo:<key>),
+// plus the portrait and signature the coach's settings point at (wipe adds those
+// by id, so extra uploads through the public demo code do not pile up).
+const KEPT_MEDIA = "purpose LIKE 'demo:%'";
+// Desk preferences (desk.*) kept per demo account across a rebuild: the most recently written ones.
+const KEPT_DESK_PREFS = 40;
+
+/**
+ * Empty the demo accounts for a rebuild: the foundation tables, every
+ * feature's demo.tables (features later in name order first), the existing
+ * lists, and media the demo accounts uploaded (their files go after commit).
+ * Desk layout and theme preferences (desk.*) are kept, the 40 most recent per account.
+ */
+function wipe(db, config, coach, clients) {
+  const ids = [coach.id, ...clients.map(c => c.user.id)];
+  const json = JSON.stringify(ids);
+  const IN = 'IN (SELECT value FROM json_each(?))';
+  db.prepare(`DELETE FROM event_failures WHERE seq IN (SELECT seq FROM events WHERE coach_id ${IN} OR client_id ${IN})`).run(json, json);
+  db.prepare(`DELETE FROM events WHERE coach_id ${IN} OR client_id ${IN}`).run(json, json);
+  for (const t of ['coach_notifications', 'ai_calls', 'deferred_messages', 'client_outreach']) db.prepare(`DELETE FROM ${t} WHERE coach_id ${IN}`).run(json);
+  for (const t of ['ai_calls', 'deferred_messages', 'client_outreach', 'client_tags']) db.prepare(`DELETE FROM ${t} WHERE client_id ${IN}`).run(json);
+  for (const t of ['ai_settings', 'tags', 'segments']) db.prepare(`DELETE FROM ${t} WHERE coach_id ${IN}`).run(json);
+  db.prepare(`DELETE FROM coach_prefs WHERE coach_id ${IN} AND key NOT LIKE 'desk.%'`).run(json);
+  db.prepare(`DELETE FROM coach_prefs WHERE coach_id ${IN} AND rowid NOT IN (
+    SELECT rowid FROM (SELECT rowid, ROW_NUMBER() OVER (PARTITION BY coach_id ORDER BY updated_at DESC, key) n FROM coach_prefs WHERE coach_id ${IN}) WHERE n<=?)`)
+    .run(json, json, KEPT_DESK_PREFS);
+  for (const f of [...FEATURES].reverse()) {
+    const t = f.demo?.tables ?? {};
+    for (const table of t.client ?? []) db.prepare(`DELETE FROM ${table} WHERE client_id ${IN}`).run(json);
+    for (const table of t.user ?? []) db.prepare(`DELETE FROM ${table} WHERE user_id ${IN}`).run(json);
+    for (const table of t.coach ?? []) db.prepare(`DELETE FROM ${table} WHERE coach_id ${IN}`).run(json);
+  }
   for (const { user } of clients) {
     for (const t of CLIENT_TABLES) db.prepare(`DELETE FROM ${t} WHERE client_id=?`).run(user.id);
     for (const t of USER_TABLES) db.prepare(`DELETE FROM ${t} WHERE user_id=?`).run(user.id);
   }
   for (const t of COACH_TABLES) db.prepare(`DELETE FROM ${t} WHERE coach_id=?`).run(coach.id);
+  const s = coachSettings(db, coach.id);
+  const keep = JSON.stringify([s.avatarMediaId, s.signatureMediaId].filter(Boolean));
+  const media = db.prepare(`SELECT id, ext FROM media WHERE (owner_id ${IN} OR client_id ${IN}) AND NOT (${KEPT_MEDIA}) AND id NOT IN (SELECT value FROM json_each(?))`).all(json, json, keep);
+  for (const m of media) db.prepare('DELETE FROM media WHERE id=?').run(m.id);
+  if (config?.dataDir && media.length) afterCommit(() => { for (const m of media) rmSync(mediaFilePath(config, m), { force: true }); });
+}
+
+const SERVER_DIR = fileURLToPath(new URL('./', import.meta.url));
+
+/**
+ * Write the files for demo fixtures that have no row yet (features' demo.media),
+ * BEFORE the build's transaction. Returns Map<key, file>; rows are inserted by
+ * ctx.media inside the transaction.
+ */
+function prepareFixtures(db, config) {
+  const files = new Map();
+  if (!config?.dataDir) return files;
+  const coach = db.prepare("SELECT id FROM users WHERE apple_sub='demo-coach'").get();
+  for (const f of FEATURES) {
+    for (const m of f.demo?.media ?? []) {
+      if (coach && db.prepare('SELECT 1 FROM media WHERE owner_id=? AND purpose=?').get(coach.id, `demo:${m.key}`)) continue;
+      try {
+        const bytes = readFileSync(isAbsolute(m.file) ? m.file : join(SERVER_DIR, m.file));
+        files.set(m.key, { ...writeMediaFile(config, { bytes, mime: m.mime }), durationSec: m.durationSec ?? null });
+      } catch (e) {
+        console.warn(`Demo fixture ${f.name}/${m.key} skipped: ${e.message}`);
+      }
+    }
+  }
+  return files;
 }
 
 /**
@@ -133,11 +198,28 @@ export function demoPortrait(db, config, file = process.env.DEMO_COACH_PORTRAIT_
   }
 }
 
-/** Build (or rebuild) the whole demo world around `today`. */
-export function buildDemo(db, today = londonDay()) {
+/**
+ * Build (or rebuild) the whole demo world around `today`. Each feature's
+ * demo.build(db, ctx) runs inside the same transaction, after the library, in
+ * feature-name order. Builders write rows directly and never emit, send or notify.
+ */
+export function buildDemo(db, today = londonDay(), config = null) {
+  // Feature tables must exist before the wipe and the builders touch them, even when a test builds the demo before createApp.
+  ensureFeatureSchemas(db);
+  const fixtures = prepareFixtures(db, config);
+  try {
+    buildInTx(db, today, config, fixtures);
+  } catch (e) {
+    // The rows rolled back, so the fixture files written for them are orphans.
+    for (const file of fixtures.values()) rmSync(mediaFilePath(config, file), { force: true });
+    throw e;
+  }
+}
+
+function buildInTx(db, today, config, fixtures) {
   tx(db, () => {
     const { coach, clients } = ensureAccounts(db, today);
-    wipe(db, coach, clients);
+    wipe(db, config, coach, clients);
     const at = (d, t = '09:00') => londonToUtc(d, t).toISOString();
     const monday = mondayOf(today);
 
@@ -164,6 +246,7 @@ export function buildDemo(db, today = londonDay()) {
     });
     const byName = Object.fromEntries(clients.map(c => [c.p.name, c.user]));
     library(db, coach, byName, today);
+    buildFeatures(db, config, coach, clients.map(c => db.prepare('SELECT * FROM users WHERE id=?').get(c.user.id)), today, fixtures);
 
     // The month's distance challenge, with everyone in it.
     const monthStart = `${today.slice(0, 8)}01`;
@@ -176,7 +259,26 @@ export function buildDemo(db, today = londonDay()) {
     const settings = coachSettings(db, coach.id);
     saveCoachSettings(db, coach.id, { ...settings, formChecks: true, challenges: true });
     db.prepare("INSERT INTO meta (key, value) VALUES ('demo_built', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(today);
+    db.prepare("INSERT INTO meta (key, value) VALUES ('demo_features', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(demoFeatureKey());
   });
+}
+
+/** Every feature's demo.build, in name order, with ctx = {coach, clients, byName, today, rng, config, media}. */
+function buildFeatures(db, config, coach, clients, today, fixtures) {
+  const byName = Object.fromEntries(clients.map(c => [c.name.split(' ')[0], c]));
+  const media = key => {
+    if (!config?.dataDir) return null;
+    const purpose = `demo:${key}`;
+    const existing = db.prepare('SELECT * FROM media WHERE owner_id=? AND purpose=?').get(coach.id, purpose);
+    if (existing) return existing;
+    const file = fixtures.get(key);
+    if (!file) return null;
+    return insertMediaRow(db, file, { ownerId: coach.id, purpose, durationSec: file.durationSec });
+  };
+  for (const f of FEATURES) {
+    if (typeof f.demo?.build !== 'function') continue;
+    f.demo.build(db, { coach, clients, byName, today, rng: rng(`${f.name}:${today}`), config, media });
+  }
 }
 
 /** The demo coach's programs, forms (Sam has one waiting) and an onboarding autoflow. */
@@ -234,13 +336,17 @@ function library(db, coach, byName, today) {
 }
 
 /** Build the demo world if it isn't there or wasn't built today. Returns whether it built. */
+/** Which features' demo builders made the demo world: a deploy that adds a feature rebuilds it the same day. */
+const demoFeatureKey = () => FEATURES.filter(f => f.demo?.build).map(f => f.name).sort().join(',');
+
 export function seedDemo(db, today = londonDay(), config = null) {
   const built = db.prepare("SELECT value FROM meta WHERE key='demo_built'").get()?.value;
-  if (built === today && db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-client'").get()) {
+  const features = db.prepare("SELECT value FROM meta WHERE key='demo_features'").get()?.value ?? '';
+  if (built === today && features === demoFeatureKey() && db.prepare("SELECT 1 FROM users WHERE apple_sub='demo-client'").get()) {
     demoPortrait(db, config);
     return false;
   }
-  buildDemo(db, today);
+  buildDemo(db, today, config);
   demoPortrait(db, config);
   return true;
 }

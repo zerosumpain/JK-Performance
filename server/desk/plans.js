@@ -6,8 +6,9 @@
  */
 import {
   api, busy, button, card, chip, confirmBox, errorLine, eyebrow, field, fill, fmtMoney, h, icon, link, loading,
-  plans, route, screenHeader, sheet, state, toast,
+  plans, route, sheet, state, toast,
 } from './core.js';
+import { pageHead } from './ui.js';
 
 const FEATURE_ICON = {
   programme: 'dumbbell', messaging: 'bubble', habits: 'checklist', progress: 'chart', checkin: 'form',
@@ -129,9 +130,8 @@ function editPlan(p, features) {
 route('/business/plans', async (el, _params, view) => {
   const body = h('div');
   el.append(
-    h('div', { class: 'cl-crumb' }, link('/business', { class: 'small muted' }, icon('back', 18), 'Business')),
-    screenHeader('Business', 'Plans & prices'),
-    h('p', { class: 'muted small' }, 'What each membership costs and includes. Your clients see these in the app, and new clients step through them in the plan walkthrough.'),
+    pageHead({ eyebrow: 'Business', title: 'Plans', accent: '& prices', sub: 'What each membership costs and includes. Your clients see these in the app, and new clients step through them in the plan walkthrough.',
+      actions: [link('/billing', { class: 'btn' }, icon('receipt_long', 18), 'Billing'), link('/revenue', { class: 'btn' }, icon('trending_up', 18), 'Revenue')] }),
     body);
 
   const draw = async (force = false) => {
@@ -157,4 +157,4 @@ route('/business/plans', async (el, _params, view) => {
     }
   };
   await draw(true);
-}, { nav: 'today' });
+}, { nav: 'plans' });

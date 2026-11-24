@@ -11,6 +11,7 @@
  */
 
 import { SYMBOLS } from './symbols.js';
+export { live } from './live.js';
 
 // MARK: - Token and API
 
@@ -92,7 +93,15 @@ export function h(tag, attrs, ...children) {
     if (v === null || v === undefined || v === false) continue;
     if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'class') el.className = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    // Inline style only through the CSSOM: the CSP (style-src 'self') blocks a style attribute.
+    else if (k === 'style' && typeof v === 'string') el.style.cssText = v;
+    else if (k === 'style' && typeof v === 'object') {
+      for (const [prop, val] of Object.entries(v)) {
+        if (val === null || val === undefined || val === false) continue;
+        if (prop.startsWith('--')) el.style.setProperty(prop, String(val));
+        else el.style[prop] = val;
+      }
+    }
     else if (k === 'value') el.value = v;
     else if (k === 'checked' || k === 'disabled' || k === 'selected') el[k] = !!v;
     else el.setAttribute(k, v === true ? '' : String(v));
@@ -167,7 +176,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 export function icon(name, size = 20, { filled = false, label = null } = {}) {
   const sym = SYMBOLS[ICON_NAMES[name] ?? name];
   const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('viewBox', '0 -960 960 960');
+  svg.setAttribute('viewBox', sym?.[2] || '0 -960 960 960');
   svg.setAttribute('width', size); svg.setAttribute('height', size);
   svg.setAttribute('fill', 'currentColor');
   if (label) { svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', label); } else svg.setAttribute('aria-hidden', 'true');
@@ -179,17 +188,23 @@ export function icon(name, size = 20, { filled = false, label = null } = {}) {
 }
 
 /** The JK monogram (docs/design/brand/jk-monogram.svg), in the accent. */
-const MONOGRAM = 'M 34 15.5 L 44 15.5 L 44 63.5 C 44 78.5 37 87.5 25 87.5 C 18 87.5 13 83.5 13 78.5 C 13 74.5 16 71.5 20 71.5 C 24 71.5 27 74.5 27 78.5 C 31 77.5 34 72.5 34 63.5 Z M 24 12.5 L 54 12.5 L 54 15.5 C 48 15.5 45 16.5 44 18.5 L 34 18.5 C 33 16.5 30 15.5 24 15.5 Z M 44 49.5 L 70.5 15.5 L 75 15.5 L 44 55.5 Z M 65 12.5 L 82 12.5 L 82 15.5 L 65 15.5 Z M 51 42 L 57 34.5 L 83 69.5 L 72 69.5 Z M 67 66.5 L 87 66.5 L 87 69.5 L 67 69.5 Z';
 export function monogram(size = 32, { label = 'JK' } = {}) {
+  // The silver "JK." mark (docs/design/brand/jk-mark-silver-1024.png): heavy sans
+  // letters in currentColor and a chrome dot (.mono-dot, coloured by app.css).
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('width', size); svg.setAttribute('height', size);
   svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', label);
   svg.classList.add('monogram');
-  const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', MONOGRAM);
-  svg.append(path);
+  const text = document.createElementNS(SVG, 'text');
+  for (const [k, v] of Object.entries({ x: '43', y: '72', 'text-anchor': 'middle', 'font-size': '66', 'font-weight': '800', 'letter-spacing': '-2',
+    'font-family': '"Inter Display","Inter",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif' })) text.setAttribute(k, v);
+  text.textContent = 'JK';
+  const dot = document.createElementNS(SVG, 'circle');
+  dot.setAttribute('cx', '89'); dot.setAttribute('cy', '65'); dot.setAttribute('r', '7.5');
+  dot.classList.add('mono-dot');
+  svg.append(text, dot);
   return svg;
 }
 
@@ -385,8 +400,9 @@ export function ring(pct, { size = 44, stroke = 3, label = '' } = {}) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   const f = Math.max(0, Math.min(100, pct ?? 0)) / 100;
   return svgEl('svg', { viewBox: `0 0 ${size} ${size}`, width: size, height: size, class: 'ring', role: 'img', 'aria-label': label },
-    svgEl('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: 'var(--track)', 'stroke-width': stroke }),
-    svgEl('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: 'var(--accent)', 'stroke-width': stroke, 'stroke-linecap': 'round',
+    // Colours come from app.css classes: SVG presentation attributes do not resolve var().
+    svgEl('circle', { class: 'ring-track', cx: size / 2, cy: size / 2, r, fill: 'none', 'stroke-width': stroke }),
+    svgEl('circle', { class: 'ring-sweep', cx: size / 2, cy: size / 2, r, fill: 'none', 'stroke-width': stroke, 'stroke-linecap': 'round',
       'stroke-dasharray': `${(c * f).toFixed(2)} ${c.toFixed(2)}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }));
 }
 
@@ -482,14 +498,38 @@ export function confirmBox(message, { ok = 'OK', danger = false, detail = null }
   }).then(v => v === true);
 }
 
-/** A short note in the corner that fades. */
-export function toast(text, { error = false } = {}) {
+/**
+ * A short note at the bottom centre that fades. `undo` (async) adds an Undo
+ * button that runs the inverse; `action: {label, run}` adds another button.
+ * A hairline under the note counts down `ms`. Returns {close}.
+ */
+export function toast(text, { error = false, undo = null, action = null, ms = null } = {}) {
   let box = document.getElementById('toasts');
   if (!box) { box = h('div', { id: 'toasts', 'aria-live': 'polite' }); document.body.append(box); }
-  const t = h('div', { class: 'toast' + (error ? ' bad' : '') }, text);
+  const life = ms ?? (undo || action ? 6000 : error ? 5000 : 3200);
+  let timer = null;
+  const close = () => {
+    clearTimeout(timer);
+    t.classList.add('out');
+    setTimeout(() => t.remove(), 320);
+  };
+  const btn = (label, run) => h('button', { type: 'button', class: 'toast-btn', onclick: async () => {
+    close();
+    try { await run(); } catch (err) { toast(err.message || String(err), { error: true }); }
+  } }, label);
+  const t = h('div', { class: 'toast' + (error ? ' bad' : ''), role: error ? 'alert' : 'status' },
+    error ? icon('error', 18) : null,
+    h('span', { class: 'toast-text' }, text),
+    undo ? btn('Undo', undo) : null,
+    action ? btn(action.label, action.run) : null,
+    h('span', { class: 'toast-life', style: { '--life': `${life}ms` } }));
   box.append(t);
-  setTimeout(() => t.classList.add('out'), 2600);
-  setTimeout(() => t.remove(), 3200);
+  // Hovering holds the note; leaving restarts its clock.
+  const arm = () => { clearTimeout(timer); timer = setTimeout(close, life); };
+  t.addEventListener('mouseenter', () => { clearTimeout(timer); t.classList.add('hold'); });
+  t.addEventListener('mouseleave', () => { t.classList.remove('hold'); arm(); });
+  arm();
+  return { close };
 }
 
 // MARK: - Router (hash routes: #/clients/u_123/plan)
@@ -510,10 +550,46 @@ let onNav = () => {};
 export function startRouter(getOutlet, navChanged) {
   outlet = getOutlet;
   onNav = navChanged;
-  window.addEventListener('hashchange', render);
+  window.removeEventListener('hashchange', hashChanged);
+  window.addEventListener('hashchange', hashChanged);
   render();
 }
-export const currentPath = () => decodeURIComponent(location.hash.replace(/^#/, '')) || '/today';
+let renderedPath = null;
+let renderedQuery = null;
+// The query the screen was drawn for, without the keys the shell owns (`panel`).
+const screenQuery = () => { const q = hashQuery(); q.delete('panel'); q.sort(); return q.toString(); };
+function hashChanged() {
+  // Only a shell-owned key changed (a panel opened or closed): keep the screen.
+  // Any other query change (?kit=1, ?tab=…) redraws, as a pasted link expects.
+  if (currentPath() === renderedPath && screenQuery() === renderedQuery && document.contains(outlet())) {
+    for (const fn of queryListeners) { try { fn(); } catch (err) { console.warn(err); } }
+    return;
+  }
+  render();
+}
+/** The route part of the hash (before any `?`), decoded. */
+export const currentPath = () => decodeURIComponent(location.hash.replace(/^#/, '').split('?')[0]) || '/today';
+/**
+ * The hash's query (`#/clients?panel=client:u_1`): panels, synced tabs and harness flags, never part of the route.
+ * A hashchange that changes only `panel` keeps the screen; any other query change redraws it.
+ */
+export const hashQuery = () => new URLSearchParams(location.hash.split('?').slice(1).join('?'));
+/**
+ * Change the hash query without redrawing the screen or adding history
+ * (slide-over deep links). `null` removes a key.
+ */
+export function setHashQuery(changes) {
+  const params = hashQuery();
+  for (const [k, v] of Object.entries(changes)) { if (v === null || v === undefined) params.delete(k); else params.set(k, v); }
+  const base = location.hash.split('?')[0] || '#/today';
+  const qs = params.toString();
+  history.replaceState(history.state, '', base + (qs ? `?${qs}` : ''));
+  // The screen made this change itself (tabs({sync})), so it already shows it.
+  if (currentPath() === renderedPath) renderedQuery = screenQuery();
+}
+/** fn() runs when only the hash query changes (Back over a panel, a pasted deep link). Returns off(). */
+const queryListeners = new Set();
+export const onHashQuery = fn => { queryListeners.add(fn); return () => queryListeners.delete(fn); };
 /** Go to a route. `replace` swaps the history entry instead of adding one. */
 export function go(path, { replace = false } = {}) {
   if (replace) { history.replaceState(null, '', '#' + path); render(); }
@@ -528,9 +604,12 @@ function render() {
   if (!el) return;
   if (current) for (const fn of current.leave) { try { fn(); } catch { /* ignore */ } }
   const path = currentPath();
+  renderedPath = path;
+  renderedQuery = screenQuery();
   const mine = ++seq;
   current = { leave: [], seq: mine };
-  const view = { fresh: () => mine === seq, onLeave: fn => current?.seq === mine && current.leave.push(fn) };
+  const view = { fresh: () => mine === seq, onLeave: fn => current?.seq === mine && current.leave.push(fn), query: hashQuery() };
+  setCrumbs(null);
   for (const r of routes) {
     const m = r.regex.exec(path);
     if (!m) continue;
@@ -538,6 +617,7 @@ function render() {
     onNav(r.nav);
     el.replaceChildren();
     window.scrollTo(0, 0);
+    for (const fn of queryListeners) { try { fn(); } catch (err) { console.warn(err); } }
     Promise.resolve(r.render(el, params, view)).catch(err => { if (view.fresh()) fill(el, errorLine(err)); });
     return;
   }
@@ -567,3 +647,170 @@ export const clientById = id => state.clients?.find(c => c.id === id) || null;
 let badgeListener = () => {};
 export const setBadgeListener = fn => { badgeListener = fn; };
 export const refreshBadges = () => badgeListener();
+
+// MARK: - Foundation probe (WP0-S endpoints may be absent: a server without them answers 404)
+
+let caps = null;
+/**
+ * GET /api/coach/capabilities, once: {features:[name], ai:{provider}, absent}.
+ * `absent` means the server has no desk-v2 foundation; the shell then calls no
+ * other foundation endpoint, so it runs quietly against an older server.
+ */
+export function capabilities(force = false) {
+  if (!caps || force) {
+    caps = api('GET', '/api/coach/capabilities')
+      .then(c => ({ features: [], ...c, absent: false }))
+      .catch(err => ({ features: [], ai: null, absent: true, failed: err.status !== 404 }));
+  }
+  return caps;
+}
+export const hasFeature = async name => (await capabilities()).features.includes(name);
+/**
+ * A foundation call: null when the foundation is absent or the endpoint
+ * answers 404 (not built yet), so callers draw nothing instead of an error.
+ */
+export async function foundationApi(method, path, body) {
+  const c = await capabilities();
+  if (c.absent) return null;
+  try { return await api(method, path, body); } catch (err) { if (err.status === 404) return null; throw err; }
+}
+
+// MARK: - Coach preferences (coach_prefs, with a local cache)
+
+const PREF_LOCAL = 'jk.desk.pref.';
+const prefCache = new Map();
+const prefLocal = key => { try { const v = localStorage.getItem(PREF_LOCAL + key); return v === null ? undefined : JSON.parse(v); } catch { return undefined; } };
+/**
+ * prefs.get(key) / prefs.set(key, value): the coach's desk preferences, kept
+ * on the server (GET/PUT /api/coach/prefs/:key) and mirrored in this browser,
+ * so the theme and rail apply before the first request. Without the
+ * foundation they live in this browser only. Keys match ^[a-z0-9.-]{1,64}$.
+ */
+export const prefs = {
+  /** The cached value right now (no request): the server's once loaded, else this browser's. */
+  peek(key, fallback = null) {
+    if (prefCache.has(key)) return prefCache.get(key) ?? fallback;
+    return prefLocal(key) ?? fallback;
+  },
+  async get(key, fallback = null) {
+    if (prefCache.has(key)) return prefCache.get(key) ?? fallback;
+    let value = prefLocal(key);
+    try {
+      const out = await foundationApi('GET', `/api/coach/prefs/${encodeURIComponent(key)}`);
+      // The server's value wins when it has one; when it has none, this browser's
+      // copy (saved while the server was unreachable) is kept and sent up.
+      if (out && out.value !== null && out.value !== undefined) value = out.value;
+      else if (out && value !== undefined) foundationApi('PUT', `/api/coach/prefs/${encodeURIComponent(key)}`, { value }).catch(() => {});
+    } catch { /* keep the local copy */ }
+    prefCache.set(key, value);
+    return value ?? fallback;
+  },
+  async set(key, value) {
+    prefCache.set(key, value);
+    try { if (value === null || value === undefined) localStorage.removeItem(PREF_LOCAL + key); else localStorage.setItem(PREF_LOCAL + key, JSON.stringify(value)); } catch { /* storage off */ }
+    await foundationApi('PUT', `/api/coach/prefs/${encodeURIComponent(key)}`, { value: value ?? null });
+  },
+};
+
+// MARK: - Registries (desk v2, docs/design/desk-v2.md 3.9). Register at module top level.
+
+const REG = {
+  nav: new Map(), command: new Map(), quickCreate: new Map(), widget: new Map(), clientTab: new Map(), clientAction: new Map(),
+  bulkAction: new Map(), composerTool: new Map(), sendGuard: new Map(), slash: new Map(), settings: new Map(), searchRenderer: new Map(),
+  panel: new Map(),
+};
+const registryListeners = new Set();
+// Registrations in one tick are told once per kind (a module registering a quick-create and a nav item redraws both hosts).
+const registryQueued = new Set();
+function changed(kind) {
+  if (registryQueued.has(kind)) return;
+  const first = !registryQueued.size;
+  registryQueued.add(kind);
+  if (!first) return;
+  queueMicrotask(() => {
+    const kinds = [...registryQueued];
+    registryQueued.clear();
+    for (const k of kinds) for (const fn of registryListeners) { try { fn(k); } catch (err) { console.warn(err); } }
+  });
+}
+/** fn(kind) after registrations change (hosts already on screen redraw). Returns off(). */
+export const onRegistryChange = fn => { registryListeners.add(fn); return () => registryListeners.delete(fn); };
+
+function put(kind, key, item, { fallback = false } = {}) {
+  if (!key || typeof key !== 'string') throw new Error(`register ${kind}: an id is required`);
+  const map = REG[kind];
+  const old = map.get(key);
+  // Registering an existing id merges into it, later wins per key; a `fallback` registration only fills gaps.
+  map.set(key, old ? (fallback ? { ...item, ...old } : { ...old, ...item }) : { ...item });
+  changed(kind);
+}
+/** Every register* call takes an optional second argument {fallback: true}: fill gaps only, never overwrite. */
+const byOrder = (a, b) => (a.order ?? 100) - (b.order ?? 100) || String(a.label ?? a.id ?? a.key).localeCompare(String(b.label ?? b.id ?? b.key));
+const list = kind => [...REG[kind].values()].sort(byOrder);
+
+/** Sidebar groups, in order, with their labels. */
+export const NAV_GROUPS = [['command', 'Command'], ['clients', 'Clients'], ['engage', 'Engage'], ['schedule', 'Schedule'], ['business', 'Business'], ['build', 'Build'], ['settings', 'Settings']];
+
+/**
+ * registerNav({id, label, icon, group, order, badge, badgeOn, mobile, path}).
+ * `path` defaults to /<id>. `mobile` puts it in the phone's bottom bar: true
+ * or a slot number (lower first; the bar shows four plus More). main.js
+ * registers the existing screens with {fallback: true}, so a package's
+ * refinement (registered earlier, at import) is never overwritten.
+ */
+export function registerNav(item, opts) {
+  if (item.group && !NAV_GROUPS.some(([g]) => g === item.group)) throw new Error(`registerNav ${item.id}: unknown group ${item.group}`);
+  put('nav', item.id, item, opts);
+}
+/** registerCommand({id, label, group = 'Actions', icon, keys, when, run}): palette actions and shortcuts ("g i", "⌘⇧N"). */
+export const registerCommand = (item, opts) => put('command', item.id, { group: 'Actions', ...item }, opts);
+/** registerQuickCreate({id, label, icon, order, run}): the top bar's + New menu. */
+export const registerQuickCreate = (item, opts) => put('quickCreate', item.id, item, opts);
+/** registerWidget({id, title, size: s|m|l|xl|full, tall, order, defaultOn = true, render: async (bodyEl, view) => {}}): Today tiles. */
+export const registerWidget = (item, opts) => put('widget', item.id, { size: 'm', tall: false, defaultOn: true, ...item }, opts);
+/** registerClientTab({key, label, order, render: async (box, {client, detail, view}) => {}}). */
+export const registerClientTab = (item, opts) => put('clientTab', item.key, item, opts);
+/** registerClientAction({id, label, icon, order, run: client => {}}): client header buttons and palette "… for <client>". */
+export const registerClientAction = (item, opts) => put('clientAction', item.id, item, opts);
+/** registerBulkAction({id, label, icon, scope: 'clients', run: async clientIds => {}}). */
+export const registerBulkAction = (item, opts) => put('bulkAction', item.id, { scope: 'clients', ...item }, opts);
+/** registerComposerTool({id, icon, label, order, run: (composer, ctx) => {}}). */
+export const registerComposerTool = (item, opts) => put('composerTool', item.id, item, opts);
+/** registerSendGuard({id, order, check: async (draft, ctx) => ({ok: true}) | ({ok: false, panel})}). No guard may send by itself. */
+export const registerSendGuard = (item, opts) => put('sendGuard', item.id, item, opts);
+/** registerSlash({id, label, detail, run: composer => {}}): the composer's `/` menu. */
+export const registerSlash = (item, opts) => put('slash', item.id, item, opts);
+/** registerSettingsSection({id, label, icon, order, render: async box => {}}): /account/:section. */
+export const registerSettingsSection = (item, opts) => put('settings', item.id, item, opts);
+/** registerSearchRenderer(type, result => Element): custom palette rows for one result type. */
+export const registerSearchRenderer = (type, render) => put('searchRenderer', type, { type, render });
+/**
+ * registerPanel(kind, (id, {wide}) => ({title, build(body, close), wide})): a
+ * slide-over that a deep link (#/route?panel=<kind>:<id>) can reopen.
+ */
+export const registerPanel = (kind, open, opts) => put('panel', kind, { kind, open }, opts);
+
+/** Read-only views of the registries, sorted by `order` (hosts call these when they draw). */
+export const registered = {
+  nav: () => list('nav'),
+  commands: () => list('command'),
+  quickCreates: () => list('quickCreate'),
+  widgets: () => list('widget'),
+  clientTabs: () => list('clientTab'),
+  clientActions: () => list('clientAction'),
+  bulkActions: scope => list('bulkAction').filter(a => !scope || a.scope === scope),
+  composerTools: () => list('composerTool'),
+  sendGuards: () => list('sendGuard'),
+  slash: () => list('slash'),
+  settings: () => list('settings'),
+  searchRenderer: type => REG.searchRenderer.get(type)?.render ?? null,
+  panel: kind => REG.panel.get(kind)?.open ?? null,
+};
+
+// MARK: - Breadcrumbs (the top bar)
+
+let crumbs = null;
+let crumbListener = () => {};
+/** setCrumbs([{label, path}]): the top bar's trail for this screen; reset on every route change. */
+export function setCrumbs(list) { crumbs = list && list.length ? list : null; crumbListener(crumbs); }
+export const setCrumbListener = fn => { crumbListener = fn; fn(crumbs); };

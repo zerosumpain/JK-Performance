@@ -797,3 +797,25 @@ coach, so every existing coach view keeps working. Outcomes save straight onto t
 commitments keeps the outcome and acceptance of texts that did not change. Workout items (workouts and programs) gain
 `tempo` (`^\d-\d-\d(-\d)?$`, "down-pause-drive"; empty clears it; an item written without the field keeps its tempo).
 Bookings gain `purpose` (`planning` | `review` | null) on create, `PATCH` and every output.
+
+## Desk v2 (per package)
+
+Desk v2 (the coach desk overhaul, `docs/design/desk-v2.md`) documents each package's endpoints, events, actions, facts and variables in its
+own file under [`docs/api/`](api/README.md), which also holds the shared conventions and the OpenRouter and ffmpeg findings.
+
+| Package | File |
+|---|---|
+| WP0-S foundation, server (events, notifications, live stream, facts, tags, segments, prefs, outreach governor, search, AI, audio) | [`api/wp0-server.md`](api/wp0-server.md) |
+| WP0-D foundation, desk | `api/wp0-desk.md` |
+| WP1 Command | `api/wp1-command.md` |
+| WP2 Clients and lifecycle | `api/wp2-crm.md` |
+| WP3 Billing and revenue | `api/wp3-billing.md` |
+| WP4 Campaigns and guidebook | `api/wp4-campaigns.md` |
+| WP5 Automations and outreach | `api/wp5-automations.md` |
+| WP6 AI and voice | `api/wp6-ai-voice.md` |
+| WP7 Calendar and diary | `api/wp7-calendar.md` |
+| WP8 Tasks, accountability and insights | `api/wp8-tasks.md` |
+| WP11 Growth | `api/wp11-growth.md` |
+
+Changes to existing endpoints made by the foundation: `GET /api/messages` takes `since=<iso>` and returns `updated` and `cursor`;
+`GET /api/me/export` adds `tags`, `outreach`, `heldMessages` and `features.<name>`; `GET /api/coach/needs-you` reasons can come from features.

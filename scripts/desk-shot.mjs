@@ -45,16 +45,36 @@ const problems = [];
 page.on('console', m => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
 page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
 
+// "Network idle", ignoring the desk's live event stream (it stays open by design,
+// so Playwright's own 'networkidle' would never arrive once the foundation is up).
+const LONG_LIVED = /\/api\/coach\/stream(\?|$)/;
+const inflight = new Set();
+page.on('request', r => { if (!LONG_LIVED.test(r.url())) inflight.add(r); });
+page.on('requestfinished', r => inflight.delete(r));
+page.on('requestfailed', r => inflight.delete(r));
+async function settle(quietMs = 500, maxMs = 30_000) {
+  const end = Date.now() + maxMs;
+  let quietSince = inflight.size ? 0 : Date.now();
+  while (Date.now() < end) {
+    await page.waitForTimeout(50);
+    if (inflight.size) quietSince = 0;
+    else if (!quietSince) quietSince = Date.now();
+    else if (Date.now() - quietSince >= quietMs) return;
+  }
+  throw new Error(`network not idle after ${maxMs} ms: ${[...inflight].map(r => r.url()).join(', ')}`);
+}
+
 if (code !== 'none') {
   const res = await fetch(`${base}/api/auth/web/code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
   const body = await res.json();
   if (!res.ok) throw new Error(`sign-in failed: ${res.status} ${JSON.stringify(body)}`);
   await context.addInitScript(t => { try { localStorage.setItem('jk.desk.token', t); } catch { /* */ } }, body.token);
 }
-await page.goto(`${base}/desk#${route}`, { waitUntil: 'networkidle' });
+await page.goto(`${base}/desk#${route}`, { waitUntil: 'load' });
+await settle();
 for (const text of clicks) {
   await page.getByText(text, { exact: false }).first().click();
-  await page.waitForLoadState('networkidle');
+  await settle();
   await page.waitForTimeout(300);
 }
 await page.waitForTimeout(400);

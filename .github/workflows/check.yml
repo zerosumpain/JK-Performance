@@ -47,6 +47,12 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build -project ios/JKPerformance.xcodeproj -scheme JKPerformance -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee release-build.log
+      - name: Unit tests (simulator)
+        # The contract-fixture decoder tests (JKPerformanceTests), on the first available iPhone simulator.
+        run: |
+          set -o pipefail
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in sorted(d.items(), reverse=True) if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          xcodebuild test -project ios/JKPerformance.xcodeproj -scheme JKPerformance -destination "id=$UDID" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO | tee test.log
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:

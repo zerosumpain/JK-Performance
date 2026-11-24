@@ -36,7 +36,7 @@ targets:
         # The API origin (docs/API.md). APIClient reads it at launch.
         JKAPIBaseURL: 'https://jk.strangeramblings.com'
         NSHealthShareUsageDescription: 'JK Performance reads your steps, sleep, heart rate, active energy, weight, distance and workouts so your habits, progress and challenges fill in automatically and, if you choose to share, your coach can see your activity and recovery.'
-        NSMicrophoneUsageDescription: 'JK Performance records the voice notes you add to your letters.'
+        NSMicrophoneUsageDescription: 'JK Performance uses the microphone to record voice notes for your coach and letters.'
         NSCameraUsageDescription: 'JK Performance films the form-check clips you choose to send to your coach.'
         NSPhotoLibraryUsageDescription: 'JK Performance sends the photos and clips you pick to your coach.'
         NSCalendarsWriteOnlyAccessUsageDescription: 'JK Performance adds the sessions you choose to your calendar.'
@@ -52,3 +52,34 @@ targets:
         aps-environment: production
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+  # Decoder and text-rule tests against the API contract fixtures (desk-v2
+  # F13/F14/F19). Run with `xcodebuild test`; on Linux,
+  # JKPerformanceTests/Linux/check.sh runs the same files in Docker.
+  JKPerformanceTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: JKPerformanceTests
+        excludes:
+          - Linux/**
+          - Fixtures/**
+    dependencies:
+      - target: JKPerformance
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.jkperformance.app.tests
+schemes:
+  JKPerformance:
+    build:
+      targets:
+        JKPerformance: all
+        JKPerformanceTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - JKPerformanceTests
+    archive:
+      config: Release

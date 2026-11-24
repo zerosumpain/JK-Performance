@@ -19,6 +19,8 @@ struct ActRoot: View {
     @Environment(AppSession.self) private var session
     @State private var week: WeekPayload?
     @State private var error: String?
+    /// Campaign invitations and enrolments (desk-v2 F13); nil on a server without campaigns.
+    @State private var campaigns: CampaignsMine?
 
     private var router: TabRouter { TabRouter.shared }
 
@@ -58,6 +60,9 @@ struct ActRoot: View {
                 WeekLine(days: WeekText.lineDays(days))
             }
             todayCard(week)
+            if let campaigns, !campaigns.isEmpty {
+                CampaignTodaySection(mine: campaigns) { await loadCampaigns() }
+            }
             AdaptiveStack(verticalAlignment: .top, spacing: JK.Space.m) {
                 sessionCard(label: "Plan", session: week.plan, glyph: AnyView(DiamondGlyph(size: 12)), tab: .plan)
                 sessionCard(label: "Review", session: week.review, glyph: AnyView(DottedCircleGlyph(size: 13)), tab: .review)
@@ -143,6 +148,17 @@ struct ActRoot: View {
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
+        }
+        await loadCampaigns()
+    }
+
+    /// Quietly absent when the server has no campaigns (404) or the call fails:
+    /// the rest of Act never waits on it.
+    private func loadCampaigns() async {
+        do {
+            campaigns = try await CampaignAPI.mine()
+        } catch {
+            if (error as? APIError)?.status == 404 || (error as? APIError)?.status == 403 { campaigns = nil }
         }
     }
 }

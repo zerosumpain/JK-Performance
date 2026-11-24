@@ -21,6 +21,14 @@ struct Features: Codable, Equatable, Hashable {
     var mealPhotos: Bool?
     var challenges: Bool?
     var hasMacroTargets: Bool?
+    /// Voice notes (desk-v2 F19): show the mic in the composer.
+    var voiceNotes: Bool?
+    /// The chat recorder's cap (300). Letters stay at 90 s.
+    var voiceMaxSec: Int?
+    /// ask | on | off: a client's choice about transcription.
+    var voiceTranscription: String?
+    /// The AI audio model's provider, for the consent sheet, when the server names it.
+    var voiceProvider: String?
 }
 
 /// What this client's plan includes. With no `features` (an older server)
@@ -43,6 +51,11 @@ struct Gate: Equatable {
     var mealPhotos: Bool { features?.mealPhotos ?? false }
     var challenges: Bool { features?.challenges ?? true }
     var hasMacroTargets: Bool? { features?.hasMacroTargets }
+    /// Voice notes in the chat; off on a server that does not know them.
+    var voiceNotes: Bool { features?.voiceNotes ?? false }
+    var voiceMaxSec: Int { features?.voiceMaxSec ?? 300 }
+    /// ask | on | off; nil on an older server.
+    var voiceTranscription: String? { features?.voiceTranscription }
     /// Free: nothing but guides.
     var isFree: Bool { known && !messaging && !checkin && !habits && !progress }
 }
@@ -481,6 +494,9 @@ struct TimelineItem: Codable, Hashable, Identifiable {
 struct TimelineResponse: Codable {
     let items: [TimelineItem]
     var nextBefore: String?
+    /// With `since=<cursor>`: message items changed or new since then (a transcript arriving).
+    var updated: [TimelineItem]?
+    var cursor: String?
 }
 
 // MARK: - Guides (client)

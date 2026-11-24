@@ -6,6 +6,7 @@
  * Monday 07:00". Publishing marks the week's check-in replied.
  * (docs/design/atelier-spec.md, "Coach screens" 4; docs/API.md, "Letters".)
  */
+import { canRecord, recorder } from './f-voice.js';
 import {
   DAYS, api, apiBlob, apiUpload, busy, button, card, clearDraft, confirmBox, emptyCard, errorLine, field, fill, fmtShort,
   fmtTime, fmtWhen, h, icon, loading, londonParts, mondayOf, parseDay, q, readDraft, segmented, sheet, toast, todayLondon,
@@ -26,11 +27,15 @@ export function letterState(r) {
   return 'Draft';
 }
 
-/** The media types a note may be (the server keeps m4a and mp4). */
+/**
+ * The label to upload a note with: the file's real type (the server sniffs audio and re-encodes it to m4a, F19),
+ * video/mp4 for a video note, or application/octet-stream when the browser gives none. Null for what is neither.
+ */
 function mimeOf(file) {
-  const t = (file.type || '').toLowerCase();
-  if (t === 'video/mp4' || /\.mp4$/i.test(file.name)) return 'video/mp4';
-  if (t.startsWith('audio/') || /\.m4a$/i.test(file.name)) return 'audio/mp4';
+  const t = (file.type || '').toLowerCase().split(';')[0];
+  if (t === 'video/mp4' || (!t && /\.mp4$/i.test(file.name || ''))) return 'video/mp4';
+  if (t.startsWith('audio/')) return t;
+  if (!t) return 'application/octet-stream';
   return null;
 }
 /** The length of a local audio or video file in seconds, from its metadata. */
@@ -149,24 +154,36 @@ export function letterComposer(ctx, opts = {}) {
           button('Remove', () => { mediaId = null; mediaKind = null; mediaUrl = null; localUrl = null; drawMedia(); sync(); }, { small: true })), player);
         return;
       }
-      const file = h('input', { type: 'file', accept: 'audio/mp4,audio/x-m4a,audio/m4a,video/mp4,.m4a,.mp4', 'aria-label': 'Voice or video note file' });
       const upStatus = h('div');
+      /** Upload a recording or a chosen file as the letter's note (purpose letter, 90 s). */
+      const take = async (blob, secs, mime, name = null) => {
+        if (secs !== null && secs > MAX_SECONDS + 0.5) throw new Error(`That note is ${fmtSecs(secs)}. Notes are 90 seconds at most.`);
+        fill(upStatus, h('p', { class: 'small muted' }, 'Uploading…'));
+        const m = await apiUpload(`/api/media?${q({ purpose: 'letter', clientId: ctx.id, durationSec: secs === null || secs === undefined ? undefined : Math.min(MAX_SECONDS, Math.round(secs)) })}`, blob, mime);
+        mediaId = m.id; mediaKind = m.kind; mediaDuration = m.durationSec ?? secs; mediaUrl = m.url;
+        localUrl = URL.createObjectURL(blob); urls.push(localUrl);
+        fill(upStatus);
+        drawMedia(); sync();
+      };
+      // The shared recorder (f-voice.js), capped at 90 s; without HTTPS it offers a file instead.
+      const rec = recorder({
+        capSec: MAX_SECONDS, fileAccept: 'audio/*,video/mp4,.m4a,.mp4',
+        actions: (blob, secs, { type }) => h('button', { type: 'button', class: 'btn primary', onclick: async e => {
+          const mime = blob instanceof File ? mimeOf(blob) : (type || blob.type || 'application/octet-stream').split(';')[0];
+          if (!mime) { fill(upStatus, errorLine('Choose an audio recording or an .mp4 video.')); return; }
+          await busy(e.currentTarget, upStatus, () => take(blob, secs ?? null, mime));
+        } }, icon('check', 18), 'Use this note'),
+      });
+      const file = h('input', { type: 'file', accept: 'audio/*,video/mp4,.m4a,.mp4', 'aria-label': 'Voice or video note file' });
       file.addEventListener('change', async () => {
         const chosen = file.files?.[0];
         if (!chosen) return;
         const mime = mimeOf(chosen);
-        if (!mime) { fill(upStatus, errorLine('Choose an .m4a voice note or an .mp4 video.')); return; }
-        await busy(file, upStatus, async () => {
-          const secs = await durationOf(chosen, mime);
-          if (secs !== null && secs > MAX_SECONDS + 0.5) throw new Error(`That note is ${fmtSecs(secs)}. Notes are 90 seconds at most.`);
-          fill(upStatus, h('p', { class: 'small muted' }, 'Uploading…'));
-          const m = await apiUpload(`/api/media?${q({ purpose: 'letter', clientId: ctx.id, durationSec: secs === null ? undefined : Math.min(MAX_SECONDS, Math.round(secs)) })}`, chosen, mime);
-          mediaId = m.id; mediaKind = m.kind; mediaDuration = m.durationSec ?? secs; mediaUrl = m.url;
-          localUrl = URL.createObjectURL(chosen); urls.push(localUrl);
-          drawMedia(); sync();
-        });
+        if (!mime) { fill(upStatus, errorLine('Choose an audio recording or an .mp4 video.')); return; }
+        await busy(file, upStatus, async () => take(chosen, await durationOf(chosen, mime), mime));
       });
-      fill(mediaBox, field('Voice or video note', file, `${prompt} An .m4a or .mp4 file, up to 90 seconds.`), upStatus);
+      fill(mediaBox, field('Voice or video note', rec, `${prompt} Record up to 90 seconds.`),
+        h('details', { class: 'lc-upload', hidden: !canRecord() }, h('summary', { class: 'small muted' }, 'Or upload a file (audio, or an .mp4 video)'), file), upStatus);
     }
 
     function drawRhythm() {

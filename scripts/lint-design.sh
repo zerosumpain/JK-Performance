@@ -109,11 +109,12 @@ lint_desk() {
   [[ ${#css[@]} -gt 0 ]] || return 0
   local file hit
   for file in "${css[@]}"; do
-    # Hex colours outside :root / [data-theme] blocks (the token definitions).
+    # Colour literals (hex, rgb()/rgba(), hsl()/hsla()) outside :root / [data-theme]
+    # blocks (the token definitions). Derive local colours with var() and color-mix().
     while IFS= read -r hit; do
       local line=${hit%%:*} text=${hit#*:}
       allowed "$file" "$text" && continue
-      printf '%s:%s: %s\n    %s\n' "$file" "$line" "hex colour outside the token block: use var(--token)" \
+      printf '%s:%s: %s\n    %s\n' "$file" "$line" "colour literal (hex, rgb(), hsl()) outside the token block: use var(--token) or color-mix()" \
         "$(sed -E 's/^[[:space:]]+//' <<<"$text")"
       failures=$((failures + 1))
     done < <(awk '
@@ -121,7 +122,7 @@ lint_desk() {
         text = $0; opens = gsub(/[{]/, "{", text); closes = gsub(/[}]/, "}", text)
         if (!intoken && opens > 0 && $0 ~ /:root|\[data-theme/) { intoken = 1; tokdepth = depth }
         decl = $0; if (opens > 0) decl = substr($0, index($0, "{") + 1)
-        if (!intoken && $0 !~ /^[ \t]*(\/\*|\*)/ && decl ~ /:[^;]*#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/) print NR ":" $0
+        if (!intoken && $0 !~ /^[ \t]*(\/\*|\*)/ && (decl ~ /:[^;]*#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/ || decl ~ /[^a-z-](rgba?|hsla?)\(/)) print NR ":" $0
         depth += opens - closes
         if (intoken && depth <= tokdepth) intoken = 0
       }

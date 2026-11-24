@@ -170,6 +170,10 @@ private struct JKTimelineView: View {
     @State private var loadingEarlier = false
     @State private var form: FormRequest?
     @State private var actionError: String?
+    /// The timeline's `since` cursor: a transcript that arrives later comes back in `updated`.
+    @State private var cursor: String?
+    /// When a pending voice note was first seen (the 10 s poll lasts two minutes).
+    @State private var pendingSince: Date?
 
     private var api: APIClient { APIClient.shared }
     private var gate: Gate { session.gate }
@@ -208,9 +212,12 @@ private struct JKTimelineView: View {
         .task {
             while !Task.isCancelled {
                 await refresh()
-                try? await Task.sleep(for: .seconds(15))
+                let wait = VoiceRefresh.interval(anyPending: pendingSince != nil, pendingSince: pendingSince)
+                try? await Task.sleep(for: .seconds(wait))
             }
         }
+        .planLinksOpenInApp()
+        .onDisappear { VoicePlayback.shared.stop() }
     }
 
     private func pinned(_ r: Report, id: String) -> some View {
@@ -273,17 +280,20 @@ private struct JKTimelineView: View {
 
     private func refresh() async {
         do {
-            let page: TimelineResponse = try await api.get("/api/timeline", query: ["limit": "50"])
+            let page: TimelineResponse = try await api.get("/api/timeline", query: ["limit": "50", "since": cursor])
             if let current = items {
                 let fresh = Dictionary(page.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
                 var merged = current.map { fresh[$0.id] ?? $0 }
                 let known = Set(current.map(\.id))
                 merged += page.items.filter { !known.contains($0.id) }
-                items = merged
+                items = VoiceRefresh.merge(merged, updated: page.updated ?? [])
             } else {
                 items = page.items
                 nextBefore = page.nextBefore
             }
+            if let next = page.cursor { cursor = next }
+            let pending = (items ?? []).contains { $0.message?.voice?.status == .pending }
+            pendingSince = pending ? (pendingSince ?? Date()) : nil
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
@@ -341,15 +351,41 @@ struct MessageBubble: View {
     var coach: PersonRef? = nil
 
     var body: some View {
+        if message.isVoice { voiceBody } else { textBody }
+    }
+
+    /// A voice note (chosen by kind, never by mediaId): its own player and transcript.
+    private var voiceBody: some View {
+        HStack(alignment: .bottom, spacing: JK.Space.s) {
+            if mine { Spacer(minLength: JK.Space.xxxl) } else { TopBarAvatar(coach: coach, size: JK.Size.avatarSmall - JK.Space.s) }
+            VStack(alignment: .leading, spacing: JK.Space.xs) {
+                VoiceNoteBubble(message: message, forClient: true, mine: mine, onChangeConsent: { TabRouter.shared.openPrivacy() })
+                Text(Fmt.time(message.at)).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
+            }
+            .padding(JK.Space.m)
+            .background(mine ? JK.raised : JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
+            .overlay {
+                if !mine {
+                    RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous)
+                        .strokeBorder(JK.hairline, lineWidth: JK.Size.hairline)
+                }
+            }
+            if !mine { Spacer(minLength: JK.Space.xxxl) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel((mine ? "Your voice note" : "Voice note from JK") + ", \(Fmt.time(message.at))")
+    }
+
+    private var textBody: some View {
         HStack(alignment: .bottom, spacing: JK.Space.s) {
             if mine { Spacer(minLength: JK.Space.huge) } else { TopBarAvatar(coach: coach, size: JK.Size.avatarSmall - JK.Space.s) }
             VStack(alignment: .leading, spacing: JK.Space.xs) {
                 if let caption { Text(caption).font(.jkCaption).foregroundStyle(JK.textSecondary) }
                 if let id = message.mediaId {
-                    MessageMedia(mediaId: id, isVideo: message.kind == "formCheck")
+                    MessageMedia(mediaId: id, isVideo: message.kind == "formCheck" || message.mediaKind == "video")
                 }
                 if !message.text.isEmpty {
-                    Text(message.text).font(.jkBody).foregroundStyle(JK.text)
+                    LinkedText(message.text).font(.jkBody).foregroundStyle(JK.text)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(Fmt.time(message.at)).font(.jkCaption.monospacedDigit()).foregroundStyle(JK.textSecondary)
@@ -480,6 +516,9 @@ private struct JKComposer: View {
     @State private var mealItem: PhotosPickerItem?
     @State private var clipItem: PhotosPickerItem?
     @FocusState private var focused: Bool
+    /// The chat's voice note (desk-v2 F19): 5 minutes unless the server says otherwise.
+    @StateObject private var voice = VoiceRecorder(cap: 300, purpose: "voice")
+    @State private var askConsent = false
 
     private var router: TabRouter { TabRouter.shared }
     private var gate: Gate { session.gate }
@@ -498,18 +537,51 @@ private struct JKComposer: View {
                 }
             }
             if let error { ErrorBanner(message: error) }
-            HStack(alignment: .bottom, spacing: JK.Space.s) {
-                TextField("Message JK", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($focused)
-                    .font(.jkBody)
-                    .foregroundStyle(JK.text)
-                    .padding(.horizontal, JK.Space.m)
-                    .padding(.vertical, JK.Space.s)
-                    .frame(minHeight: JK.Size.touch)
-                    .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous)
-                        .strokeBorder(JK.inputBorder, lineWidth: JK.Size.hairline))
+            if let voiceError = voice.error { ErrorBanner(message: voiceError) }
+            if voice.recording || voice.hasTake {
+                VoiceComposerBar(voice: voice, sending: sending) { Task { await sendVoice() } }
+            } else {
+                field
+            }
+            askJK
+        }
+        .padding(.horizontal, JK.Space.gutter)
+        .padding(.vertical, JK.Space.s)
+        .background(JK.bg)
+        .sheet(isPresented: $askConsent) {
+            VoiceConsentSheet(provider: session.me?.features?.voiceProvider) { allow in
+                Task { await consentChosen(allow) }
+            }
+        }
+        .onDisappear { voice.stopAll() }
+        .onChange(of: router.composerDraft, initial: true) { _, text in
+            if let text {
+                draft = text
+                router.composerDraft = nil
+                focused = true
+            }
+        }
+        .onChange(of: router.replyQuote, initial: true) { _, quote in if quote != nil { focused = true } }
+        .onChange(of: mealItem) { _, item in if let item { Task { await sendMeal(item) } } }
+        .onChange(of: clipItem) { _, item in if let item { Task { await sendClip(item) } } }
+    }
+
+    private var field: some View {
+        HStack(alignment: .bottom, spacing: JK.Space.s) {
+            TextField("Message JK", text: $draft, axis: .vertical)
+                .lineLimit(1...5)
+                .focused($focused)
+                .font(.jkBody)
+                .foregroundStyle(JK.text)
+                .padding(.horizontal, JK.Space.m)
+                .padding(.vertical, JK.Space.s)
+                .frame(minHeight: JK.Size.touch)
+                .background(JK.surface, in: RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: JK.Radius.control, style: .continuous)
+                    .strokeBorder(JK.inputBorder, lineWidth: JK.Size.hairline))
+            if trimmed.isEmpty && !sending && gate.voiceNotes {
+                MicButton { micTapped() }
+            } else {
                 Button { Task { await send() } } label: {
                     Group {
                         if sending { ProgressView().tint(JK.onPrimary) } else { Image(systemName: "arrow.up") }
@@ -523,21 +595,49 @@ private struct JKComposer: View {
                 .disabled(sending || trimmed.isEmpty)
                 .accessibilityLabel("Send")
             }
-            askJK
         }
-        .padding(.horizontal, JK.Space.gutter)
-        .padding(.vertical, JK.Space.s)
-        .background(JK.bg)
-        .onChange(of: router.composerDraft, initial: true) { _, text in
-            if let text {
-                draft = text
-                router.composerDraft = nil
-                focused = true
-            }
+    }
+
+    // MARK: Voice notes
+
+    /// The first time, the consent sheet (D16) asks before anything is recorded.
+    private func micTapped() {
+        error = nil
+        if gate.voiceTranscription == "ask" {
+            askConsent = true
+        } else {
+            Task { await startRecording() }
         }
-        .onChange(of: router.replyQuote, initial: true) { _, quote in if quote != nil { focused = true } }
-        .onChange(of: mealItem) { _, item in if let item { Task { await sendMeal(item) } } }
-        .onChange(of: clipItem) { _, item in if let item { Task { await sendClip(item) } } }
+    }
+
+    private func consentChosen(_ allow: Bool) async {
+        do {
+            try await VoiceConsentStore.set(allow, session: session)
+            // Let the sheet finish closing before the microphone prompt appears.
+            try? await Task.sleep(for: .milliseconds(450))
+            await startRecording()
+        } catch {
+            self.error = error.readable
+        }
+    }
+
+    private func startRecording() async {
+        focused = false
+        voice.cap = TimeInterval(gate.voiceMaxSec)
+        await voice.start()
+    }
+
+    private func sendVoice() async {
+        sending = true
+        defer { sending = false }
+        do {
+            _ = try await VoiceSend.send(voice, clientId: nil)
+            error = nil
+            await onSent()
+            await Reminders.shared.offerIfUndecided(checkIn: session.gate.checkin)
+        } catch {
+            self.error = error.readable
+        }
     }
 
     private var trimmed: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }

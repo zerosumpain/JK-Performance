@@ -68,6 +68,7 @@ import com.jkperformance.app.net.TimelineForm
 import com.jkperformance.app.net.TimelineItem
 import com.jkperformance.app.net.TimelineResponse
 import com.jkperformance.app.net.isCancellation
+import com.jkperformance.app.net.mergeById
 import com.jkperformance.app.net.readable
 import java.time.Instant
 import kotlin.math.roundToInt
@@ -153,20 +154,22 @@ private fun JKTimelineView() {
     var loadingEarlier by remember { mutableStateOf(false) }
     var form by remember { mutableStateOf<FormRequest?>(null) }
     var actionError by remember { mutableStateOf<String?>(null) }
+    var cursor by remember { mutableStateOf<String?>(null) }
+    val pendingClock = remember { PendingVoiceClock() }
     val list = rememberLazyListState()
 
     suspend fun refresh() {
         try {
-            val page: TimelineResponse = APIClient.get("/api/timeline", mapOf("limit" to "50"))
+            // `since` also returns `updated`: messages whose transcript arrived (F19 refresh rule).
+            val page: TimelineResponse = APIClient.get("/api/timeline", mapOf("limit" to "50", "since" to cursor))
             val current = items
             if (current != null) {
-                val fresh = page.items.associateBy { it.id }
-                val known = current.map { it.id }.toSet()
-                items = current.map { fresh[it.id] ?: it } + page.items.filter { it.id !in known }
+                items = mergeById(mergeById(current, page.items) { it.id }, page.updated.orEmpty()) { it.id }
             } else {
-                items = page.items
+                items = mergeById(page.items, page.updated.orEmpty()) { it.id }
                 nextBefore = page.nextBefore
             }
+            page.cursor?.let { cursor = it }
             error = null
         } catch (e: Exception) {
             if (e.isCancellation) throw e
@@ -210,7 +213,8 @@ private fun JKTimelineView() {
     LaunchedEffect(Unit) {
         while (isActive) {
             refresh()
-            delay(TIMELINE_POLL_MS)
+            val pending = items.orEmpty().mapNotNull { it.message }.anyPendingVoice()
+            delay(pendingClock.delayFor(pending, TIMELINE_POLL_MS))
         }
     }
 
@@ -224,6 +228,7 @@ private fun JKTimelineView() {
         if (lastId != null && !lettersOnly) list.animateScrollToItem(maxOf(0, list.layoutInfo.totalItemsCount - 1))
     }
 
+    VoicePlayerScope {
     Column(Modifier.jkScreen().jkKeyboardAware()) {
         // Pinned above the timeline, so Past letters and Guides stay in reach however long the history.
         Box(Modifier.padding(start = JKSpace.gutter, end = JKSpace.gutter, top = JKSpace.gutter)) {
@@ -287,6 +292,7 @@ private fun JKTimelineView() {
         }
         if (gate.messaging && !lettersOnly) JKComposer(onSent = { refresh() })
     }
+    }
 
     form?.let { request ->
         Sheet(onDismiss = {
@@ -331,6 +337,7 @@ object LetterText {
  */
 @Composable
 fun MessageBubble(message: Message, mine: Boolean, coachAvatarMediaId: String? = null) {
+    val nav = LocalNav.current
     val caption = when (message.kind) {
         "answer" -> if (mine) "Your answer to JK's question" else null
         "formCheck" -> "Form check"
@@ -352,14 +359,20 @@ fun MessageBubble(message: Message, mine: Boolean, coachAvatarMediaId: String? =
             Column(
                 Modifier
                     .widthIn(max = widest)
+                    .then(if (message.isVoice) Modifier.widthIn(min = widest * 0.8f) else Modifier)
                     .background(if (mine) JKColors.raised else JKColors.surface, JKShape.parCard)
                     .then(if (mine) Modifier else Modifier.border(JKSize.hairline, JKColors.hairline, JKShape.parCard))
                     .padding(JKSpace.m),
                 verticalArrangement = Arrangement.spacedBy(JKSpace.xs),
             ) {
                 caption?.let { Text(it, style = JKType.caption, color = JKColors.textSecondary) }
-                message.mediaId?.let { MessageMedia(it, isVideo = message.kind == "formCheck") }
-                if (message.text.isNotEmpty()) Text(message.text, style = JKType.body, color = JKColors.text)
+                if (message.isVoice) {
+                    // Chosen by kind, never by mediaId (voice notes carry none at the top level).
+                    VoiceNoteBubble(message, asClient = true, onChangeConsent = { nav.push { PrivacyView() } })
+                } else {
+                    message.mediaId?.let { MessageMedia(it, isVideo = message.kind == "formCheck") }
+                    if (message.text.isNotEmpty()) LinkedText(message.text, style = JKType.body, color = JKColors.text)
+                }
                 Text(Fmt.time(message.at), style = JKType.caption, color = JKColors.textSecondary)
             }
         }
@@ -507,6 +520,9 @@ private fun JKComposer(onSent: suspend () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val quote = TabRouter.replyQuote
     val trimmed = draft.trim()
+    val recorder = rememberVoiceRecorder(cap = gate.voiceMaxSec.toDouble(), purpose = "voice")
+    val (voice, voiceOverlay) = rememberVoiceStarter(recorder, asClient = true)
+    val makingVoice = recorder.recording || recorder.file != null
 
     LaunchedEffect(TabRouter.composerDraft) {
         TabRouter.composerDraft?.let {
@@ -532,6 +548,21 @@ private fun JKComposer(onSent: suspend () -> Unit) {
             TabRouter.replyQuote = null
             // The natural moment to ask: they'll want to know when the reply comes.
             Reminders.offerIfUndecided(checkIn = gate.checkin)
+        } catch (e: Exception) {
+            if (e.isCancellation) throw e
+            error = e.readable
+        } finally {
+            sending = false
+        }
+    }
+
+    suspend fun sendVoice() {
+        sending = true
+        try {
+            sendVoiceNote(recorder, clientId = null, caption = trimmed)
+            draft = ""
+            error = null
+            onSent()
         } catch (e: Exception) {
             if (e.isCancellation) throw e
             error = e.readable
@@ -594,7 +625,10 @@ private fun JKComposer(onSent: suspend () -> Unit) {
             }
         }
         error?.let { ErrorBanner(it) }
-        Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s), verticalAlignment = Alignment.Bottom) {
+        voiceOverlay()
+        if (makingVoice) VoiceRecordBar(recorder, sending = sending, onSend = { scope.launch { sendVoice() } })
+        if (!makingVoice) Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.s), verticalAlignment = Alignment.Bottom) {
+            if (gate.voiceNotes && trimmed.isEmpty()) MicButton(enabled = !sending) { voice.start() }
             ComposerField(draft, { draft = it }, "Message JK", Modifier.weight(1f).focusRequester(focus))
             val canSend = !sending && trimmed.isNotEmpty()
             Box(
@@ -610,8 +644,16 @@ private fun JKComposer(onSent: suspend () -> Unit) {
                 else Glyph(IconKey.send, size = JKSize.iconInline, tint = if (canSend) JKColors.primaryLabel else JKColors.textSecondary)
             }
         }
-        if (gate.formChecks || gate.mealPhotos) {
+        val testClip = BuildConfig.DEBUG && gate.voiceNotes && !makingVoice && recorder.testClipAvailable()
+        if (!makingVoice && (gate.formChecks || gate.mealPhotos || testClip)) {
             Row(horizontalArrangement = Arrangement.spacedBy(JKSpace.l)) {
+                if (testClip) {
+                    // Debug builds only: the emulator has no microphone (desk-v2 WP10).
+                    TextButton(onClick = { voice.testClip() }, enabled = !sending) {
+                        Glyph(IconKey.mic, JKType.caption)
+                        Text("Send test clip", style = JKType.caption)
+                    }
+                }
                 if (gate.formChecks) {
                     TextButton(onClick = { clipPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }, enabled = !sending) {
                         Glyph(IconKey.formCheck, JKType.caption)

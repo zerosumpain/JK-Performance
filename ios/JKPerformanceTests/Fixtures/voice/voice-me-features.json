@@ -1,0 +1,20 @@
+{
+  "features": {
+    "programme": true,
+    "messaging": true,
+    "habits": true,
+    "progress": true,
+    "checkin": true,
+    "sessions": true,
+    "nutrition": false,
+    "priority": false,
+    "guides": true,
+    "formChecks": true,
+    "mealPhotos": false,
+    "challenges": true,
+    "voiceNotes": true,
+    "hasMacroTargets": false,
+    "voiceMaxSec": 300,
+    "voiceTranscription": "ask"
+  }
+}

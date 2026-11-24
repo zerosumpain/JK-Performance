@@ -1,5 +1,14 @@
 import { createServer } from 'node:http';
+import { requireCoach } from './access.mjs';
 import { accountRoutes } from './account.mjs';
+import { aiInfo, aiRoutes } from './ai.mjs';
+import { attachEvents } from './events.mjs';
+import { factRoutes } from './facts.mjs';
+import { runFeatureSchemas } from './features.mjs';
+import { notificationRoutes } from './notifications.mjs';
+import { FEATURES, hooks } from './registry.mjs';
+import { searchRoutes } from './search.mjs';
+import { streamRoutes } from './stream.mjs';
 import { androidRoutes } from './android.mjs';
 import { autoflowRoutes } from './autoflows.mjs';
 import { sessionUser } from './auth.mjs';
@@ -28,9 +37,38 @@ import { trainingRoutes } from './training.mjs';
 
 const JSON_LIMIT = 1024 * 1024;
 
+/** GET /api/coach/capabilities: which features this server runs, and the AI provider. The desk hides what is absent. */
+function capabilities(_req, ctx) {
+  requireCoach(ctx);
+  return { features: FEATURES.map(f => f.name), ai: { provider: aiInfo(ctx.db, ctx.config, ctx.user).provider } };
+}
+
+/** GET /api/coach/badges: {navId: count} merged from every feature's `badges` hook (a provider that throws is skipped). */
+function badges(_req, ctx) {
+  requireCoach(ctx);
+  const out = {};
+  for (const [f, fn] of hooks('badges')) {
+    try {
+      for (const [k, v] of Object.entries(fn(ctx.db, ctx.user) ?? {})) if (Number.isFinite(v)) out[k] = (out[k] ?? 0) + v;
+    } catch (e) { console.error(`badges hook of ${f.name} failed`, e); }
+  }
+  return { badges: out };
+}
+
+function foundationRoutes(r) {
+  r.add('GET', '/api/coach/capabilities', capabilities);
+  r.add('GET', '/api/coach/badges', badges);
+}
+
 export function createApp(db, config) {
+  // Desk v2 (docs/design/desk-v2.md 3.1): feature tables, then the event bus, before any request or clock.
+  runFeatureSchemas(db);
+  attachEvents(db, config);
   const router = createRouter();
   for (const add of [pageRoutes, accountRoutes, trainingRoutes, dailyRoutes, healthRoutes, messageRoutes, bookingRoutes, progressRoutes, coachRoutes, reportRoutes, calendarRoutes, deskRoutes, pushRoutes, formRoutes, autoflowRoutes, androidRoutes, planRoutes, settingsRoutes, mediaRoutes, goalRoutes, todayRoutes, timelineRoutes, needsRoutes, parRoutes]) add(router);
+  // Foundation routes, then each feature's, in name order: existing routes always match first.
+  for (const add of [foundationRoutes, factRoutes, notificationRoutes, streamRoutes, searchRoutes, aiRoutes]) add(router);
+  for (const f of FEATURES) f.routes?.(router);
 
   return createServer(async (req, res) => {
     const started = Date.now();
@@ -45,7 +83,14 @@ export function createApp(db, config) {
       const ctx = { db, config, user, params, query: Object.fromEntries(url.searchParams), body: {}, rawBody: null };
       if (!['GET', 'HEAD', 'DELETE'].includes(req.method)) {
         if (route.opts.rawBody) {
-          ctx.rawBody = await readBody(req, route.opts.rawBody);
+          // A route may narrow its limit from the query and headers (media: 10 MB for voice audio) and refuse before reading.
+          const limit = Math.min(route.opts.rawBody, route.opts.rawLimit?.(req, url) ?? route.opts.rawBody);
+          const declared = Number(req.headers['content-length']);
+          if (Number.isFinite(declared) && declared > limit) {
+            res.setHeader('connection', 'close');
+            return sendJson(res, 413, { error: route.opts.tooLarge?.(limit) ?? 'Request body too large' });
+          }
+          ctx.rawBody = await readBody(req, limit);
         } else {
           const buf = await readBody(req, JSON_LIMIT);
           if (buf.length) {

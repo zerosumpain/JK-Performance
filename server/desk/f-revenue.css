@@ -1,0 +1,30 @@
+/* WP3 Revenue (docs/design/desk-v2.md F26). Tokens only. Class prefix rv-. */
+.rv-body{margin-top:20px}
+.rv-bento{grid-auto-rows:minmax(132px,auto)}
+.rv-hero{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.rv-hero-main{display:grid;gap:8px;justify-items:start}
+.rv-hero-n{font-family:var(--serif);font-weight:500;font-size:60px;line-height:1;letter-spacing:-1.2px;font-variant-numeric:tabular-nums}
+.rv-delta{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600}
+.rv-ring .ui-score-word{font-size:13px;color:var(--text-secondary)}
+.rv-hero-split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding-top:16px;margin-top:18px;border-top:1px solid var(--hairline)}
+.rv-legend{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;margin:10px 0 0;padding:0;font-size:13px;color:var(--text-secondary)}
+.rv-legend li{display:flex;align-items:center;gap:8px}
+.rv-key{display:inline-block;width:12px;height:12px;border-radius:4px;background:currentColor;flex:none}
+.rv-legend li{color:var(--text-secondary)}
+.rv-legend li .rv-key{color:inherit}
+.rv-legend .ch-tone-1 .rv-key,.rv-conf-chip.ch-tone-1 .rv-key{background:var(--chart-1)}
+.rv-legend .ch-tone-2 .rv-key{background:var(--chart-2)}
+.rv-legend .ch-tone-3 .rv-key,.rv-conf-chip.ch-tone-3 .rv-key{background:var(--chart-3)}
+.rv-conf-chip.ch-tone-4 .rv-key{background:var(--chart-4)}
+.rv-aged{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rv-aged li{display:flex;align-items:center;gap:10px}
+.rv-conf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:4px 0 16px}
+.rv-conf-chip{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--hairline);border-radius:var(--r-card);color:var(--text);background:var(--surface)}
+.rv-conf-chip .rv-key{margin-top:4px}
+.rv-conf-n{font-family:var(--serif);font-size:26px;font-weight:500;line-height:1.1}
+.rv-w-spark{margin:8px 0 2px;color:var(--accent)}
+@media (max-width:820px){
+  .rv-hero-n{font-size:46px}
+  .rv-conf{grid-template-columns:minmax(0,1fr)}
+  .rv-hero-split{gap:8px}
+}

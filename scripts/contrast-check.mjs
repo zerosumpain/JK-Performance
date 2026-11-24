@@ -10,7 +10,12 @@
 //    hand edit cannot drift from what was measured. Platforms whose file does
 //    not exist yet are skipped.
 //
+// 3. --desk: measures the coach desk's own tokens, read from the :root blocks of
+//    server/desk/app.css (dark and light), including the desk-v2 glass, tile,
+//    badge and chart pairs (docs/design/desk-v2.md 2.2). Run alone; it exits.
+//
 // Usage: node scripts/contrast-check.mjs [ios|android]... [--verbose]
+//        node scripts/contrast-check.mjs --desk [--verbose]
 //   With platform names, only those platforms' token files are compared (each
 //   platform's CI checks its own file); with none, every platform is.
 import { existsSync, readFileSync } from 'node:fs';
@@ -92,6 +97,82 @@ const PAIRS = [
 
 const rgb = (hex) => [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
 
+// MARK: - The desk (--desk): server/desk/app.css, both themes
+
+/** {dark: {name: value}, light: {…}} from app.css: the dark :root block, the light one, and the shared one (var() aliases). */
+function deskTokens(css) {
+  const blocks = [...css.matchAll(/:root(\[data-theme="light"\])?\s*\{([^}]*)\}/g)].map((m) => ({ light: !!m[1], body: m[2] }));
+  const read = (body) => Object.fromEntries([...body.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);?/g)].map((m) => [m[1], m[2].trim()]));
+  const shared = {}, dark = {}, light = {};
+  blocks.forEach((b, i) => {
+    const t = read(b.body);
+    if (b.light) Object.assign(light, t);
+    else if (i === 0) Object.assign(dark, t);
+    else Object.assign(shared, t);
+  });
+  return { dark: { ...shared, ...dark }, light: { ...shared, ...dark, ...light } };
+}
+/** A token as [r, g, b, a], following var() aliases. */
+function deskColour(tokens, name, seen = new Set()) {
+  const v = tokens[name];
+  if (v === undefined) throw new Error(`--${name} is not defined in app.css`);
+  if (seen.has(name)) throw new Error(`--${name} refers to itself`);
+  seen.add(name);
+  const alias = /^var\(--([a-z0-9-]+)\)$/.exec(v);
+  if (alias) return deskColour(tokens, alias[1], seen);
+  const hex = /^#([0-9A-Fa-f]{6})$/.exec(v);
+  if (hex) return [...rgb(hex[1]), 1];
+  const rgba = /^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/.exec(v);
+  if (rgba) return rgba.slice(1).map(Number);
+  throw new Error(`--${name}: cannot measure "${v}"`);
+}
+const over = ([r, g, b, a], under) => [r, g, b].map((c, i) => c * a + under[i] * (1 - a));
+
+function deskCheck() {
+  const css = readFileSync(join(root, 'server/desk/app.css'), 'utf8');
+  if (!/--accent:#D9D9D9;/.test(css)) failures.push('dark --accent is no longer silver #D9D9D9 (the owner moved the desk to the silver JK. palette, 2026-11-24)');
+  const themes = deskTokens(css);
+  const ALL = ['bg', 'surface', 'raised', 'paper', 'tile', 'tile-hover'];
+  // [foreground, [backgrounds], minimum, note]; a background "a/b" is token a composited over token b.
+  const DESK_PAIRS = [
+    ['text', [...ALL, 'glass/bg', 'glass/surface', 'accent-wash/bg', 'accent-wash/surface'], TEXT],
+    ['text-secondary', [...ALL, 'glass/bg', 'accent-wash/bg'], TEXT],
+    ['text-tertiary', ['bg', 'surface', 'paper', 'tile', 'tile-hover', 'glass/bg'], TEXT, 'group labels, eyebrows (never on raised)'],
+    ['accent', ['bg', 'surface', 'raised', 'tile', 'tile-hover', 'accent-wash/bg'], TEXT, 'the accent word, selected icons, links'],
+    ['on-track', ['bg', 'surface', 'raised', 'tile'], TEXT],
+    ['attention', ['bg', 'surface', 'raised', 'tile'], TEXT],
+    ['data', ['bg', 'surface', 'raised', 'tile'], TEXT],
+    ['error', ['bg', 'surface', 'raised', 'tile'], TEXT],
+    ['urgent', ['bg', 'surface', 'raised', 'tile'], TEXT],
+    ['bg', ['accent'], TEXT, 'badge numbers on the accent pill'],
+    ['primary-label', ['primary-fill', 'primary-pressed'], TEXT, 'primary button'],
+    ['accent', ['bg', 'surface', 'raised'], NON_TEXT, 'focus ring'],
+    // On raised layers (sheets, slide-overs) fields are filled with surface, so the boundary is measured there, not on raised (2.85:1).
+    ['input-border', ['bg', 'surface'], NON_TEXT, 'input boundary'],
+    ...['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6'].map((c) => [c, ['tile', 'surface', 'raised'], NON_TEXT, 'chart marks']),
+    ['heat-4', ['tile'], NON_TEXT, 'the strongest heat cell'],
+  ];
+  for (const [mode, tokens] of Object.entries(themes)) {
+    const ground = deskColour(tokens, 'bg').slice(0, 3);
+    const solidOf = (spec) => {
+      const [top, base] = spec.split('/');
+      const under = base ? over(deskColour(tokens, base), ground) : ground;
+      return over(deskColour(tokens, top), under);
+    };
+    for (const [fg, backs, min, note] of DESK_PAIRS) {
+      for (const back of backs) {
+        const b = solidOf(back);
+        const f = over(deskColour(tokens, fg), b);
+        const r = ratio(f, b);
+        checked++;
+        const line = `desk ${mode.padEnd(5)} ${fg} on ${back}: ${r.toFixed(2)}:1 (needs ${min})${note ? ` - ${note}` : ''}`;
+        if (r + 1e-9 < min) failures.push(line);
+        else if (verbose) console.log(`ok    ${line}`);
+      }
+    }
+  }
+}
+
 /** A token as opaque RGB, composited over `under` (RGB) when translucent. */
 function solid(name, mode, under) {
   const [hex, alpha = 1] = TOKENS[name][mode];
@@ -116,6 +197,17 @@ function ratio(a, b) {
 
 const failures = [];
 let checked = 0;
+
+if (process.argv.includes('--desk')) {
+  deskCheck();
+  for (const line of failures) console.error(`FAIL  ${line}`);
+  if (failures.length) {
+    console.error(`contrast-check --desk: ${failures.length} pair(s) below their minimum.`);
+    process.exit(1);
+  }
+  console.log(`contrast-check --desk: ${checked} pairs pass (dark and light).`);
+  process.exit(0);
+}
 
 for (const mode of MODES) {
   const ground = solid('bg', mode);

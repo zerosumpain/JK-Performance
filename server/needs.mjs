@@ -1,8 +1,10 @@
 import { initials, requireCoach } from './access.mjs';
 import { bookingOut } from './bookings.mjs';
+import { clientFacts } from './facts.mjs';
 import { flaggedAnswers } from './forms.mjs';
 import { milestoneSuggestions } from './milestones.mjs';
 import { planOf } from './plans.mjs';
+import { allFacts, hooks } from './registry.mjs';
 import { feedbackWeek } from './reports.mjs';
 import { hasFeature, rhythmOf } from './settings.mjs';
 import { addDays, daysBetween, londonDay, londonToUtc, weekday } from './time.mjs';
@@ -44,7 +46,26 @@ export function letterDue(db, client, week = feedbackWeek()) {
   return rhythm;
 }
 
-function reasonsFor(db, c, today) {
+const LAPSED_DAYS = 28;
+const RESTING_STAGES = new Set(['paused', 'churned', 'alumni']);
+
+/** Clients whose lifecycle stage (crm.stage, when the crm feature is loaded) says they are paused or have left. */
+function restingClients(db, coach, clients, today) {
+  if (!clients.length || !allFacts().some(f => f.id === 'crm.stage')) return new Set();
+  try {
+    const facts = clientFacts(db, coach.id, clients.map(c => c.id), { only: ['crm.stage'], today });
+    return new Set([...facts].filter(([, f]) => RESTING_STAGES.has(f['crm.stage'])).map(([id]) => id));
+  } catch (e) {
+    console.error('needs: crm.stage failed', e);
+    return new Set();
+  }
+}
+
+/**
+ * A paused or departed client (`resting`) still surfaces for pain, messages and answers, but not for going quiet, missed training or
+ * letters; nor does a client with no plan who has been idle for four weeks or more.
+ */
+function reasonsFor(db, c, today, resting = false) {
   const reasons = [];
   const add = (kind, text, at, extra = {}) => reasons.push({ kind, text, at: at ?? null, rank: REASON_RANK[kind], iconKey: ICON[kind], ...extra });
   const plan = planOf(db, c);
@@ -66,7 +87,7 @@ function reasonsFor(db, c, today) {
     add(priority ? 'priorityUnread' : 'unread', text, unread[0].at, { count: unread.length });
   }
   const answered = checkin && db.prepare("SELECT 1 FROM reports WHERE client_id=? AND kind='weekly' AND week=? AND published_at IS NOT NULL").get(c.id, checkin.week);
-  if (checkin && !pain.length && hasFeature(db, c, 'checkin') && !answered) {
+  if (checkin && !pain.length && hasFeature(db, c, 'checkin') && !answered && !resting) {
     add('checkinLetterDue', `${checkedIn} · letter due`, checkin.submitted_at, { week: checkin.week });
   }
   const unflagged = forms.filter(f => f !== flagged);
@@ -82,12 +103,13 @@ function reasonsFor(db, c, today) {
       UNION ALL SELECT MAX(s.at) FROM set_logs s JOIN workout_items i ON i.id=s.item_id JOIN workouts w ON w.id=i.workout_id WHERE w.client_id=?
       UNION ALL SELECT MAX(submitted_at) FROM checkins WHERE client_id=?)`).get(c.id, c.id, c.id, c.id).at;
   const quietDays = daysBetween(londonDay(new Date(lastActive ?? c.created_at)), today);
-  if (quietDays >= QUIET_DAYS && c.plan !== 'none') add('quiet', `Quiet for ${quietDays} days`, lastActive, { days: quietDays });
+  if (quietDays >= QUIET_DAYS && c.plan !== 'none' && !resting) add('quiet', `Quiet for ${quietDays} days`, lastActive, { days: quietDays });
 
   const planned = db.prepare('SELECT 1 FROM workouts WHERE client_id=? AND published=1 AND date<=? LIMIT 1').get(c.id, today);
   const lastDone = db.prepare('SELECT MAX(completed_at) at FROM workouts WHERE client_id=?').get(c.id).at;
   const idle = lastDone ? daysBetween(londonDay(new Date(lastDone)), today) : null;
-  if (planned && (idle === null || idle >= NO_TRAINING_DAYS)) add('noTraining', idle === null ? 'No training logged yet' : `No training in ${idle} days`, lastDone, { days: idle });
+  const lapsed = c.plan === 'none' && (idle ?? quietDays) >= LAPSED_DAYS;
+  if (planned && !resting && !lapsed && (idle === null || idle >= NO_TRAINING_DAYS)) add('noTraining', idle === null ? 'No training logged yet' : `No training in ${idle} days`, lastDone, { days: idle });
 
   for (const m of milestoneSuggestions(db, c, today)) add('milestone', m.reason, null, { milestoneKey: m.key, suggestedHeadline: m.suggestedHeadline });
   return { reasons: reasons.sort((a, b) => a.rank - b.rank), priority };
@@ -108,19 +130,23 @@ export function needsYou(db, coach, now = new Date()) {
   const clients = db.prepare("SELECT * FROM users WHERE role='client' AND coach_id=? ORDER BY name").all(coach.id);
   const items = [];
   const due = [];
+  const extra = featureReasons(db, coach, clients, today);
+  const resting = restingClients(db, coach, clients, today);
   for (const c of clients) {
     const plan = planOf(db, c);
-    const rhythm = letterDue(db, c, week);
+    const rhythm = resting.has(c.id) ? null : letterDue(db, c, week);
     if (rhythm) due.push({ id: c.id, name: c.name, initials: initials(c.name), media: rhythm.media, every: rhythm.every });
-    const { reasons, priority } = reasonsFor(db, c, today);
+    const own = reasonsFor(db, c, today, resting.has(c.id));
+    const priority = own.priority;
+    const reasons = [...own.reasons, ...(extra.get(c.id) ?? [])].sort((a, b) => a.rank - b.rank);
     if (!reasons.length) continue;
     const top = reasons[0];
-    const action = actionFor(top, c, db);
+    const action = top.feature ? null : actionFor(top, c, db);
     items.push({
       client: { id: c.id, name: c.name, firstName: c.name.split(' ')[0], initials: initials(c.name), plan: plan.id, planName: plan.name },
       rank: top.rank, priority, reasons,
       reasonLine: reasons.slice(0, 2).map(r => r.text).join(' · '),
-      primaryAction: { kind: action, label: ACTIONS[action] },
+      primaryAction: action ? { kind: action, label: ACTIONS[action] } : { kind: 'feature', label: top.action?.label ?? 'Open', path: top.action?.path ?? null },
     });
   }
   items.sort((a, b) => a.rank - b.rank || (a.reasons[0].at ?? '9').localeCompare(b.reasons[0].at ?? '9') || a.client.name.localeCompare(b.client.name));
@@ -134,6 +160,28 @@ export function needsYou(db, coach, now = new Date()) {
     lettersDue: { week, count: due.length, estMinutes: Math.round(minutes / 5) * 5, clients: due },
     items, allCaughtUp: items.length === 0,
   };
+}
+
+/**
+ * Reasons from features (hooks('needs'), docs/design/desk-v2.md 3.7), by
+ * client: {clientId, kind, text, at, rank 1-8, iconKey, action:{label, path}}.
+ * Only this coach's clients count; a provider that throws is logged and skipped.
+ */
+function featureReasons(db, coach, clients, today) {
+  const mine = new Set(clients.map(c => c.id));
+  const out = new Map();
+  for (const [f, fn] of hooks('needs')) {
+    let list = [];
+    try { list = fn(db, coach, clients, today) ?? []; } catch (e) { console.error(`needs hook of ${f.name} failed`, e); continue; }
+    for (const r of list) {
+      if (!r || !mine.has(r.clientId) || typeof r.text !== 'string') continue;
+      const rank = Math.min(8, Math.max(1, Math.round(Number(r.rank) || 8)));
+      const reason = { kind: String(r.kind ?? f.name), text: r.text, at: r.at ?? null, rank, iconKey: r.iconKey ?? 'notifications', feature: f.name,
+        action: r.action ? { label: String(r.action.label ?? 'Open'), path: r.action.path ?? null } : null };
+      out.set(r.clientId, [...(out.get(r.clientId) ?? []), reason]);
+    }
+  }
+  return out;
 }
 
 function route(_req, ctx) {

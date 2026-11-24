@@ -128,13 +128,20 @@ object MediaUpload {
 object MediaFiles {
     private val local = mutableMapOf<String, File>()
 
-    suspend fun file(context: Context, mediaId: String, kind: String?): File {
+    /**
+     * [path] is the server's own URL for the file when it is not the plain
+     * media route (a voice note's `voice.url`, a guide block's `url`); only an
+     * `/api/` path on our server is fetched. Audio is cached as `.m4a`.
+     */
+    suspend fun file(context: Context, mediaId: String, kind: String?, path: String? = null): File {
         local[mediaId]?.takeIf { it.exists() }?.let { return it }
-        val data = APIClient.data("/api/media/${seg(mediaId)}")
+        val route = path?.takeIf { it.startsWith("/api/") && !it.contains("..") } ?: "/api/media/${seg(mediaId)}"
+        val data = APIClient.data(route)
         val ext = if (kind == "video") "mp4" else "m4a"
-        val file = File(context.cacheDir, "media-$mediaId.$ext")
+        val name = mediaId.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val file = File(context.cacheDir, "media-$name.$ext")
         withContext(Dispatchers.IO) {
-            val tmp = File(context.cacheDir, "media-$mediaId.part")
+            val tmp = File(context.cacheDir, "media-$name.part")
             tmp.writeBytes(data)
             tmp.renameTo(file)
         }

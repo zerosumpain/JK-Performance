@@ -1,6 +1,9 @@
 # The JK Performance API. No npm dependencies: Node built-ins only.
 FROM node:22.23.3-trixie-slim@sha256:b26b04c123d9ff8ab646ceb18b9d75a1173acf64b9a401094b906d27b29338d4
 WORKDIR /app
+# ffmpeg re-encodes voice notes and letters to m4a and makes the model's mp3 (server/audio.mjs).
+# A floating trixie version: the image is no longer bit-reproducible (see docs/api/README.md).
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --chown=node:node package.json ./
 COPY --chown=node:node server ./server
 RUN rm -rf server/test \

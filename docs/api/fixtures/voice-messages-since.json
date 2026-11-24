@@ -1,0 +1,33 @@
+{
+  "messages": [],
+  "updated": [
+    {
+      "id": "m_9xQ2bK7tLm1aPz",
+      "clientId": "u_tom01",
+      "fromId": "u_tom01",
+      "fromRole": "client",
+      "text": "Voice note · 0:42",
+      "workoutId": null,
+      "at": "2026-11-24T08:14:05.120Z",
+      "readAt": null,
+      "kind": "voice",
+      "reportId": null,
+      "exerciseId": null,
+      "mediaId": null,
+      "mediaUrl": null,
+      "mediaKind": "audio",
+      "updatedAt": "2026-11-24T08:14:31.004Z",
+      "voice": {
+        "mediaId": "md_Vt3kq0Lw8sYb",
+        "url": "/api/media/md_Vt3kq0Lw8sYb",
+        "durationSec": 42,
+        "status": "done",
+        "reason": null,
+        "transcript": "Morning JK. Quick one: my left knee's been sore since Saturday's run, mostly going down stairs. I still did the session but skipped the lunges. Should I swap anything this week?",
+        "provider": "openrouter",
+        "model": "google/gemini-2.5-flash"
+      }
+    }
+  ],
+  "cursor": "2026-11-24T08:14:31.004Z"
+}

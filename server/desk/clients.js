@@ -1,17 +1,26 @@
 /*
- * Clients: the coach's client list (three groups, each row with its habit
- * week) and one client's page. The page opens on the Overview (goal, habit
- * week, latest check-in, letter composer: overview.js and letters.js) with the
- * studio's tabs beside it: Plan (write and publish workouts, assign a
- * programme), Letters (letters, check-ins, forms and autoflows), Sessions,
- * Progress and Health.
+ * Clients (docs/design/desk-v2.md F5, WP2): the clients list (a sortable
+ * table with stage and pinned-segment views, health rings, onboarding
+ * progress and bulk actions) and the Client 360: a hero with the stage menu,
+ * plan, tags, the health ring and its factors, money and state chips and every
+ * registered client action, over the client tabs. The Overview is overview.js;
+ * Timeline and Notes register from f-crm.js. The built-in studio tabs (Plan,
+ * Letters, Sessions, Progress, Health) live below.
+ *
+ * Registry hosts: tabs are registerClientTab entries (the six built-in ones
+ * register here), the hero draws registerClientAction buttons (five, then
+ * More), and the list feeds registerBulkAction items to the table's bulk bar.
  */
 import {
-  COLOR, DAYS, MONTHS, addDays, api, apiBlob, avatar, busy, button, card, chip, clientById, clients, confirmBox, dot,
-  emptyCard, errorLine, eyebrow, field, fill, firstName, fmtRelative, fmtShort, fmtTime, fmtWeekday, h, icon, link, loading, londonParts,
-  mondayOf, parseDay, q, route, screenHeader, segmented, sheet, svgEl, toast, todayLondon, weekDots,
-  planName, plans,
+  COLOR, DAYS, MONTHS, addDays, api, apiBlob, avatar, busy, button, capabilities, card, chip, clientById, clients, confirmBox, dot,
+  emptyCard, errorLine, eyebrow, field, fill, firstName, fmtRelative, fmtShort, fmtTime, fmtWeekday, go, h, icon, link, loading, londonParts,
+  mondayOf, parseDay, q, route, segmented, setHashQuery, sheet, svgEl, switchRow, toast, todayLondon,
+  planName, plans, registerClientAction, registerClientTab, registered, setCrumbs,
 } from './core.js';
+import { dataTable, menu, pageHead, popover, scoreRing, skeleton, slideOver, tagChip, tagPicker, timeline } from './ui.js';
+import {
+  BAND, EXIT, STAGE, allTags, bandOf, changed as crmChanged, crmClients, dropTags, healthRing, openEnd, openPause, resume, stagePill, trendChip, withScorePopover,
+} from './f-crm.js';
 import { overviewTab, statusPills } from './overview.js';
 import { lettersSection } from './letters.js';
 
@@ -32,35 +41,6 @@ const weekdayOf = s => DAYS[parseDay(s).getUTCDay()];
 const longDayOf = iso => { const d = londonParts(iso).day; return `${fmtWeekday(d)} ${fmtShort(d)}`; };
 /** "Aug 2026" */
 const monthYear = s => { const d = parseDay(s); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
-// MARK: - Client text (the iPhone app's ClientText)
-
-const WAITING_KINDS = ['urgent', 'message', 'form', 'checkin'];
-/** Something of theirs is waiting on the coach. */
-const needsYou = c => WAITING_KINDS.includes(c.demand?.kind ?? '');
-const quietOrIdle = c => c.demand?.kind === 'quiet' || c.demand?.kind === 'inactive';
-function flagText(f) {
-  if (f === 'no-workout-yet') return 'no workout yet';
-  if (f === 'checkin-overdue') return 'check-in overdue';
-  const m = /^no-workout-(\d+)d$/.exec(f);
-  return m ? `no workout in ${m[1]} days` : f.replaceAll('-', ' ');
-}
-function planLine(c) {
-  const parts = [planName(c.plan)];
-  if (c.flags?.length) parts.push(flagText(c.flags[0]));
-  else if (c.adherence !== null && c.adherence !== undefined) parts.push(`adherence ${c.adherence}%`);
-  else if (c.checkinDue) parts.push('check-in due');
-  return parts.join(' · ');
-}
-/** Why they're where they are: "Sent you a message · 2 h ago", else the usual plan line. */
-function reasonOf(c) {
-  const d = c.demand;
-  if (!d?.reason) return planLine(c);
-  if (d.at && WAITING_KINDS.includes(d.kind)) return `${d.reason} · ${fmtRelative(d.at)}`;
-  return d.reason;
-}
-/** The tab that answers what they need. */
-
-
 // MARK: - Small pieces
 
 const iconTile = node => h('span', { class: 'cl-tile' }, node);
@@ -132,68 +112,163 @@ const weekNav = (monday, step, { canBack = true } = {}) => h('div', { class: 'cl
 
 const checkCircle = on => h('span', { class: 'cl-check' + (on ? ' on' : '') }, on ? icon('check', 18) : null);
 
-// MARK: - Clients list
+// MARK: - Clients list (F5): stage and segment views over one sortable table
+
+const STAGE_ORDER = ['onboarding', 'active', 'atRisk', 'paused', 'churned', 'alumni'];
+const COACHING = new Set(['onboarding', 'active', 'atRisk']);
 
 route('/clients', async (el, _params, view) => {
   await plans().catch(() => null); // the coach's plan names
-  const search = h('input', { type: 'search', placeholder: 'Search clients', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Search clients' });
-  const listBox = h('div');
+  setCrumbs([{ label: 'Clients', path: '/clients' }]);
+  const sub = h('span', null, ' ');
+  const kpis = h('div', { class: 'crm-kpis' }, [0, 1, 2, 3].map(() => h('div', { class: 'crm-kpi' }, skeleton('lines', { rows: 2 }))));
+  const viewsBar = h('div', { class: 'crm-views', role: 'toolbar', 'aria-label': 'Views' });
+  const note = h('div');
+  const tableBox = h('div', { class: 'crm-table' }, skeleton('table', { rows: 8 }));
   el.append(
-    screenHeader(null, 'Clients'),
-    h('label', { class: 'cl-search' }, icon('search', 20), search),
-    listBox);
+    pageHead({ eyebrow: 'Clients', title: 'Clients', sub, actions: [
+      link('/segments', { class: 'btn' }, icon('filter_alt', 18), 'Segments'),
+      link('/retention', { class: 'btn' }, icon('monitor_heart', 18), 'Retention'),
+    ] }),
+    kpis, viewsBar, note, tableBox);
 
-  const row = (c, withReason) => {
-    const line = withReason ? reasonOf(c) : planName(c.plan);
-    return link(`/clients/${enc(c.id)}`, { class: 'cl-row' },
-      avatar(c.initials || c.name, 36),
-      h('div', { class: 'grow' },
-        h('div', { class: 'row gap4 cl-row-name' }, h('span', { class: 'strong clamp1' }, c.name),
-          c.unread > 0 ? h('span', { class: 'muted', title: `${c.unread} unread` }, icon('unread', 16, { label: `${c.unread} unread` })) : null),
-        h('div', { class: 'small muted clamp2', title: line }, withReason ? `${planName(c.plan)} · ${line}` : line)),
-      c.habitWeek?.length ? weekDots(c.habitWeek) : null);
-  };
-  const group = (title, list, withReason) => (list.length ? h('section', { class: 'cl-group' },
-    title ? h('div', { class: 'cl-group-head' }, h('h2', null, title), h('span', { class: 'small muted t-num' }, String(list.length))) : null,
-    card({ class: 'flush' + (title ? '' : ' cl-rows') }, list.map(c => row(c, withReason)))) : null);
+  let all, onboarding = new Map(), segments = [];
+  try {
+    const [list, onb, segs] = await Promise.all([
+      crmClients(true),
+      api('GET', '/api/onboarding').then(r => r.clients).catch(() => []),
+      api('GET', '/api/segments').then(r => r.segments).catch(() => []),
+    ]);
+    all = list;
+    onboarding = new Map(onb.map(o => [o.client.id, o]));
+    segments = segs;
+  } catch (err) {
+    if (view.fresh()) fill(tableBox, errorLine(err), button('Try again', () => go('/clients', { replace: true }), { small: true }));
+    return;
+  }
+  if (!view.fresh()) return;
+  clients(true).catch(() => null); // keep the shell's client cache (palette, panels) in step
 
-  let all = null;
-  const draw = () => {
-    if (!all) return;
-    const query = search.value.trim().toLowerCase();
-    const shown = all.filter(c => !query || c.name.toLowerCase().includes(query));
-    if (!shown.length) {
-      fill(listBox, emptyCard('people', all.length ? 'No one by that name.' : 'No clients yet.', all.length ? null : 'Clients appear here when they sign up.'));
-    } else if (!query) {
-      // The server sends them most-in-need first; three groups, side by side on a wide screen.
-      fill(listBox, h('div', { class: 'cl-groups' },
-        group('Needs you', shown.filter(needsYou), true),
-        group('Check in with', shown.filter(quietOrIdle), true),
-        group('On track', shown.filter(c => !needsYou(c) && !quietOrIdle(c)), false)));
-    } else {
-      fill(listBox, group(null, shown, true));
-    }
+  // KPIs
+  const coaching = all.filter(c => COACHING.has(c.stage));
+  const scored = coaching.filter(c => c.health !== null && c.health !== undefined);
+  const avg = scored.length ? Math.round(scored.reduce((n, c) => n + c.health, 0) / scored.length) : null;
+  const atRisk = all.filter(c => c.stage === 'atRisk').length;
+  const stuck = [...onboarding.values()].filter(o => o.stalled).length;
+  fill(sub, `${all.length} ${all.length === 1 ? 'person' : 'people'} · ${coaching.length} coaching now${all.some(c => c.stage === 'paused') ? ` · ${all.filter(c => c.stage === 'paused').length} paused` : ''}`);
+  const kpi = (label, value, detail, { tone = null, ring = null, path = null } = {}) => {
+    const inner = [h('div', { class: 'crm-kpi-k' }, label), h('div', { class: 'crm-kpi-v' }, ring, h('span', { class: `t-num crm-kpi-n${tone ? ` tone-${tone}` : ''}` }, value)), h('div', { class: 'tiny muted' }, detail)];
+    return path ? link(path, { class: 'crm-kpi' }, inner) : h('div', { class: 'crm-kpi' }, inner);
   };
-  search.addEventListener('input', draw);
-  await loadInto(listBox, view, () => clients(true), list => { all = list; draw(); });
+  fill(kpis,
+    kpi('Coaching now', String(coaching.length), `${all.filter(c => c.stage === 'active').length} active · ${all.filter(c => c.stage === 'onboarding').length} onboarding`),
+    kpi('Average health', avg === null ? '–' : String(avg), avg === null ? 'No scores yet' : BAND[bandOf(avg)].word, { ring: avg === null ? null : healthDot(avg) }),
+    kpi('At risk', String(atRisk), atRisk ? 'Open the radar' : 'Nobody slipping', { tone: atRisk ? 'urgent' : null, path: '/retention' }),
+    kpi('Onboarding', String(onboarding.size), stuck ? `${stuck} stuck` : onboarding.size ? 'All moving' : 'Everyone onboarded', { tone: stuck ? 'attention' : null, path: '/clients?stage=onboarding' }));
+
+  // Views: All, by stage, by pinned segment.
+  const q0 = view.query;
+  let current = q0.get('segment') ? { type: 'segment', id: q0.get('segment') } : q0.get('stage') && STAGE_ORDER.includes(q0.get('stage')) ? { type: 'stage', id: q0.get('stage') } : { type: 'all' };
+  const pinned = segments.filter(s => s.pinned || s.id === current.id);
+  const counts = Object.fromEntries(STAGE_ORDER.map(s => [s, all.filter(c => c.stage === s).length]));
+  const drawViews = () => {
+    const chipBtn = (on, label, n, onclick, extra = null) => h('button', { type: 'button', class: 'crm-view' + (on ? ' on' : ''), 'aria-pressed': String(on), onclick }, extra, label, n === null ? null : h('span', { class: 'crm-view-n t-num' }, String(n)));
+    fill(viewsBar,
+      chipBtn(current.type === 'all', 'All', all.length, () => pick({ type: 'all' })),
+      STAGE_ORDER.filter(s => counts[s] || current.id === s).map(s => chipBtn(current.type === 'stage' && current.id === s, STAGE[s].word, counts[s], () => pick({ type: 'stage', id: s }), h('span', { class: `dot bg-${STAGE[s].tone}`, 'aria-hidden': 'true' }))),
+      pinned.length ? h('span', { class: 'crm-views-sep', 'aria-hidden': 'true' }) : null,
+      pinned.map(s => chipBtn(current.type === 'segment' && current.id === s.id, s.name, s.count, () => pick({ type: 'segment', id: s.id }), icon('star', 14, { filled: true }))),
+      link('/segments', { class: 'crm-view ghost' }, icon('add', 14), 'Segment'));
+  };
+  const pick = async v => {
+    current = v;
+    setHashQuery({ stage: v.type === 'stage' ? v.id : null, segment: v.type === 'segment' ? v.id : null });
+    drawViews();
+    await applyView();
+  };
+
+  const bulk = registered.bulkActions('clients');
+  const hasBalance = all.some(c => c.balancePence !== undefined);
+  const columns = [
+    { key: 'name', label: 'Client', sort: true, render: c => h('span', { class: 'crm-cell-who' }, avatar(c.initials || c.name, 34),
+      h('span', { class: 'crm-cell-name' }, h('span', { class: 'strong clamp1' }, c.name, c.unread ? h('span', { class: 'crm-unread', title: `${c.unread} unread`, 'aria-label': `${c.unread} unread` }) : null),
+        h('span', { class: 'tiny muted clamp1' }, c.since ? `Since ${MONTHS[Number(c.since.slice(5, 7)) - 1]} ${c.since.slice(0, 4)}` : ''))) },
+    { key: 'stage', label: 'Stage', sort: c => STAGE_ORDER.indexOf(c.stage), render: c => stagePill(c.stage, { manual: c.manual, small: true }) },
+    { key: 'health', label: 'Health', sort: c => c.health ?? 1000, render: c => h('span', { class: 'crm-cell-health' }, healthRingSmall(c.health, c.band), trendChip(c.trend)) },
+    { key: 'onboarding', label: 'Onboarding', sort: c => onboarding.get(c.id)?.pct ?? 101, render: c => {
+      const o = onboarding.get(c.id);
+      if (!o) return null;
+      return h('span', { class: 'crm-onb' + (o.stalled ? ' stuck' : '') }, h('span', { class: 'crm-onb-bar' }, h('span', { style: { '--pct': `${o.pct}%` } })), h('span', { class: 't-num tiny' }, `${o.done}/${o.total}`));
+    } },
+    { key: 'planName', label: 'Plan', sort: c => ['none', 'foundation', 'performance', 'elite'].indexOf(c.plan) },
+    { key: 'lastActiveAt', label: 'Last active', sort: c => c.lastActiveAt ?? '', render: c => h('span', { class: 'small' + (c.daysQuiet >= 7 ? ' tone-attention' : ' muted') }, c.lastActiveAt ? fmtRelative(c.lastActiveAt) : '—') },
+    { key: 'nextSessionAt', label: 'Next session', sort: c => c.nextSessionAt ?? '9', render: c => h('span', { class: 'small' }, c.nextSessionAt ? `${DAYS[parseDay(londonParts(c.nextSessionAt).day).getUTCDay()]} ${fmtShort(londonParts(c.nextSessionAt).day)} · ${fmtTime(c.nextSessionAt)}` : h('span', { class: 'muted' }, '—')) },
+    hasBalance ? { key: 'balancePence', label: 'Balance', align: 'right', sort: c => c.balancePence ?? 0, render: c => h('span', { class: 't-num small' + (c.balancePence > 0 ? ' tone-attention' : ' muted') }, c.balancePence ? `£${(c.balancePence / 100).toFixed(2)}` : '—') } : null,
+    { key: 'tags', label: 'Tags', render: c => h('span', { class: 'crm-cell-tags', title: c.tags.map(t => t.name).join(', ') || null },
+      c.tags.slice(0, 1).map(t => tagChip({ ...t, name: t.name.length > 14 ? `${t.name.slice(0, 13)}…` : t.name })), c.tags.length > 1 ? h('span', { class: 'tiny muted' }, `+${c.tags.length - 1}`) : null) },
+  ].filter(Boolean);
+  const table = dataTable({
+    columns, rows: [], selectable: bulk.length > 0, label: 'Clients', initialSort: { key: 'health', dir: 1 },
+    bulkActions: bulk.map(a => ({ label: a.label, icon: a.icon, run: rows => a.run(rows.map(r => r.id)) })),
+    onRow: c => go(`/clients/${enc(c.id)}`),
+    empty: 'Nobody in this view.',
+  });
+  table.el.classList.add('crm-dt');
+  fill(tableBox, table.el);
+
+  async function applyView() {
+    fill(note);
+    if (current.type === 'all') return table.setRows(all.filter(c => c.stage !== 'churned' && c.stage !== 'alumni').concat(all.filter(c => c.stage === 'churned' || c.stage === 'alumni')));
+    if (current.type === 'stage') return table.setRows(all.filter(c => c.stage === current.id));
+    try {
+      const r = await api('POST', '/api/segments/preview', { audience: { segmentId: current.id } });
+      const ids = new Set(r.clients.map(c => c.id));
+      table.setRows(all.filter(c => ids.has(c.id)));
+      if (r.count > r.clients.length) fill(note, h('p', { class: 'small muted' }, `Showing the first ${r.clients.length} of ${r.count}.`));
+    } catch (err) { fill(note, errorLine(err)); table.setRows([]); }
+  }
+  drawViews();
+  await applyView();
 });
 
-// MARK: - One client
+/** A small ring for table rows (no band word). */
+function healthRingSmall(health, band) {
+  if (health === null || health === undefined) return h('span', { class: 'muted small' }, '—');
+  const r = scoreRing(health, { size: 32, label: 'Health', band: { word: BAND[band]?.word ?? '', tone: BAND[band]?.tone ?? 'data' } });
+  r.classList.add('crm-ring-s');
+  return r;
+}
+const healthDot = v => healthRingSmall(v, bandOf(v));
 
-const TABS = [['overview', 'Overview'], ['plan', 'Plan'], ['letters', 'Letters'], ['sessions', 'Sessions'], ['progress', 'Progress'], ['health', 'Health']];
+// MARK: - One client (F5: Client 360)
+
+// The six existing tabs; packages add theirs with registerClientTab({key, label, order, render}).
+// render(box, {client, detail, view}) also gets {ctx, anchor} here, which the built-in tabs use.
+for (const [key, label, order, draw] of [
+  ['overview', 'Overview', 10, (box, { ctx, openLetter }) => overviewTab(box, ctx, { openLetter })],
+  ['plan', 'Plan', 30, (box, { ctx, anchor }) => planTab(box, ctx, { anchor })],
+  ['letters', 'Letters', 40, (box, { ctx, anchor }) => lettersTab(box, ctx, { anchor })],
+  ['sessions', 'Sessions', 50, (box, { ctx, anchor }) => sessionsTab(box, ctx, { anchor })],
+  ['progress', 'Progress', 60, (box, { ctx, anchor }) => progressTab(box, ctx, { anchor })],
+  ['health', 'Health', 70, (box, { ctx, anchor }) => healthTab(box, ctx, { anchor })],
+]) registerClientTab({ key, label, order, render: draw }, { fallback: true });
 /** Old and deep-link names: Feedback became Letters, Habits moved into the Overview. */
 const ALIASES = { feedback: 'letters', habits: 'overview', letter: 'overview', checkins: 'letters', forms: 'letters', autoflows: 'letters' };
 /** Sections of the Letters tab other screens may link to: #/clients/<id>/forms scrolls there. */
 const LETTERS_SECTIONS = ['checkins', 'forms', 'autoflows'];
 const details = new Map(); // client id → last GET /api/coach/clients/:id, so switching tabs doesn't flash
 
+// Book is a client action that lives here, beside the booking sheet it opens.
+registerClientAction({ id: 'book', label: 'Book', icon: 'event_available', order: 20, run: c => bookSessionSheet({ id: c.id, name: c.name, first: () => firstName(c.name) }).then(done => { if (done) crmChanged(c.id); }) });
+
 route('/clients/:id/:tab?', async (el, params, view) => {
   plans().catch(() => null);
   const id = params.id;
   const anchor = LETTERS_SECTIONS.includes(params.tab) ? params.tab : null;
-  const tab = TABS.some(([k]) => k === params.tab) ? params.tab : ALIASES[params.tab] ?? 'overview';
+  const tabList = registered.clientTabs();
+  const tab = tabList.some(t => t.key === params.tab) ? params.tab : ALIASES[params.tab] ?? 'overview';
   const summary = clientById(id);
-  const head = h('div');
+  const head = h('div', { class: 'crm-hero-wrap' });
   const body = h('div', { class: 'cl-tab' });
   const ctx = { id, view, name: summary?.name || details.get(id)?.client.name || 'Client', planName: planName(summary?.plan) };
   ctx.first = () => firstName(ctx.name);
@@ -201,20 +276,17 @@ route('/clients/:id/:tab?', async (el, params, view) => {
   ctx.assignProgram = () => assignProgramSheet({ client: { id, name: ctx.name } });
   ctx.sendForm = () => sendFormSheet(ctx);
 
+  const extra = { crm: null, life: null, facts: null, outreach: null, consent: null };
   const drawHead = (detail, error) => {
     const c = detail?.client;
     if (c) { ctx.name = c.name; ctx.planName = planName(c.plan); }
-    const sub = c ? [c.name, planName(c.plan), c.since ? `since ${monthYear(c.since)}` : null].filter(Boolean).join(' · ') : ' ';
+    const who = { id, name: ctx.name, ...(summary || {}), ...(c || {}), ...(extra.crm || {}) };
+    setCrumbs([{ label: 'Clients', path: '/clients' }, { label: ctx.name, path: `/clients/${enc(id)}` }, ...(tab === 'overview' ? [] : [{ label: tabList.find(t => t.key === tab)?.label || tab }])]);
     fill(head,
-      h('div', { class: 'cl-crumb' }, link('/clients', { class: 'small muted' }, icon('back', 16), 'Clients')),
-      h('div', { class: 'cl-head' },
-        avatar(c?.initials || ctx.name, 48),
-        h('div', { class: 'grow' }, h('h1', null, ctx.first()), h('div', { class: 'small muted' }, sub)),
-        detail ? h('div', { class: 'row gap4' }, statusPills(detail)) : null,
-        link(`/messages/${enc(id)}`, { class: 'btn', title: `Message ${ctx.first()}` }, icon('reply', 18), 'Message')),
+      clientHero({ id, who, detail, extra, ctx, reload: reloadExtra }),
       error ? errorLine(error) : null,
-      h('nav', { class: 'tabs', 'aria-label': 'Client' }, TABS.map(([k, label]) =>
-        link(`/clients/${enc(id)}/${k}`, { class: 'tab' + (k === tab ? ' sel' : ''), 'aria-current': k === tab ? 'page' : null }, label))));
+      h('nav', { class: 'ui-tabs crm-tabs', 'aria-label': 'Client' }, tabList.map(t =>
+        link(`/clients/${enc(id)}/${t.key}`, { class: 'ui-tab' + (t.key === tab ? ' sel' : ''), 'aria-current': t.key === tab ? 'page' : null }, t.label))));
   };
   drawHead(details.get(id) || null);
   el.append(head, body);
@@ -232,11 +304,139 @@ route('/clients/:id/:tab?', async (el, params, view) => {
   };
   ctx.detail = () => pending;
   ctx.reloadDetail();
+  // The CRM side of the header (stage, score, tags, money, consent, outreach), each part optional.
+  async function reloadExtra() {
+    const caps = await capabilities();
+    const has = name => caps.features.includes(name);
+    const [list, life, facts, outreach, consent] = await Promise.all([
+      crmClients(true).catch(() => []),
+      api('GET', `/api/coach/clients/${enc(id)}/lifecycle`).catch(() => null),
+      api('GET', `/api/facts/clients/${enc(id)}`).then(r => r.facts).catch(() => null),
+      api('GET', `/api/coach/clients/${enc(id)}/outreach`).then(r => r.outreach).catch(() => null),
+      has('voice') ? api('GET', `/api/coach/clients/${enc(id)}/ai-consent`).catch(() => null) : null,
+    ]);
+    Object.assign(extra, { crm: list.find(x => x.id === id) ?? null, life, facts, outreach, consent });
+    if (view.fresh()) drawHead(details.get(id) || null);
+  }
+  reloadExtra();
+  const onChanged = e => { if ((!e.detail?.clientId || e.detail.clientId === id) && view.fresh()) { reloadExtra(); if (tab === 'overview') ctx.reloadDetail(); } };
+  window.addEventListener('crm:changed', onChanged);
+  view.onLeave(() => window.removeEventListener('crm:changed', onChanged));
 
-  if (tab === 'overview') { await overviewTab(body, ctx, { openLetter: params.tab === 'letter' }); return; }
-  const draw = { plan: planTab, letters: lettersTab, health: healthTab, sessions: sessionsTab, progress: progressTab }[tab];
-  await draw(body, ctx, { anchor });
+  const entry = tabList.find(t => t.key === tab);
+  const client = { id, name: ctx.name, ...(summary || {}) };
+  // Built-in tabs load their own data beside the header; a package's tab gets the detail once it is in.
+  const builtIn = ['overview', 'plan', 'letters', 'sessions', 'progress', 'health'].includes(tab);
+  const detail = details.get(id) || (builtIn ? null : await ctx.detail()?.catch(() => null));
+  if (!view.fresh()) return;
+  await entry.render(body, { client: { ...client, ...(detail?.client || {}) }, detail, view, ctx, anchor, openLetter: params.tab === 'letter' });
 });
+
+const MAIN_ACTIONS = 5; // shown as buttons; the rest go under More
+
+/** The Client 360 hero: who, stage, plan, tags, the health ring, money and state chips, then the actions. */
+function clientHero({ id, who, detail, extra, ctx, reload }) {
+  const crm = extra.crm, life = extra.life, facts = extra.facts || {};
+  const stage = life?.stage ?? crm?.stage ?? null;
+  const first = firstName(who.name);
+  // Stage pill: a menu to set, clear or end.
+  const stageBtn = stage ? h('button', { type: 'button', class: 'crm-stage-btn', 'aria-haspopup': 'menu', 'aria-label': `Stage: ${STAGE[stage].word}. Change`,
+    onclick: e => stageMenu(e.currentTarget, who, life, reload) }, stagePill(stage, { manual: life?.manual }), icon('expand_more', 16)) : null;
+  const tagsBox = h('div', { class: 'crm-hero-tags' });
+  if (crm) {
+    allTags().then(all => fill(tagsBox, tagPicker({ selected: crm.tags.map(t => t.id), all, allowCreate: true, onChange: async ids => {
+      try { await api('PUT', `/api/coach/clients/${enc(id)}/tags`, { tagIds: ids }); dropTags(); crmChanged(id); } catch (err) { toast(err.message, { error: true }); }
+    } }))).catch(() => fill(tagsBox, crm.tags.map(t => tagChip(t))));
+  }
+  // Ring with its factor popover.
+  const ringBox = crm && crm.health !== null ? withScorePopover(h('div', { class: 'crm-hero-ring', role: 'button', 'aria-label': `Health ${crm.health}, ${BAND[crm.band]?.word}. Show why` },
+    healthRing(crm.health, crm.band, { size: 84 }), trendChip(crm.trend)), () => api('GET', `/api/coach/clients/${enc(id)}/score`)) : null;
+  // Stat chips from facts, when those features are here.
+  const money = p => `£${(p / 100).toLocaleString('en-GB', { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+  const stat = (label, value, tone = null) => h('div', { class: 'crm-stat' }, h('div', { class: 'crm-stat-k' }, label), h('div', { class: `crm-stat-v t-num${tone ? ` tone-${tone}` : ''}` }, value));
+  const nb = detail?.nextBooking;
+  const stats = [
+    'billing.balance' in facts ? stat('Balance', facts['billing.balance'] ? money(facts['billing.balance']) : '£0', facts['billing.balance'] > 0 ? 'attention' : null) : null,
+    'billing.credits' in facts && facts['billing.credits'] !== null ? stat('Credits left', String(facts['billing.credits'])) : null,
+    'billing.ltv' in facts && facts['billing.ltv'] !== null ? stat('Lifetime value', money(facts['billing.ltv'])) : null,
+    stat('Next session', nb ? `${fmtShort(londonParts(nb.start).day)} · ${fmtTime(nb.start)}` : crm?.nextSessionAt ? `${fmtShort(londonParts(crm.nextSessionAt).day)} · ${fmtTime(crm.nextSessionAt)}` : 'None booked'),
+    facts['campaign.name'] ? stat('Campaign', String(facts['campaign.name'])) : null,
+    stat('Last active', crm?.lastActiveAt ? fmtRelative(crm.lastActiveAt) : '—', crm?.daysQuiet >= 7 ? 'attention' : null),
+    stat('With you since', who.since ? `${MONTHS[Number(String(who.since).slice(5, 7)) - 1]} ${String(who.since).slice(0, 4)}` : '—'),
+  ];
+  // State chips: AI consent (WP6), outreach, pause, birthday.
+  const o = extra.outreach;
+  const outreachChip = o ? h('button', { type: 'button', class: 'crm-state' + (o.paused || o.noBroadcasts ? ' warn' : ''), 'aria-haspopup': 'dialog',
+    onclick: e => outreachPopover(e.currentTarget, id, o, reload) }, icon(o.paused ? 'block' : 'campaign', 14), o.paused ? 'Outreach paused' : o.noBroadcasts ? 'No broadcasts' : 'Outreach on') : null;
+  const consent = extra.consent;
+  const consentChip = consent ? h('span', { class: 'crm-state' + (consent.voice === 'on' ? ' ok' : '') }, icon('graphic_eq', 14), `Voice AI: ${consent.voice === 'on' ? 'allowed' : consent.voice === 'off' ? 'declined' : 'not asked'}`) : null;
+  const pauseChip = life?.stage === 'paused' && life.pausedUntil ? h('span', { class: 'crm-state warn' }, icon('pause_circle', 14), `Back ${fmtShort(life.pausedUntil)}`) : null;
+  const endedChip = life?.endedAt && ['churned', 'alumni'].includes(life.stage) ? h('span', { class: 'crm-state' }, icon('logout', 14), `Ended ${fmtShort(londonParts(life.endedAt).day)} · ${EXIT[life.exitReason] ?? ''}`) : null;
+  const bday = life ? h('button', { type: 'button', class: 'crm-state', onclick: e => birthdayPopover(e.currentTarget, id, life.birthday, reload) }, icon('cake', 14),
+    life.birthday ? `Birthday ${Number(life.birthday.slice(3))} ${MONTHS[Number(life.birthday.slice(0, 2)) - 1]}` : 'Add birthday') : null;
+  // Actions: the first few as buttons, the rest under More.
+  const acts = registered.clientActions();
+  const shown = acts.slice(0, MAIN_ACTIONS), rest = acts.slice(MAIN_ACTIONS);
+  const actBtn = (a, i) => h('button', { type: 'button', class: 'btn' + (i === 0 ? ' primary' : ''), 'data-action': a.id, onclick: () => a.run(who) }, a.icon ? icon(a.icon, 18) : null, a.label);
+  return h('section', { class: 'crm-hero' + (stage ? ` stage-${stage}` : '') },
+    h('div', { class: 'crm-hero-top' },
+      h('div', { class: 'crm-hero-id' },
+        avatar(who.initials || who.name, 72),
+        h('div', { class: 'crm-hero-text' },
+          h('div', { class: 'ui-eyebrow' }, link('/clients', null, 'Clients')),
+          h('h1', { class: 'crm-hero-name' }, who.name || 'Client'),
+          h('div', { class: 'crm-hero-pills' }, stageBtn, h('span', { class: 'pill crm-plan' }, icon('workspace_premium', 14), planName(who.plan)), detail ? statusPills(detail) : null))),
+      ringBox),
+    h('div', { class: 'crm-hero-tagrow' }, tagsBox),
+    h('div', { class: 'crm-stats' }, stats),
+    h('div', { class: 'crm-hero-states' }, consentChip, outreachChip, pauseChip, endedChip, bday),
+    h('div', { class: 'crm-hero-actions' }, shown.map(actBtn),
+      rest.length ? h('button', { type: 'button', class: 'btn', 'aria-haspopup': 'menu', onclick: e => menu(e.currentTarget, rest.map(a => ({ label: a.label, icon: a.icon, onclick: () => a.run(who) })), { label: `More for ${first}` }) }, icon('more_horiz', 18), 'More') : null));
+}
+
+/** The stage pill's menu: set a stage, clear the override, pause or resume, end, history. */
+function stageMenu(anchor, who, life, reload) {
+  const set = async stage => {
+    try { await api('PUT', `/api/coach/clients/${enc(who.id)}/lifecycle`, { stage }); toast(`${firstName(who.name)} is now ${STAGE[stage].word}.`); crmChanged(who.id); } catch (err) { toast(err.message, { error: true }); }
+  };
+  const ended = ['churned', 'alumni'].includes(life?.stage);
+  menu(anchor, [
+    ...(ended ? [{ label: 'Restart coaching', icon: 'play_arrow', onclick: () => set('active') }] : ['active', 'onboarding', 'atRisk'].filter(s => s !== life?.stage).map(s => ({ label: `Set ${STAGE[s].word}`, icon: STAGE[s].icon, onclick: () => set(s) }))),
+    life?.stage !== 'alumni' ? { label: 'Set Alumni', icon: 'workspace_premium', onclick: () => set('alumni') } : null,
+    life?.manual ? { label: 'Clear my override', detail: 'Let the rules decide', icon: 'undo', onclick: async () => { await api('PUT', `/api/coach/clients/${enc(who.id)}/lifecycle`, { manual: false }); crmChanged(who.id); } } : null,
+    'sep',
+    life?.stage === 'paused' ? { label: 'Resume now', icon: 'play_arrow', onclick: () => resume(who) } : !ended ? { label: 'Pause…', icon: 'pause_circle', onclick: () => openPause(who) } : null,
+    !ended ? { label: 'End coaching…', icon: 'logout', danger: true, onclick: () => openEnd(who) } : null,
+    { label: 'History', icon: 'timeline', onclick: () => slideOver(`${firstName(who.name)} · lifecycle`, body => {
+      body.append(timeline((life?.history ?? []).map(x => ({ at: x.at, icon: STAGE[x.stage]?.icon, tone: STAGE[x.stage]?.tone === 'accent' ? 'ok' : STAGE[x.stage]?.tone, title: STAGE[x.stage]?.word ?? x.stage, detail: x.reason }))));
+    }) },
+  ], { label: 'Stage' });
+}
+
+function outreachPopover(anchor, id, o, reload) {
+  popover(anchor, box => {
+    const put = async patch => {
+      try { await api('PUT', `/api/coach/clients/${enc(id)}/outreach`, patch); reload(); } catch (err) { toast(err.message, { error: true }); }
+    };
+    box.append(h('div', { class: 'ui-eyebrow' }, 'Outreach'),
+      switchRow('Pause automated messages', o.paused, v => put({ paused: v }), { detail: 'Automations, campaigns and nudges skip them. You can still message.' }),
+      switchRow('No broadcasts', o.noBroadcasts, v => put({ noBroadcasts: v }), { detail: 'Left out of segment broadcasts.' }),
+      h('p', { class: 'tiny muted m0' }, `${o.sentToday} of ${o.cap} automated messages sent today.`));
+  }, { className: 'crm-pop', label: 'Outreach' });
+}
+
+function birthdayPopover(anchor, id, current, reload) {
+  popover(anchor, (box, close) => {
+    const month = h('select', { 'aria-label': 'Month' }, MONTHS.map((m, i) => h('option', { value: String(i + 1).padStart(2, '0'), selected: current?.slice(0, 2) === String(i + 1).padStart(2, '0') }, m)));
+    const day = h('input', { type: 'number', min: '1', max: '31', value: current ? String(Number(current.slice(3))) : '', 'aria-label': 'Day', class: 'crm-bday-day' });
+    const save = async value => {
+      try { await api('PUT', `/api/coach/clients/${enc(id)}/lifecycle`, { birthday: value }); close(); reload(); } catch (err) { toast(err.message, { error: true }); }
+    };
+    box.append(h('div', { class: 'ui-eyebrow' }, 'Birthday (day and month only)'), h('div', { class: 'row gap4' }, day, month),
+      h('div', { class: 'row end gap4 mt-s' }, current ? button('Remove', () => save(null), { small: true, kind: 'text' }) : null,
+        button('Save', () => { const d = Number(day.value); if (!(d >= 1 && d <= 31)) { toast('Pick a day.', { error: true }); return; } save(`${month.value}-${String(d).padStart(2, '0')}`); }, { small: true, kind: 'primary' })));
+  }, { className: 'crm-pop', label: 'Birthday' });
+}
 
 /** Send one of the coach's forms to this client. */
 function sendFormSheet(ctx) {

@@ -1,6 +1,7 @@
 import { createPublicKey, timingSafeEqual, verify } from 'node:crypto';
 import { startJoinFlows } from './autoflows.mjs';
 import { DEFAULT_HABITS, DEFAULT_TARGETS, WELCOME_MESSAGE } from './catalogue.mjs';
+import { emit } from './events.mjs';
 import { fail } from './http.mjs';
 import { hash, newId, nowIso, secret, tx } from './store.mjs';
 
@@ -121,7 +122,11 @@ export function upsertIdentityUser(db, config, provider, claims, fullName, { cre
     const coachId = role === 'client' ? primaryCoachId(db, config) : null;
     db.prepare(`INSERT INTO users (id, ${column}, email, name, role, coach_id, created_at) VALUES (?,?,?,?,?,?,?)`)
       .run(id, claims.sub, email, name, role, coachId, nowIso());
-    if (role === 'client') setUpClient(db, id, coachId);
+    if (role === 'client') {
+      setUpClient(db, id, coachId);
+      // Lower-case email, used only to match a lead (F6).
+      emit(db, 'client.joined', { coachId, clientId: id, summary: 'Joined', email });
+    }
     return db.prepare('SELECT * FROM users WHERE id=?').get(id);
   });
   // The coach's onboarding autoflows start the moment a client joins.
