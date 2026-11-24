@@ -1,0 +1,27 @@
+{
+  "id": "m_Lk2Rx8VqA1cE",
+  "clientId": "u_tom01",
+  "fromId": "u_coach01",
+  "fromRole": "coach",
+  "text": "Plan for this week",
+  "workoutId": null,
+  "at": "2026-11-24T09:40:00.000Z",
+  "readAt": "2026-11-24T10:02:11.000Z",
+  "kind": "voice",
+  "reportId": null,
+  "exerciseId": null,
+  "mediaId": null,
+  "mediaUrl": null,
+  "mediaKind": "audio",
+  "updatedAt": "2026-11-24T09:40:20.000Z",
+  "voice": {
+    "mediaId": "md_Cq81nWm2Lp0x",
+    "url": "/api/media/md_Cq81nWm2Lp0x",
+    "durationSec": 27,
+    "status": "done",
+    "reason": null,
+    "transcript": "Tom, swap the lunges for step-ups to a low box this week and keep the runs flat. Tell me how the stairs feel on Thursday.",
+    "provider": "stub",
+    "model": null
+  }
+}

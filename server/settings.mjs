@@ -1,6 +1,7 @@
 import { clientFor, requireCoach } from './access.mjs';
 import { clock, fail, num, oneOf, str } from './http.mjs';
 import { planOf } from './plans.mjs';
+import { hooks } from './registry.mjs';
 import { nowIso } from './store.mjs';
 
 /**
@@ -17,7 +18,7 @@ import { nowIso } from './store.mjs';
  */
 
 export const PLAN_FEATURES = ['programme', 'messaging', 'habits', 'progress', 'checkin', 'sessions', 'nutrition', 'priority', 'guides'];
-export const COACH_TOGGLES = ['formChecks', 'mealPhotos', 'challenges'];
+export const COACH_TOGGLES = ['formChecks', 'mealPhotos', 'challenges', 'voiceNotes'];
 const RHYTHMS = ['weekly', 'fortnightly', 'none'];
 
 export const COACH_DEFAULTS = {
@@ -25,6 +26,8 @@ export const COACH_DEFAULTS = {
   formChecks: false,
   mealPhotos: false,
   challenges: false,
+  // Clients may send voice notes (F19); coaches always can.
+  voiceNotes: true,
   replyExpectation: { standard: 'JK replies most evenings', priority: 'Same-day replies' },
   defaultMeetingUrl: null,
   avatarMediaId: null,
@@ -61,7 +64,14 @@ export function featuresOf(db, user) {
   const planFeatures = user.role === 'coach' ? PLAN_FEATURES : planOf(db, user).features;
   const out = Object.fromEntries(PLAN_FEATURES.map(f => [f, planFeatures.includes(f)]));
   for (const t of COACH_TOGGLES) out[t] = !!settings[t];
+  if (user.role === 'coach') out.voiceNotes = true;
   out.hasMacroTargets = user.role === 'client' && !!db.prepare('SELECT 1 FROM nutrition_targets WHERE client_id=?').get(user.id);
+  // Feature modules add keys (voice: voiceMaxSec, voiceTranscription); they never replace the core ones.
+  for (const [f, fn] of hooks('meFeatures')) {
+    try {
+      for (const [k, v] of Object.entries(fn(db, user) ?? {})) if (!(k in out)) out[k] = v;
+    } catch (e) { console.error(`meFeatures of ${f.name} failed`, e); }
+  }
   return out;
 }
 

@@ -4,26 +4,76 @@ import { fail, instant, oneOf, str } from './http.mjs';
 import { attachableMedia } from './media.mjs';
 import { inWindow, nextClock, quietWindow, windowEnd } from './notifications.mjs';
 import { notify } from './push.mjs';
+import { hooks } from './registry.mjs';
 import { featuresOf } from './settings.mjs';
 import { afterCommit, coachPref, newId, nowIso, tx } from './store.mjs';
 import { addDays, londonDay, londonToUtc } from './time.mjs';
 
 /**
  * kind: text (a normal message), letter (the note a delivered letter drops in the thread), answer (a client's answer
- * to a letter's question), formCheck (a video of a lift, with exerciseId), mealPhoto (a photo of a meal).
+ * to a letter's question), formCheck (a video of a lift, with exerciseId), mealPhoto (a photo of a meal), voice (a
+ * voice note, F19).
+ *
+ * `messageOut(m, {coachView = false, media, extra})` is the CLIENT view by default. A caller passes coachView: true
+ * only after checking that the signed-in user is a coach; then extras from hooks('messageExtras') may carry
+ * coach-only fields (a voice note's analysis). Voice messages never carry a top-level mediaId or mediaUrl (builds
+ * in the field would render it as an image): the audio lives in `voice`. Use messagesOut() for lists: it looks the
+ * media up and asks the hooks once per batch.
  */
-export const messageOut = m => ({
-  id: m.id, clientId: m.client_id, fromId: m.from_id, fromRole: m.from_role, text: m.text, workoutId: m.workout_id, at: m.at, readAt: m.read_at,
-  kind: m.kind ?? 'text', reportId: m.report_id ?? null, exerciseId: m.exercise_id ?? null, mediaId: m.media_id ?? null,
-  mediaUrl: m.media_id ? `/api/media/${m.media_id}` : null,
-});
+export const fmtVoiceLength = sec => { const t = Math.max(0, Math.round(Number(sec) || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+
+// `coachView` is accepted for the documented signature; on its own messageOut has no database, so coach-only fields only
+// ever come through `extra` (from messagesOut, which asks the hooks with the caller's coachView).
+export function messageOut(m, { coachView: _coachView = false, media = undefined, extra = null } = {}) {
+  const kind = m.kind ?? 'text';
+  const isVoice = kind === 'voice';
+  const out = {
+    id: m.id, clientId: m.client_id, fromId: m.from_id, fromRole: m.from_role, text: m.text, workoutId: m.workout_id, at: m.at, readAt: m.read_at,
+    kind, reportId: m.report_id ?? null, exerciseId: m.exercise_id ?? null,
+    mediaId: m.media_id && !isVoice ? m.media_id : null,
+    mediaUrl: m.media_id && !isVoice ? `/api/media/${m.media_id}` : null,
+    mediaKind: m.media_id ? (media?.kind ?? (isVoice ? 'audio' : null)) : null,
+    updatedAt: m.updated_at ?? m.at,
+  };
+  if (isVoice) {
+    // The base block, before any feature adds to it: a deleted file is a tombstone, otherwise waiting.
+    const gone = !m.media_id || media === null;
+    out.voice = {
+      mediaId: gone ? null : m.media_id, url: gone ? null : `/api/media/${m.media_id}`, durationSec: media?.duration_sec ?? null,
+      status: gone ? 'deleted' : 'pending', reason: null, transcript: null, provider: null, model: null,
+    };
+    if (gone) out.text = out.text || 'Voice note deleted';
+  }
+  return extra ? { ...out, ...extra } : out;
+}
+
+/**
+ * Many messages out at once: media looked up in one query, hooks('messageExtras') asked once.
+ * `coachView` must only be true when the signed-in user is a coach.
+ */
+export function messagesOut(db, rows, { coachView = false } = {}) {
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.map(m => m.media_id).filter(Boolean))];
+  const media = new Map(ids.length
+    ? db.prepare('SELECT id, kind, duration_sec FROM media WHERE id IN (SELECT value FROM json_each(?))').all(JSON.stringify(ids)).map(r => [r.id, r])
+    : []);
+  const extras = new Map();
+  for (const [f, fn] of hooks('messageExtras')) {
+    try {
+      for (const [id, fields] of fn(db, rows, { coachView: !!coachView }) ?? []) extras.set(id, { ...(extras.get(id) ?? {}), ...fields });
+    } catch (e) { console.error(`messageExtras of ${f.name} failed`, e); }
+  }
+  return rows.map(m => messageOut(m, { media: m.media_id ? media.get(m.media_id) ?? null : undefined, extra: extras.get(m.id) ?? null }));
+}
 
 function threads(_req, ctx) {
   requireCoach(ctx);
   const clients = ctx.db.prepare("SELECT id, name FROM users WHERE role='client' AND coach_id=?").all(ctx.user.id);
   const last = ctx.db.prepare('SELECT * FROM messages WHERE client_id=? ORDER BY at DESC LIMIT 1');
   const unread = ctx.db.prepare("SELECT COUNT(*) n FROM messages WHERE client_id=? AND from_role='client' AND read_at IS NULL");
-  const out = clients.map(c => ({ client: { id: c.id, name: c.name }, last: last.get(c.id) ? messageOut(last.get(c.id)) : null, unread: unread.get(c.id).n }));
+  const lasts = clients.map(c => last.get(c.id)).filter(Boolean);
+  const outs = new Map(messagesOut(ctx.db, lasts, { coachView: true }).map(m => [m.clientId, m]));
+  const out = clients.map(c => ({ client: { id: c.id, name: c.name }, last: outs.get(c.id) ?? null, unread: unread.get(c.id).n }));
   out.sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? ''));
   return { threads: out };
 }
@@ -46,10 +96,11 @@ function list(_req, ctx) {
     : null;
   const otherSide = ctx.user.role === 'coach' ? 'client' : 'coach';
   ctx.db.prepare('UPDATE messages SET read_at=? WHERE client_id=? AND from_role=? AND read_at IS NULL').run(nowIso(), client.id, otherSide);
-  return { messages: rows.map(messageOut), ...(updated ? { updated: updated.map(messageOut) } : {}), cursor };
+  const coachView = ctx.user.role === 'coach';
+  return { messages: messagesOut(ctx.db, rows, { coachView }), ...(updated ? { updated: messagesOut(ctx.db, updated, { coachView }) } : {}), cursor };
 }
 
-const voiceLength = sec => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+const voiceLength = sec => fmtVoiceLength(sec);
 
 function send(_req, ctx) {
   requireMember(ctx);
@@ -64,14 +115,24 @@ function send(_req, ctx) {
   const exerciseId = b.exerciseId ? str(b.exerciseId, 'exerciseId', { max: 80 }) : null;
   if (exerciseId && !ctx.db.prepare('SELECT 1 FROM exercises WHERE id=?').get(exerciseId)) fail(400, 'exerciseId is not in the library');
   const media = attachableMedia(ctx, b.mediaId, 'mediaId', client);
-  const kind = b.kind ? oneOf(b.kind, 'kind', ['text', 'formCheck', 'mealPhoto']) : media ? (exerciseId ? 'formCheck' : 'mealPhoto') : 'text';
+  // Audio is only ever a voice note: never inferred as a meal photo.
+  const kind = b.kind ? oneOf(b.kind, 'kind', ['text', 'formCheck', 'mealPhoto', 'voice'])
+    : media ? (media.kind === 'audio' ? 'voice' : exerciseId ? 'formCheck' : 'mealPhoto') : 'text';
+  if (kind === 'voice') {
+    if (!media) fail(400, 'mediaId is required');
+    if (media.kind !== 'audio' || media.purpose !== 'voice') fail(400, 'mediaId is not a voice note');
+    // The sender's own recording, made for this thread's client.
+    if (media.client_id !== client.id || media.owner_id !== ctx.user.id) fail(400, 'That voice note is for someone else');
+    if (ctx.db.prepare('SELECT 1 FROM messages WHERE media_id=?').get(media.id)) fail(400, 'That voice note has already been sent');
+  } else if (media?.kind === 'audio') fail(400, 'Audio goes as kind voice');
   if (ctx.user.role === 'client' && kind !== 'text') {
-    // Form checks and meal photos are coach toggles, not plan features.
+    // Form checks, meal photos and voice notes are coach toggles, not plan features.
     const f = featuresOf(ctx.db, ctx.user);
-    if (!f[kind === 'formCheck' ? 'formChecks' : 'mealPhotos']) fail(403, 'not_enabled');
+    if (!f[{ formCheck: 'formChecks', mealPhoto: 'mealPhotos', voice: 'voiceNotes' }[kind]]) fail(403, 'not_enabled');
     if (!media) fail(400, 'mediaId is required');
   }
-  const fallback = kind === 'formCheck' ? 'Form check' : kind === 'mealPhoto' ? 'Meal photo' : workoutId ? 'Plan updated' : null;
+  const voiceLabel = kind === 'voice' ? `Voice note · ${voiceLength(media.duration_sec ?? 0)}` : null;
+  const fallback = voiceLabel ?? (kind === 'formCheck' ? 'Form check' : kind === 'mealPhoto' ? 'Meal photo' : workoutId ? 'Plan updated' : null);
   const text = str(b.text || fallback, 'text', { max: 4000 });
   const id = newId('m');
   const fromCoach = ctx.user.role === 'coach';
@@ -80,15 +141,12 @@ function send(_req, ctx) {
       .run(id, client.id, ctx.user.id, ctx.user.role, text, workoutId, nowIso(), kind, reportId, exerciseId, media?.id ?? null, fromCoach ? 'desk' : 'app');
     const row = ctx.db.prepare('SELECT * FROM messages WHERE id=?').get(id);
     const payload = { messageId: id, kind, mediaId: media?.id ?? null };
-    if (fromCoach) emit(ctx.db, 'message.sent', { coachId: ctx.user.id, clientId: client.id, summary: 'Message sent', ...payload, via: 'desk' });
-    else {
-      const summary = media?.kind === 'audio' ? `Voice note · ${voiceLength(media.duration_sec ?? 0)}` : 'Message';
-      emit(ctx.db, 'message.received', { coachId: client.coach_id, clientId: client.id, summary, ...payload });
-    }
+    if (fromCoach) emit(ctx.db, 'message.sent', { coachId: ctx.user.id, clientId: client.id, summary: voiceLabel ?? 'Message sent', ...payload, via: 'desk' });
+    else emit(ctx.db, 'message.received', { coachId: client.coach_id, clientId: client.id, summary: voiceLabel ?? 'Message', ...payload });
     afterCommit(() => notify(ctx.db, ctx.config, fromCoach ? client.id : client.coach_id, { title: ctx.user.name, body: row.text, kind: 'message', id, clientId: client.id }));
     return row;
   });
-  return messageOut(m);
+  return messagesOut(ctx.db, [m], { coachView: fromCoach })[0];
 }
 
 // MARK: - Sending from code, and the outreach governor (docs/design/desk-v2.md 3.5)

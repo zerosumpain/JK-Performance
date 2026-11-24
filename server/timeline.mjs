@@ -1,7 +1,7 @@
 import { clientFor } from './access.mjs';
 import { checkinOut } from './daily.mjs';
 import { instant, num } from './http.mjs';
-import { messageOut } from './messages.mjs';
+import { messagesOut } from './messages.mjs';
 import { deliverDue, reportOut } from './reports.mjs';
 import { featuresOf } from './settings.mjs';
 import { nowIso } from './store.mjs';
@@ -15,6 +15,13 @@ import { addDays, londonDay, mondayOf } from './time.mjs';
  * 'messaging'; letters and check-ins need 'checkin'. A Free client gets an
  * empty list, never a 403. Opening the first page marks the other side's
  * messages read, as GET /api/messages does.
+ *
+ * Messages are always in the CLIENT view here, also for a coach caller (F19):
+ * a voice note carries its `voice` block without any analysis. `since=<iso>`
+ * adds `updated` (message items changed or new at or after it, by
+ * COALESCE(updated_at, at)) and `cursor` (the greatest such time in the
+ * thread, read before the lists), so the client's chat can pick up a
+ * transcript that arrives later.
  */
 function timeline(_req, ctx) {
   const { db } = ctx;
@@ -25,13 +32,21 @@ function timeline(_req, ctx) {
   const before = ctx.query.before && instant(ctx.query.before, 'before') < now ? instant(ctx.query.before, 'before') : now;
   const limit = ctx.query.limit === undefined ? 50 : num(Number(ctx.query.limit), 'limit', { min: 1, max: 200, int: true });
   if (ctx.user.role === 'client') deliverDue(db, ctx.config, { clientId: client.id });
+  const since = ctx.query.since ? instant(ctx.query.since, 'since') : null;
   const items = [];
+  let cursor = null;
+  let updated = null;
 
   if (f.messaging) {
-    for (const m of db.prepare("SELECT * FROM messages WHERE client_id=? AND kind<>'letter' AND at<? ORDER BY at DESC LIMIT ?").all(client.id, before, limit)) {
-      items.push({ kind: 'message', id: m.id, at: m.at, message: messageOut(m) });
+    cursor = db.prepare("SELECT MAX(COALESCE(updated_at, at)) c FROM messages WHERE client_id=? AND kind<>'letter'").get(client.id).c;
+    const rows = db.prepare("SELECT * FROM messages WHERE client_id=? AND kind<>'letter' AND at<? ORDER BY at DESC LIMIT ?").all(client.id, before, limit);
+    for (const m of messagesOut(db, rows)) items.push({ kind: 'message', id: m.id, at: m.at, message: m });
+    if (since) {
+      const changed = db.prepare(`SELECT * FROM messages WHERE client_id=? AND kind<>'letter' AND COALESCE(updated_at, at)>=? AND COALESCE(updated_at, at)<=?
+        ORDER BY at LIMIT 500`).all(client.id, since, cursor ?? since);
+      updated = messagesOut(db, changed).map(m => ({ kind: 'message', id: m.id, at: m.at, message: m }));
     }
-  }
+  } else if (since) updated = [];
   if (f.checkin) {
     const letters = db.prepare(`SELECT * FROM reports WHERE client_id=? AND published_at IS NOT NULL AND COALESCE(deliver_at, published_at)<=? AND COALESCE(deliver_at, published_at)<?
       ORDER BY COALESCE(deliver_at, published_at) DESC LIMIT ?`).all(client.id, now, before, limit);
@@ -59,7 +74,7 @@ function timeline(_req, ctx) {
     const otherSide = ctx.user.role === 'coach' ? 'client' : 'coach';
     db.prepare('UPDATE messages SET read_at=? WHERE client_id=? AND from_role=? AND read_at IS NULL').run(now, client.id, otherSide);
   }
-  return { items: page, nextBefore: page.length === limit ? page.at(-1).at : null };
+  return { items: page, nextBefore: page.length === limit ? page.at(-1).at : null, ...(updated ? { updated } : {}), cursor };
 }
 
 export function timelineRoutes(r) {
