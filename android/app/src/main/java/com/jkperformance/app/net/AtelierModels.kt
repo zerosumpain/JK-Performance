@@ -30,6 +30,14 @@ data class Features(
     var mealPhotos: Boolean? = null,
     var challenges: Boolean? = null,
     var hasMacroTargets: Boolean? = null,
+    /** May the client send voice notes (the coach's toggle); coaches always true. */
+    var voiceNotes: Boolean? = null,
+    /** The chat recorder's cap in seconds (300). */
+    var voiceMaxSec: Int? = null,
+    /** ask | on | off: whether the client agreed to transcription (D16). */
+    var voiceTranscription: String? = null,
+    /** The AI provider behind the audio model ("Google"), for the consent sheet; not sent yet (an integration request). */
+    var voiceAiProvider: String? = null,
 )
 
 /**
@@ -52,6 +60,11 @@ data class Gate(val features: Features?) {
     val mealPhotos: Boolean get() = features?.mealPhotos ?: false
     val challenges: Boolean get() = features?.challenges ?: true
     val hasMacroTargets: Boolean? get() = features?.hasMacroTargets
+    /** The mic in the composer: off on a server that predates voice notes. */
+    val voiceNotes: Boolean get() = features?.voiceNotes ?: false
+    val voiceMaxSec: Int get() = features?.voiceMaxSec?.takeIf { it > 0 } ?: 300
+    /** ask | on | off; "ask" shows the consent sheet before the first voice note. */
+    val voiceTranscription: String get() = features?.voiceTranscription ?: "ask"
 
     /** Free: nothing but guides. */
     val isFree: Boolean get() = known && !messaging && !checkin && !habits && !progress
@@ -533,6 +546,9 @@ data class TimelineItem(
 data class TimelineResponse(
     val items: List<TimelineItem>,
     var nextBefore: String? = null,
+    /** With `since=`: items whose message changed (a transcript arrived). */
+    var updated: List<TimelineItem>? = null,
+    var cursor: String? = null,
 )
 
 // MARK: - Guides (client)

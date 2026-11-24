@@ -1,0 +1,126 @@
+{
+  "invitations": [],
+  "enrolments": [
+    {
+      "id": "ce_hOdT6amCqpnF",
+      "status": "active",
+      "campaign": {
+        "id": "cg_yLwEzsljoFMV",
+        "name": "12-Week Marathon Build",
+        "tagline": "From 10 km to race day, one week at a time",
+        "coverUrl": null
+      },
+      "day": 24,
+      "lengthDays": 84,
+      "startOn": "2026-11-01",
+      "endsOn": "2027-01-23",
+      "pct": 22,
+      "points": 155,
+      "today": [
+        {
+          "id": "ca_3NW6a8Gyc6z5",
+          "day": 23,
+          "date": "2026-11-24",
+          "title": "Intervals 6 × 800 m",
+          "kind": "workout",
+          "detail": "",
+          "points": 15,
+          "required": true,
+          "spendPence": 0,
+          "guide": null,
+          "done": true,
+          "doneAt": "2026-11-24T08:15:00.000Z"
+        }
+      ],
+      "next": [
+        {
+          "id": "ca_brINwUcPpnFC",
+          "day": 24,
+          "date": "2026-11-25",
+          "title": "Mobility 10",
+          "kind": "habit",
+          "detail": "",
+          "points": 5,
+          "required": false,
+          "spendPence": 0,
+          "guide": {
+            "id": "gb_sqo4QjMQj8va",
+            "title": "Mobility 10"
+          },
+          "done": false,
+          "doneAt": null
+        },
+        {
+          "id": "ca_qgWKCSafWWri",
+          "day": 26,
+          "date": "2026-11-27",
+          "title": "Long run 16 km",
+          "kind": "workout",
+          "detail": "",
+          "points": 20,
+          "required": true,
+          "spendPence": 0,
+          "guide": {
+            "id": "gb_eFOwwJ8vQaj9",
+            "title": "Fuel the long run"
+          },
+          "done": false,
+          "doneAt": null
+        },
+        {
+          "id": "ca_miIKIc7mYK33",
+          "day": 27,
+          "date": "2026-11-28",
+          "title": "Weekly check-in",
+          "kind": "checkin",
+          "detail": "",
+          "points": 5,
+          "required": true,
+          "spendPence": 0,
+          "guide": null,
+          "done": false,
+          "doneAt": null
+        }
+      ],
+      "rank": {
+        "position": 3,
+        "of": 4
+      },
+      "planUrl": "https://jk.example.com/plan/ce_hOdT6amCqpnF.1799370767.ImL8Fy7DFvSHm2hX1SzHKdAlzuIm1BO_TxuM-HQMEDU"
+    },
+    {
+      "id": "ce_qAvRbqvM8Kln",
+      "status": "completed",
+      "campaign": {
+        "id": "cg_9euXrh3OgZiw",
+        "name": "Ski-fit 6 weeks",
+        "tagline": "Legs, lungs and knees for the slopes",
+        "coverUrl": null
+      },
+      "day": 42,
+      "lengthDays": 42,
+      "startOn": "2026-09-25",
+      "endsOn": "2026-11-05",
+      "pct": 100,
+      "points": 270,
+      "today": [
+        {
+          "id": "ca_v-1f6KR9RmgP",
+          "day": 41,
+          "date": "2026-11-05",
+          "title": "Weekly check-in",
+          "kind": "checkin",
+          "detail": "",
+          "points": 5,
+          "required": true,
+          "spendPence": 0,
+          "guide": null,
+          "done": true,
+          "doneAt": "2026-11-05T18:20:00.000Z"
+        }
+      ],
+      "next": [],
+      "planUrl": "https://jk.example.com/plan/ce_qAvRbqvM8Kln.1799370767.dk9KAa2liYbFQg6Kjglx1lAoYX9rUBXNKcpxxz5RA5s"
+    }
+  ]
+}

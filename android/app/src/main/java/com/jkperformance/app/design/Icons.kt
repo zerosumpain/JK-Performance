@@ -258,6 +258,18 @@ enum class IconKey(val glyph: String, @DrawableRes val outline: Int, @DrawableRe
     forum("forum", R.drawable.ms_forum_fill0, R.drawable.ms_forum_fill1),
     /** Varies. */
     shuffle("shuffle", R.drawable.ms_shuffle_fill0, R.drawable.ms_shuffle_fill1),
+    /** Record a voice note (desk-v2 F19). */
+    mic("mic", R.drawable.ms_mic_fill0, R.drawable.ms_mic_fill1),
+    /** Opens outside the app (a guide or kit link). */
+    openLink("open_in_new", R.drawable.ms_open_in_new_fill0, R.drawable.ms_open_in_new_fill1),
+    /** Kit to buy (campaigns). */
+    kit("shopping_bag", R.drawable.ms_shopping_bag_fill0, R.drawable.ms_shopping_bag_fill1),
+    /** An info callout. */
+    info("info", R.drawable.ms_info_fill0, R.drawable.ms_info_fill1),
+    /** A link in a guide. */
+    link("link", R.drawable.ms_link_fill0, R.drawable.ms_link_fill1),
+    /** A campaign (megaphone). */
+    campaign("campaign", R.drawable.ms_campaign_fill0, R.drawable.ms_campaign_fill1),
     /** Heart, fitness. */
     heart("favorite", R.drawable.ms_favorite_fill0, R.drawable.ms_favorite_fill1);
 

@@ -108,8 +108,11 @@ fun ThisWeekView() {
     val nav = LocalNav.current
     var week by remember { mutableStateOf<WeekPayload?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Bumped by each load, so the campaign cards re-read with the rest of Today.
+    var campaignsKey by remember { mutableStateOf(0) }
 
     suspend fun load() {
+        campaignsKey++
         try {
             val fresh: WeekPayload = APIClient.get("/api/week")
             week = fresh
@@ -167,6 +170,8 @@ fun ThisWeekView() {
                     }
                 }
             }
+            // Campaigns (desk-v2 F13): an invitation to answer, or the campaign's day.
+            CampaignSection(refreshKey = campaignsKey)
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(JKSpace.m)) {
                 SessionHalfCard("Plan", p.plan, plan = true, Modifier.weight(1f).fillMaxHeight())
                 SessionHalfCard("Review", p.review, plan = false, Modifier.weight(1f).fillMaxHeight())

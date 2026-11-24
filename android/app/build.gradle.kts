@@ -93,4 +93,6 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.coil.compose)
     implementation(libs.androidx.splashscreen)
+    // Decoder tests against the desk-v2 API fixtures (src/test/resources/fixtures).
+    testImplementation(libs.junit)
 }
