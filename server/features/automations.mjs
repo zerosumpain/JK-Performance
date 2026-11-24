@@ -236,7 +236,9 @@ export function whereWords(where = {}) {
     if (v === false) return `not ${k}`;
     if (k === 'byRole') return `by the ${v}`;
     if (k === 'hoursBefore') return `${v} hours before`;
-    return `${k} ${v}`;
+    // Payload values are ids ("atRisk", "noShow"): read them as words (the desk's copy in f-auto-common.js does the same).
+    const said = typeof v === 'string' ? v.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase() : Array.isArray(v) ? v.join(' or ') : v;
+    return `${k} ${said}`;
   }).filter(Boolean).join(', ');
 }
 
