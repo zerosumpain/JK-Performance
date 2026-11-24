@@ -375,6 +375,8 @@ describe('F4: the Inbox', () => {
     assert.equal(box.counts.flag, 3);
     assert.equal(box.counts.message, 1);
     assert.equal(box.counts.voice, 1);
+    assert.equal(box.items.find(i => i.kind === 'form').title, 'Answered PAR-Q health check');
+    assert.equal(box.items.find(i => i.key.startsWith('flag:form:')).title, 'Health flag on PAR-Q health check');
     const onlyForms = await inbox(w.coach, '?filter=form');
     assert.ok(onlyForms.items.every(i => i.kind === 'form') && onlyForms.items.length === 1);
     assert.equal((await w.call('GET', '/api/inbox?filter=%25bad', { as: w.coach })).status, 400);

@@ -61,7 +61,7 @@ const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
  */
 function coreItems(db, coach) {
   const items = [];
-  const unread = db.prepare(`SELECT m.id, m.client_id, m.text, m.kind, m.at, u.name FROM messages m
+  const unread = db.prepare(`SELECT m.id, m.client_id, m.text, m.kind, m.at FROM messages m
     JOIN users u ON u.id=m.client_id AND u.role='client' AND u.coach_id=?
     WHERE m.from_role='client' AND m.read_at IS NULL ORDER BY m.at`).all(coach.id);
   const threads = new Map();
@@ -81,7 +81,7 @@ function coreItems(db, coach) {
       path: `/messages/${enc(clientId)}`, ref: { type: 'thread', id: clientId }, actions: [], source: 'core',
     });
   }
-  const checkins = db.prepare(`SELECT k.*, u.name FROM checkins k JOIN users u ON u.id=k.client_id AND u.role='client' AND u.coach_id=?
+  const checkins = db.prepare(`SELECT k.*, u.name client_name FROM checkins k JOIN users u ON u.id=k.client_id AND u.role='client' AND u.coach_id=?
     WHERE k.reviewed_at IS NULL ORDER BY k.submitted_at`).all(coach.id);
   for (const k of checkins) {
     let pain = [];
@@ -97,7 +97,7 @@ function coreItems(db, coach) {
       actions: [{ id: 'review', label: 'Mark reviewed', method: 'POST', url: `/api/checkins/${enc(k.id)}/review`, body: { reply: '' } }],
     });
   }
-  const forms = db.prepare(`SELECT r.*, u.name FROM form_requests r JOIN users u ON u.id=r.client_id AND u.role='client' AND u.coach_id=?
+  const forms = db.prepare(`SELECT r.*, u.name client_name FROM form_requests r JOIN users u ON u.id=r.client_id AND u.role='client' AND u.coach_id=?
     WHERE r.submitted_at IS NOT NULL AND r.reviewed_at IS NULL ORDER BY r.submitted_at`).all(coach.id);
   for (const r of forms) {
     const flagged = flaggedAnswers(r);
@@ -435,8 +435,8 @@ async function brief(_req, ctx) {
 export const NOTIFY_KINDS = [
   { kind: 'newClient', label: 'New clients', detail: 'Someone signs up with you.', event: 'client.joined' },
   { kind: 'cancellation', label: 'Cancellations', detail: 'A client cancels a session or leaves a class.', event: 'booking.cancelled' },
-  { kind: 'healthFlag', label: 'Health flags on forms', detail: 'A “yes” on a PAR-Q or injury question. Urgent.', event: 'form.submitted', urgent: true },
-  { kind: 'pain', label: 'Pain in check-ins', detail: 'A weekly check-in reports a sore area. Urgent.', event: 'checkin.submitted', urgent: true },
+  { kind: 'healthFlag', label: 'Health flags on forms', detail: 'A “yes” on a PAR-Q or injury question.', event: 'form.submitted', urgent: true },
+  { kind: 'pain', label: 'Pain in check-ins', detail: 'A weekly check-in reports a sore area.', event: 'checkin.submitted', urgent: true },
 ];
 
 const kindOn = (db, coachId, kind) => {
@@ -581,6 +581,13 @@ function buildDemo(db, ctx) {
     const k = c && latest(c);
     if (k) db.prepare('UPDATE checkins SET reviewed_at=NULL, reply=NULL WHERE id=?').run(k.id);
   }
+  // Letters still to write for last week: Alex (written) and Priya (with a voice note).
+  for (const c of [alex, priya]) {
+    const r = c && db.prepare("SELECT id FROM reports WHERE client_id=? AND kind='weekly' AND published_at IS NOT NULL ORDER BY week DESC LIMIT 1").get(c.id);
+    if (!r) continue;
+    db.prepare('DELETE FROM messages WHERE report_id=?').run(r.id);
+    db.prepare('UPDATE reports SET published_at=NULL, read_at=NULL WHERE id=?').run(r.id);
+  }
   // Tom answered the monthly review last night.
   const review = db.prepare("SELECT * FROM forms WHERE coach_id=? AND name='Monthly review'").get(coach.id);
   if (review && tom) {
@@ -620,7 +627,7 @@ function buildDemo(db, ctx) {
     db.prepare("INSERT INTO inbox_state (coach_id, item_key, client_id, status, snooze_until, updated_at) VALUES (?,?,?,'snoozed',?,?)")
       .run(coach.id, `thread:${rory.id}:${roryMsg}`, rory.id, t(addDays(today, 1), '07:00'), t(yesterday, '18:20'));
   }
-  void sam; void priya;
+  void sam;
 }
 
 // MARK: - The feature
