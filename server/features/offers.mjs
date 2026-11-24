@@ -371,7 +371,9 @@ function joinReferral(db, coachId, leadId, clientId) {
 }
 
 function onLeadWon(db, _config, e) {
-  if (e.coachId && e.payload?.leadId && e.payload?.clientId) joinReferral(db, e.coachId, e.payload.leadId, e.payload.clientId);
+  // emit() lifts clientId out of the payload into the event's own column.
+  const clientId = e.payload?.clientId ?? e.clientId;
+  if (e.coachId && e.payload?.leadId && clientId) joinReferral(db, e.coachId, e.payload.leadId, clientId);
 }
 
 /** client.joined: the coach's open referred lead with the same e-mail (through WP11's table, when it exists). */

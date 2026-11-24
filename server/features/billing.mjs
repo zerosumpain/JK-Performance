@@ -932,7 +932,8 @@ function packageOut(db, p, today) {
 
 function scheduleOut(db, s, today) {
   const preview = [];
-  let d = s.next_on;
+  // A paused schedule bills again from the first date on or after its pause ends.
+  let d = s.status === 'paused' && s.paused_until ? forwardTo(s, s.paused_until) : s.next_on;
   for (let i = 0; i < 3; i++) {
     if (s.ends_on && d > s.ends_on) break;
     preview.push(d);
@@ -1892,8 +1893,9 @@ function buildDemo(db, { coach, byName, today, rng }) {
       if (issueOn > today) continue;
       let status = 'paid', paid = null, paidOn = addDays(issueOn, rng.int(0, 6));
       if (paidOn > today) paidOn = today;
-      if (firstName === 'Alex' && k === 0) { status = 'partial'; paid = 5000; paidOn = today; }
-      else if (daysBetween(issueOn, today) < 3) status = 'issued';
+      if (firstName === 'Alex' && k === 0) { const d = addDays(today, -6); invoice({ client: c, issueOn: d, lines: [planLine(plan, d)], status: 'partial', paid: 5000, paidOn: addDays(today, -1), source: 'recurring' }); continue; }
+      if (firstName === 'Rory' && k === 0) { const d = addDays(today, -4); invoice({ client: c, issueOn: d, lines: [planLine(plan, d)], status: 'issued', source: 'recurring' }); continue; }
+      if (daysBetween(issueOn, today) < 3) status = 'issued';
       const discountKey = { Priya: k >= months.Priya - 2 ? 'newyear' : null, Rory: k === months.Rory - 1 ? 'return' : null, Alex: k === months.Alex - 1 ? 'return' : null,
         Sam: k === months.Sam - 1 ? 'founding' : null, Leo: k === months.Leo - 1 ? 'founding' : null }[firstName] ?? null;
       invoice({ client: c, issueOn, lines: [planLine(plan, issueOn)], status, paid, paidOn, method: methods[(k + firstName.length) % methods.length], source: k < 2 ? 'recurring' : 'manual', discountKey });

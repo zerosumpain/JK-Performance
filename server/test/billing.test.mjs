@@ -142,7 +142,9 @@ describe('invoices (F9)', () => {
     const { creditNote } = await w.ok('POST', '/api/billing/credit-notes', { as: w.coach, body: { clientId: c.id, amountPence: 500, reason: 'Sorry' } });
     await w.ok('POST', '/api/billing/refunds', { as: w.coach, body: { creditNoteId: creditNote.id, amountPence: 500, method: 'cash', paidOn: today } });
     await issue((await draft(olive.id, [line(777)], {}, coach2)).id, {}, coach2);
-    const r = await w.call('GET', `/api/billing/export.csv?from=${today}&to=${today}&at=${encodeURIComponent(now.toISOString())}`, { as: w.coach });
+    // Credit notes are dated by when they were raised (the wall clock), so the range spans both days when FAKE_TODAY differs.
+    const [lo, hi] = [today, realToday].sort();
+    const r = await w.call('GET', `/api/billing/export.csv?from=${lo}&to=${hi}&at=${encodeURIComponent(now.toISOString())}`, { as: w.coach });
     assert.equal(r.status, 200);
     assert.match(r.headers.get('content-type'), /text\/csv/);
     assert.match(r.headers.get('content-disposition'), /^attachment; filename="billing-/);
