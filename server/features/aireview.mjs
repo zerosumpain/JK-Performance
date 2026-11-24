@@ -5,6 +5,7 @@ import { clientFacts } from '../facts.mjs';
 import { fail, instant, oneOf, str } from '../http.mjs';
 import { mediaFilePath } from '../media.mjs';
 import { fmtVoiceLength, messagesOut } from '../messages.mjs';
+import { allFacts } from '../registry.mjs';
 import { planOf } from '../plans.mjs';
 import { limit } from '../ratelimit.mjs';
 import { newId, nowIso, tx } from '../store.mjs';
@@ -195,7 +196,9 @@ function normaliseReview(json) {
 /** Pain in the last 14 days (core.pain14) and the body parts named in recent check-ins. */
 function painOf(db, coachId, client, now) {
   let pain14 = false;
-  try { pain14 = !!clientFacts(db, coachId, [client.id], { only: ['core.pain14'], now }).get(client.id)?.['core.pain14']; } catch { pain14 = false; }
+  // core.pain14 (check-ins, urgent words, forms) and, when voice is on this server, voice.pain14 (a fact, not voice's table).
+  const ids = ['core.pain14', ...(allFacts().some(f => f.id === 'voice.pain14') ? ['voice.pain14'] : [])];
+  try { const f = clientFacts(db, coachId, [client.id], { only: ids, now }).get(client.id) ?? {}; pain14 = ids.some(id => !!f[id]); } catch { pain14 = false; }
   const from = londonToUtc(addDays(londonDay(now), -13)).toISOString();
   const parts = db.prepare('SELECT pain FROM checkins WHERE client_id=? AND submitted_at>=? ORDER BY submitted_at DESC').all(client.id, from).flatMap(c => parse(c.pain, []));
   return { pain14: pain14 || parts.length > 0, painParts: parts };
@@ -345,7 +348,7 @@ function stubDraft(intent, client, facts, note) {
   const lastClient = [...(facts.thread ?? [])].reverse().find(m => m.from === 'client');
   const next = facts.nextSession ? `your ${facts.nextSession.kind === 'video' ? 'video call' : 'session'} on ${facts.nextSession.day}` : 'our next session';
   const lines = {
-    reply: lastClient ? `[Stub] Thanks ${name}, good to hear from you. On "${clip(lastClient.text, 60)}": let's talk it through properly. What would help most this week?`
+    reply: lastClient ? `[Stub] Thanks ${name}, good to hear from you. On "${clip(lastClient.text.replace(/^\(voice note\) /, ''), 60)}": let's talk it through properly. What would help most this week?`
       : `[Stub] Hi ${name}, checking in. How has the week gone so far?`,
     nudge: `[Stub] Hi ${name}, haven't heard from you for a few days. No pressure: what's one session you can get done before the weekend?`,
     celebrate: `[Stub] ${name}, that's a real win${facts.goal ? ` on the way to "${facts.goal}"` : ''}. Proud of the work. What made it click?`,

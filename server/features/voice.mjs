@@ -427,6 +427,17 @@ function sentiment14(db, coachId, clientIds, today) {
   return out;
 }
 
+/** A pain or injury flag in the client's voice notes over 14 days (current owner only). */
+function pain14(db, coachId, clientIds, today) {
+  const from = londonToUtc(addDays(today, -13)).toISOString();
+  const out = new Map(clientIds.map(id => [id, false]));
+  for (const r of db.prepare(`SELECT va.client_id, va.flags FROM voice_analyses va JOIN users u ON u.id=va.client_id AND u.coach_id=?
+    WHERE va.client_id IN (SELECT value FROM json_each(?)) AND va.status='done' AND va.flags<>'[]' AND va.created_at>=?`).all(coachId, JSON.stringify(clientIds), from)) {
+    if (parse(r.flags, []).some(f => f.kind === 'pain' || f.kind === 'injury')) out.set(r.client_id, true);
+  }
+  return out;
+}
+
 /** Recent flagged notes (current owner), newest first: [{va, m, name}]. */
 function flagged(db, coachId, sinceIso, kinds) {
   return db.prepare(`SELECT va.*, m.at msg_at, u.name FROM voice_analyses va JOIN messages m ON m.id=va.message_id JOIN users u ON u.id=va.client_id AND u.coach_id=?
@@ -640,6 +651,7 @@ export const feature = {
   },
   facts: {
     'voice.sentiment14': { label: 'Voice note sentiment (14 days, −1 to 1)', type: 'number', aiDerived: true, compute: sentiment14 },
+    'voice.pain14': { label: 'Pain or injury mentioned in a voice note (14 days)', type: 'bool', aiDerived: true, compute: pain14 },
   },
   needs, inbox, search, timeline, meFeatures, exportFor,
   messageExtras: extras,
