@@ -174,7 +174,7 @@ function sessionItems(db, coach, dy) {
     const single = b.kind !== 'group' && people[0] ? notes.get(people[0].id) : null;
     return {
       at: b.start, end: b.end, day: dy, kind: 'session', icon: b.kind === 'group' ? 'group' : b.kind === 'video' ? 'videocam' : 'person',
-      title: who, detail: [KIND_WORD[b.kind], `${londonClock(new Date(b.start))}–${londonClock(new Date(b.end))}`, b.location, b.kind === 'group' ? `${people.length} booked` : null].filter(Boolean).join(' · '),
+      title: who, detail: [KIND_WORD[b.kind], `${londonClock(new Date(b.start))}–${londonClock(new Date(b.end))}`, b.location && b.location !== KIND_WORD[b.kind] ? b.location : null, b.kind === 'group' ? `${people.length} booked` : null].filter(Boolean).join(' · '),
       path: b.kind === 'group' ? `/schedule/class/${b.id}/${dy}` : b.client_id ? `/clients/${b.client_id}/sessions` : null,
       tone: single?.attendance === 'noShow' || single?.attendance === 'lateCancel' ? 'attention' : 'data',
       bookingId: b.id, bookingKind: b.kind, attendance: single?.attendance ?? null, marked, people: people.map(p => ({ id: p.id, name: p.name, attendance: notes.get(p.id)?.attendance ?? null })),

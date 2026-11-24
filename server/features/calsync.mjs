@@ -1336,7 +1336,8 @@ function buildDemo(db, { coach, clients, byName, today, config }) {
       .run(newId('hd'), coach.id, kind, title, at(d, t), new Date(Date.parse(at(d, t)) + mins * MIN).toISOString(), nowIso());
   };
   const weekdayAfter = (n, wd) => { for (let i = n; i < n + 8; i++) if (weekday(addDays(today, i)) === wd) return addDays(today, i); return addDays(today, n); };
-  hold('consult', 'Consult: Hannah Lewis', weekdayAfter(1, 2), '12:30', 30);
+  hold('admin', 'Write the spring block', today, '13:00', 60);
+  hold('consult', 'Consult: Hannah Lewis', addDays(today, 1), '12:30', 30);
   hold('trial', 'Trial: Marcus Bell', weekdayAfter(2, 4), '17:00', 60);
   hold('admin', 'Programming time', weekdayAfter(0, 5), '13:00', 120);
   hold('admin', 'Programming time', weekdayAfter(7, 5), '13:00', 120);

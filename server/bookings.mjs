@@ -353,10 +353,13 @@ function createBooking(_req, ctx) {
     return bookingOut(ctx.db, ctx.db.prepare('SELECT * FROM bookings WHERE id=?').get(id), ctx.user);
   });
   const what = `${kind === 'video' ? 'Video call' : '1:1'} · ${when(slot.start)}`;
-  if (ctx.user.role === 'coach') notify(ctx.db, ctx.config, client.id, { title: `${ctx.user.name} booked you in`, body: what, kind: 'booking', id: out.id });
+  if (ctx.user.role === 'coach') notify(ctx.db, ctx.config, client.id, { title: `${ctx.user.name} booked you in`, body: `${what} · ${policyLine(cancellationPolicy(ctx.db, coachId))}`, kind: 'booking', id: out.id });
   else notify(ctx.db, ctx.config, coachId, { title: `${client.name} booked a session`, body: what, kind: 'booking', id: out.id, clientId: client.id });
   return out;
 }
+
+/** The cancellation policy in one line for the client ("Free to cancel up to 24 h before; later uses the session"). */
+export const policyLine = p => `Free to cancel up to ${p.noticeHours} h before${p.forfeitCredit ? '; later uses the session' : ''}${p.cancelFeePence ? ` and costs £${(p.cancelFeePence / 100).toFixed(2).replace(/\.00$/, '')}` : ''}`;
 
 /** Is a cancel at `now` late (inside the coach's notice)? */
 const isLate = (policy, b, now) => Date.parse(b.start) - now.getTime() < policy.noticeHours * 3_600_000;
