@@ -268,3 +268,4 @@ a.ld-src:hover{color:var(--text);border-color:var(--text-secondary)}
 .ld-field-opt b{color:var(--text);font-size:14px}
 @media (min-width:821px){.ld-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .ld-p-next .grow{white-space:nowrap}
+.ld-card-foot .ld-src{min-width:0;overflow:hidden;text-overflow:ellipsis}

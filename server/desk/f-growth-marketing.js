@@ -63,6 +63,7 @@ route('/marketing/:tab?', async (el, params, view) => {
 // MARK: - Sources
 
 let period = '90';
+const SHORT = { word: 'Word', enquiryForm: 'Form', manual: 'You', referral: 'Referral' };
 async function sourcesTab(body, sub, view) {
   const data = await api('GET', `/api/marketing/sources?days=${period === 'all' ? 'all' : period}`);
   if (!view.fresh()) return;
@@ -80,7 +81,7 @@ async function sourcesTab(body, sub, view) {
   const busiest = [...all].sort((a, b) => b.leads - a.leads)[0];
   const chart = barChart({
     stacked: true, height: 220, ariaLabel: 'Leads by source, won and not won', yFormat: v => String(Math.round(v)),
-    bars: all.map(s => ({ label: s.label, parts: [{ label: 'Won', value: s.won, tone: 3 }, { label: 'Not won (yet)', value: s.leads - s.won, tone: 6 }] })),
+    bars: all.map(s => ({ label: SHORT[s.source] ?? s.label, parts: [{ label: 'Won', value: s.won, tone: 3 }, { label: 'Not won (yet)', value: s.leads - s.won, tone: 6 }] })),
   });
   const insight = (glyph, eyebrow, s, line) => tile({ size: 's', icon: glyph, eyebrow, hero: eyebrow === 'Best converting', body: s
     ? [h('div', { class: 'mk-ins-name' }, icon(sourceIcon(s.source), 18), s.label), h('div', { class: 'mk-ins-line' }, line(s))]
