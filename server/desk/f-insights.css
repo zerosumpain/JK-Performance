@@ -1,0 +1,87 @@
+/* F25 Engagement insights (f-insights.js). Class prefix in-. Colours only through tokens. */
+
+.in-body{margin-top:18px}
+.in-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.in-note{margin:0;max-width:62ch}
+.in-grid.ui-bento{grid-auto-rows:minmax(120px,auto)}
+.in-loading{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+
+/* Big numbers */
+.in-kpi{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+.in-kpi-v{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.in-big{font:600 38px/1 var(--serif);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.in-kpi-suffix{font-size:15px;color:var(--text-secondary);font-weight:500}
+.in-kpi-k{font-size:13px;color:var(--text-secondary);line-height:1.35}
+.in-cap{margin:10px 0 0}
+
+/* Heatmap: every hour labelled, only every third shown when tight */
+.in-heat{overflow-x:auto;padding-bottom:4px}
+.in-heat .ch-heatmap{min-width:560px}
+.in-heat .ch-cell{height:24px}
+@media (max-width:1400px){.in-heat .ch-heat-col:not(:nth-child(3n+2)){color:transparent}}
+
+.in-days{display:inline-flex;align-items:center;gap:10px;justify-content:flex-end}
+.in-mini{display:inline-block;width:64px;height:5px;border-radius:var(--r-pill);background:var(--track);overflow:hidden}
+.in-mini-fill{display:block;height:100%;width:var(--w,0%);background:var(--accent);border-radius:inherit}
+.in-who{display:inline-flex;align-items:center;gap:10px;font-weight:500}
+.in-who .avatar{font-size:10px}
+.ui-tile .ui-table-scroll{border:none;background:none;max-height:none}
+.ui-tile .ui-table th{background:var(--tile)}
+
+/* Cohorts */
+.in-cohort{overflow-x:auto}
+.in-cohort .ch-cohort-table{width:100%}
+
+/* NPS */
+.in-nps{display:flex;align-items:baseline;gap:12px;margin:6px 0 2px}
+.in-nps-n{font:600 72px/1 var(--serif);letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.in-nps-word{font:italic 400 22px/1 var(--serif);color:var(--text-secondary)}
+.in-npsbar-wrap{display:flex;flex-direction:column;gap:12px;margin-top:auto}
+.in-npsbar{display:flex;gap:3px;height:12px;border-radius:var(--r-pill);overflow:hidden}
+.in-npsbar-seg{width:var(--w,0%);min-width:0;transition:width var(--dur-slow) var(--ease)}
+.in-passive{background:var(--data)}
+.in-npsleg{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.in-npsleg li{display:flex;align-items:center;gap:8px}
+.in-key{width:10px;height:10px;border-radius:3px;flex:none}
+.in-comments{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.in-comment-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.in-comment-head .avatar{font-size:10px}
+.in-comment-name{font-weight:600;font-size:14px}
+.in-score{display:inline-grid;place-items:center;min-width:26px;height:22px;padding:0 6px;border-radius:var(--r-pill);border:1px solid currentColor;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.in-quote{margin:0 0 0 34px;padding:2px 0 2px 12px;border-left:2px solid var(--accent);font:italic 400 16px/1.45 var(--serif);color:var(--text)}
+.in-surveys{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.in-survey{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--hairline)}
+.in-survey:last-child{border-bottom:none}
+.in-survey-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--accent-wash);color:var(--accent);flex:none}
+.in-survey-ic.pulse{background:color-mix(in srgb,var(--data) 16%,transparent);color:var(--data)}
+.in-survey-name{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;margin-bottom:3px}
+.in-survey-name .pill{font-size:11px;padding:1px 8px}
+.in-survey-score{font:600 20px/1 var(--serif);color:var(--accent);white-space:nowrap}
+
+/* New survey */
+.in-form{display:flex;flex-direction:column;gap:18px}
+.in-field{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.in-field>label{font-size:13px;font-weight:600;color:var(--text-secondary)}
+.in-field input,.in-field select{background:var(--surface)}
+.in-after{display:flex;align-items:center;gap:10px}
+.in-after input{width:90px}
+.in-preview{padding:14px;border-radius:var(--r-float);background:var(--surface);border:1px solid var(--hairline);display:flex;flex-direction:column;gap:10px}
+.in-preview-q{font-weight:500}
+.in-preview-scale{display:flex;gap:4px;flex-wrap:wrap}
+.in-preview-scale span{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;border:1px solid var(--hairline);font-size:12px;color:var(--text-secondary)}
+
+@media (max-width:820px){
+  .in-grid.ui-bento{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .in-grid .ui-s-s{grid-column:span 1}
+  .in-grid .ui-s-m,.in-grid .ui-s-l,.in-grid .ui-s-xl,.in-grid .ui-s-full{grid-column:1/-1}
+  .in-grid .ui-tile.ui-s-s{padding:14px}
+  .in-grid .ui-s-s .in-kpi-k{font-size:12px}
+  .in-big{font-size:28px}
+  .in-nps-n{font-size:56px}
+  .in-loading{grid-template-columns:1fr}
+  .in-quote{margin-left:0}
+}
+
+/* The charts' visually hidden data tables: a <table> ignores width and overflow, so the
+   kit's .ui-sr alone still stretches the page. Scoped fix (integration request to WP-Z for ui.css). */
+.in-body table.ui-sr{display:block;clip-path:inset(50%)}
