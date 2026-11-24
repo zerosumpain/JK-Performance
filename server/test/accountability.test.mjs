@@ -104,6 +104,12 @@ describe('the score, part by part, on every weekday', () => {
     const missed = await w.ok('GET', `/api/accountability?week=${WEEK}&filter=missed&at=${at(addDays(WEEK, 3))}`, { as: w.coach });
     assert.ok(missed.rows.every(x => x.flags.includes('missed')));
     assert.equal((await w.call('GET', `/api/accountability?week=2099-01-05&at=${at(WEEK)}`, { as: w.coach })).status, 400);
+    const closed = await w.ok('GET', `/api/accountability?week=${WEEK}&at=${at(addDays(WEEK, 9))}`, { as: w.coach });
+    assert.ok(close(closed.rows.find(x => x.client.id === ana.id).parts.c, 0.5), 'a past week reads as closed: open commitments count');
+    const lapsed = person('Lapsed Larry');
+    w.db.prepare("UPDATE users SET plan='none' WHERE id=?").run(lapsed.id);
+    const now = await w.ok('GET', `/api/accountability?at=${at(WEEK)}`, { as: w.coach });
+    assert.ok(!now.rows.some(x => x.client.id === lapsed.id), 'no plan and quiet for four weeks: off the board');
   });
 });
 

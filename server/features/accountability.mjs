@@ -151,7 +151,8 @@ function board(_req, ctx) {
   const lastNudge = ctx.db.prepare('SELECT MAX(n.at) at FROM accountability_nudges n JOIN users u ON u.id=n.client_id AND u.coach_id=? WHERE n.client_id=?');
   const late = current && londonClock(now) >= AT_RISK_FROM;
   let rows = clients.map(c => {
-    const p = weekParts(ctx.db, c, week, { today: asOf, now });
+    // A past week is judged as closed (open commitments count), so it reads with the real today.
+    const p = weekParts(ctx.db, c, week, { today, now });
     const streak = streakOf(ctx.db, c, asOf);
     const flags = [...p.flags];
     if (late && streak > 0 && p.todayState === 'today') flags.push('atRisk');
@@ -264,7 +265,7 @@ function clientHistory(_req, ctx) {
     const snap = i > 0 ? snapshot(ctx.db, ctx.user.id, client.id, w) : null;
     if (snap) weeks.push({ ...snap, live: false });
     else {
-      const p = weekParts(ctx.db, client, w, { today: i > 0 ? addDays(w, 6) : today, now });
+      const p = weekParts(ctx.db, client, w, { today, now });
       weeks.push({ week: w, score: p.score, parts: p.parts, live: true });
     }
   }

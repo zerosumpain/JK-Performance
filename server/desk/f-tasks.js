@@ -8,7 +8,7 @@
  * Every piece of task text goes on the page through h() (textContent).
  */
 import {
-  addDays, api, avatar, button, clients, confirmBox, errorLine, fill, firstName, fmtDay, fmtRelative, h, icon, link, live, mondayOf,
+  addDays, api, avatar, button, clients, confirmBox, errorLine, fill, firstName, fmtDay, fmtRelative, fmtTime, h, icon, londonParts, link, live, mondayOf,
   registerClientAction, registerClientTab, registerCommand, registerNav, registerPanel, registerQuickCreate, registerWidget, ring, route, setCrumbs, toast, todayLondon,
 } from './core.js';
 import { dateField, emptyHero, inlineEdit, kanban, kbd, menu, openPanel, pageHead, segmentedNav, skeleton, slideOver, timeField } from './ui.js';
@@ -67,7 +67,7 @@ function snoozeChoices(today = todayLondon()) {
   const later = new Date(now.getTime() + 3 * 3_600_000);
   const monday = addDays(mondayOf(today), 7);
   return [
-    { label: 'Later today', detail: `${String(later.getHours()).padStart(2, '0')}:00`, until: new Date(Math.ceil(later.getTime() / 3_600_000) * 3_600_000).toISOString(), ok: later.toDateString() === now.toDateString() },
+    { label: 'Later today', detail: fmtTime(new Date(Math.ceil(later.getTime() / 3_600_000) * 3_600_000).toISOString()), until: new Date(Math.ceil(later.getTime() / 3_600_000) * 3_600_000).toISOString(), ok: londonParts(later.toISOString()).day === today },
     { label: 'Tomorrow', detail: fmtDay(addDays(today, 1)), until: addDays(today, 1), ok: true },
     { label: 'In 3 days', detail: fmtDay(addDays(today, 3)), until: addDays(today, 3), ok: true },
     { label: 'Next week', detail: fmtDay(monday), until: monday, ok: true },
