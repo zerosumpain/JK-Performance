@@ -14,8 +14,14 @@ struct MessagesThreadView: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
+    /// The thread's `since` cursor: transcripts that arrive later come back in `updated`.
+    @State private var cursor: String?
+    @State private var pendingSince: Date?
+    @StateObject private var voice = VoiceRecorder(cap: 300, purpose: "voice")
 
     private var api: APIClient { APIClient.shared }
+    /// The thread is the coach's (with the voice analysis) unless a client opened it.
+    private var forClient: Bool { session.me?.isCoach != true }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,8 +38,10 @@ struct MessagesThreadView: View {
                                 if index == 0 || !Day.same(messages[index - 1].at, m.at) {
                                     Text(dayLabel(m.at)).font(.jkCaption).foregroundStyle(JK.textSecondary).padding(.top, 8)
                                 }
-                                Bubble(message: m, mine: m.fromId == session.me?.id)
-                                    .id(m.id)
+                                Bubble(message: m, mine: m.fromId == session.me?.id, forClient: forClient) { info in
+                                    updateVoice(m.id, info)
+                                }
+                                .id(m.id)
                             }
                         } else if let error {
                             ErrorCard(message: error) { await load() }
@@ -48,27 +56,14 @@ struct MessagesThreadView: View {
                 }
             }
             if let sendError { ErrorBanner(message: sendError).padding(.horizontal, 16) }
-            HStack(spacing: 10) {
-                TextField("Message", text: $draft, axis: .vertical)
-                    .lineLimit(1...4)
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(JK.surface, in: Capsule())
-                    .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
-                Button {
-                    Task { await send() }
-                } label: {
-                    Group {
-                        if sending { ProgressView().tint(JK.onPrimary) } else { Image(systemName: "paperplane.fill") }
-                    }
-                    .foregroundStyle(JK.onPrimary)
-                    .frame(width: 34, height: 34)
-                    .background(JK.primaryFill, in: Circle())
-                }
-                .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel("Send")
+            if let voiceError = voice.error { ErrorBanner(message: voiceError).padding(.horizontal, 16) }
+            if voice.recording || voice.hasTake {
+                VoiceComposerBar(voice: voice, sending: sending) { Task { await sendVoice() } }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(JK.bg)
+            } else {
+                composer
             }
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(JK.bg)
         }
         .jkScreen()
         .navigationBarTitleDisplayMode(.inline)
@@ -88,9 +83,72 @@ struct MessagesThreadView: View {
             // Poll while visible; the task is cancelled when the view goes away.
             while !Task.isCancelled {
                 await load()
-                try? await Task.sleep(for: .seconds(15))
+                let wait = VoiceRefresh.interval(anyPending: pendingSince != nil, pendingSince: pendingSince)
+                try? await Task.sleep(for: .seconds(wait))
             }
         }
+        .onDisappear {
+            voice.stopAll()
+            VoicePlayback.shared.stop()
+        }
+    }
+
+    private var composer: some View {
+        HStack(spacing: 10) {
+            TextField("Message", text: $draft, axis: .vertical)
+                .lineLimit(1...4)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(JK.surface, in: Capsule())
+                .overlay(Capsule().stroke(JK.hairline, lineWidth: 1))
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending && canRecord {
+                MicButton { Task { await startRecording() } }
+            } else {
+                Button {
+                    Task { await send() }
+                } label: {
+                    Group {
+                        if sending { ProgressView().tint(JK.onPrimary) } else { Image(systemName: "paperplane.fill") }
+                    }
+                    .foregroundStyle(JK.onPrimary)
+                    .frame(width: 34, height: 34)
+                    .background(JK.primaryFill, in: Circle())
+                }
+                .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Send")
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(JK.bg)
+    }
+
+    /// Coaches always have voice notes; a client only when JK allows them.
+    private var canRecord: Bool { !forClient || session.gate.voiceNotes }
+
+    private func startRecording() async {
+        sendError = nil
+        voice.cap = TimeInterval(forClient ? session.gate.voiceMaxSec : 300)
+        await voice.start()
+    }
+
+    private func sendVoice() async {
+        sending = true
+        defer { sending = false }
+        do {
+            let sent = try await VoiceSend.send(voice, clientId: clientId)
+            sendError = nil
+            messages = VoiceRefresh.merge(messages ?? [], updated: [sent])
+            pendingSince = sent.voice?.status == .pending ? (pendingSince ?? Date()) : pendingSince
+        } catch {
+            sendError = error.readable
+        }
+    }
+
+    /// A retried transcription comes back with its new state.
+    private func updateVoice(_ id: String, _ info: VoiceInfo) {
+        guard var list = messages, let i = list.firstIndex(where: { $0.id == id }) else { return }
+        list[i].voice = info
+        messages = list
+        if info.status == .pending { pendingSince = Date() }
     }
 
     private func dayLabel(_ date: Date) -> String {
@@ -104,14 +162,18 @@ struct MessagesThreadView: View {
         do {
             let reply: MessagesResponse = try await api.get("/api/messages", query: [
                 "clientId": clientId, "after": last.map { ISO.fractional.string(from: $0) },
+                "since": messages == nil ? nil : cursor,
             ])
             if let current = messages {
                 let known = Set(current.map(\.id))
                 let fresh = reply.messages.filter { !known.contains($0.id) }
-                if !fresh.isEmpty { messages = current + fresh }
+                messages = VoiceRefresh.merge(current + fresh, updated: reply.updated ?? [])
             } else {
                 messages = reply.messages
             }
+            if let next = reply.cursor { cursor = next }
+            let pending = (messages ?? []).contains { $0.voice?.status == .pending }
+            pendingSince = pending ? (pendingSince ?? Date()) : nil
             error = nil
         } catch {
             if !error.isCancellation { self.error = error.readable }
@@ -140,6 +202,8 @@ struct MessagesThreadView: View {
 private struct Bubble: View {
     let message: Message
     let mine: Bool
+    var forClient = false
+    var onVoiceUpdate: (VoiceInfo) -> Void = { _ in }
 
     /// What a non-text message is, in a word or two.
     private var tag: (key: IconKey, text: String)? {
@@ -148,6 +212,7 @@ private struct Bubble: View {
         case "mealPhoto"?: return (.mealPhoto, "Meal photo")
         case "answer"?: return (.reply, mine ? "Your answer to the letter" : "Answered your letter")
         case "letter"?: return (.letter, "Letter delivered")
+        case "voice"?: return (.voiceNote, mine ? "Your voice note" : "Voice note")
         default:
             if message.workoutId != nil { return (.workout, "Plan updated") }
             return nil
@@ -164,12 +229,16 @@ private struct Bubble: View {
                         Text(tag.text).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     }
                 }
-                if !message.text.isEmpty {
-                    Text(message.text).font(.jkBody).foregroundStyle(JK.text)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if let id = message.mediaId {
-                    MessageMedia(mediaId: id, isVideo: message.kind == "formCheck")
+                if message.isVoice {
+                    VoiceNoteBubble(message: message, forClient: forClient, mine: mine, onUpdate: onVoiceUpdate)
+                } else {
+                    if !message.text.isEmpty {
+                        LinkedText(message.text).font(.jkBody).foregroundStyle(JK.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let id = message.mediaId {
+                        MessageMedia(mediaId: id, isVideo: message.kind == "formCheck" || message.mediaKind == "video")
+                    }
                 }
                 Text(Fmt.time(message.at)).font(.jkCaption).foregroundStyle(JK.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -179,8 +248,8 @@ private struct Bubble: View {
             // Your own words sit raised; the other side's on surface.
             .background(mine ? JK.raised : JK.surface,
                         in: RoundedRectangle(cornerRadius: JK.Radius.card, style: .continuous))
-            .frame(maxWidth: 300, alignment: mine ? .trailing : .leading)
-            .accessibilityElement(children: .combine)
+            .frame(maxWidth: message.isVoice ? 340 : 300, alignment: mine ? .trailing : .leading)
+            .accessibilityElement(children: message.isVoice ? .contain : .combine)
             if !mine { Spacer(minLength: 50) }
         }
     }
@@ -272,6 +341,9 @@ struct CoachThreadsView: View {
         case "formCheck"?: return "Form check" + (last.text.isEmpty ? "" : " · \(last.text)")
         case "mealPhoto"?: return "Meal photo" + (last.text.isEmpty ? "" : " · \(last.text)")
         case "answer"?: return "Answered your letter · \(last.text)"
+        case "voice"?:
+            if last.voice?.flags?.isEmpty == false { return "\(last.text) · flagged" }
+            return last.text
         default: return last.text
         }
     }

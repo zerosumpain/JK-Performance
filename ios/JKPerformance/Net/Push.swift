@@ -22,6 +22,18 @@ enum ClientRoute: Hashable {
     case prepare
     /// Review › Accountability session.
     case accountability
+    /// A campaign enrolment or invitation (desk-v2 F13), by enrolment id.
+    case campaign(String)
+    /// A guide JK wrote in the guidebook (F14), by id.
+    case coachGuide(String)
+    /// An activity's inline guide (F14 blocks carried by the activity).
+    case inlineGuide(InlineGuide)
+}
+
+/// A guide that came inside a campaign activity rather than from the guidebook.
+struct InlineGuide: Hashable {
+    let title: String
+    let blocks: [GuideBlock]
 }
 
 /// Which tab is showing, what is pushed in it, and the JK sheet (docs/design/
@@ -58,6 +70,8 @@ final class TabRouter {
     var reviewWantsSession = false
     /// Unread from JK (GET /api/week): the silver dot on his avatar.
     var unread = 0
+    /// Open the Account sheet at Privacy (a voice note's "Change").
+    var showPrivacy = false
 
     struct ReplyQuote: Equatable {
         let reportId: String
@@ -74,6 +88,7 @@ final class TabRouter {
         showJK = false
         showAccount = false
         showMembership = false
+        showPrivacy = false
         replyQuote = nil
         composerDraft = nil
         reviewLetter = nil
@@ -106,6 +121,12 @@ final class TabRouter {
 
     /// JK sheet › Account (at Membership when asked). The Account sheet sits
     /// over the JK sheet, so the JK sheet opens first.
+    /// Account › Privacy, where "Transcribe my voice notes" lives.
+    func openPrivacy() {
+        showPrivacy = true
+        openAccount()
+    }
+
     func openAccount(membership: Bool = false) {
         showMembership = membership
         let wasOpen = showJK

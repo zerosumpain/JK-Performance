@@ -511,15 +511,31 @@ struct Message: Codable, Identifiable, Hashable {
     var workoutId: String?
     let at: Date
     var readAt: Date?
-    /// text | letter | answer | formCheck | mealPhoto
+    /// text | letter | answer | formCheck | mealPhoto | voice
     var kind: String?
     var reportId: String?
     var exerciseId: String?
+    /// Null on voice notes: their audio is in `voice` (old builds then show only the text).
     var mediaId: String?
     var mediaUrl: String?
+    /// image | video | audio, null without media (desk-v2 F19).
+    var mediaKind: String?
+    var durationSec: Double?
+    /// Equals `at` until something changes it, such as a transcript arriving.
+    var updatedAt: Date?
+    /// Set on `kind == "voice"`.
+    var voice: VoiceInfo?
+
+    var isVoice: Bool { kind == "voice" }
 }
 
-struct MessagesResponse: Codable { let messages: [Message] }
+/// GET /api/messages. `since=<cursor>` adds `updated` (changed or new rows) and
+/// `cursor` (pass it back on the next poll).
+struct MessagesResponse: Codable {
+    let messages: [Message]
+    var updated: [Message]?
+    var cursor: String?
+}
 
 struct MessageThread: Codable, Identifiable, Hashable {
     let client: PersonRef
