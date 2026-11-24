@@ -116,8 +116,10 @@ export async function renderBoard(box, ctx) {
   fill(box,
     h('div', { class: 'cg-board-actions' }, h('span', { class: 'small muted grow' }, `Updated ${fmtRelative(new Date().toISOString())}`), announceBtn, nudgeBtn),
     kpis,
-    h('section', { class: 'cg-card' }, h('div', { class: 'cg-card-head' }, h('div', null, h('h2', null, 'Progress'), h('p', { class: 'small muted m0' }, 'Each cell is the share of that phase\'s activities done so far. Behind means under 70% of what is due.'))), matrix),
-    h('div', { class: 'ui-bento cg-board-bento' }, leader, spend, challenge),
+    b.clients.length ? [
+      h('section', { class: 'cg-card' }, h('div', { class: 'cg-card-head' }, h('div', null, h('h2', null, 'Progress'), h('p', { class: 'small muted m0' }, 'Each cell is the share of that phase\'s activities done so far. Behind means under 70% of what is due.'))), matrix),
+      h('div', { class: 'ui-bento cg-board-bento' }, leader, spend, challenge)]
+      : h('section', { class: 'cg-card cg-blank' }, h('p', { class: 't-quote-s m0' }, 'Nobody has accepted yet.'), h('p', { class: 'small muted' }, 'The board fills in as people accept: progress by phase, points, pace and what they spend.')),
     invited);
 }
 

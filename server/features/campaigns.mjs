@@ -1563,7 +1563,12 @@ export const feature = {
         if (existing && !['declined', 'dropped'].includes(existing.status)) return `Skipped: already ${existing.status}`;
         const now = ctx.now ?? new Date();
         const id = existing?.id ?? newId('ce');
-        if (existing) db.prepare(`UPDATE campaign_enrolments SET status='invited', invited_at=?, responded_at=NULL, enrolled_at=NULL, completed_at=NULL, dropped_at=NULL, accepted_via=NULL, points=0, start_on=NULL, note=NULL WHERE id=?`).run(now.toISOString(), id);
+        if (existing) {
+          db.prepare(`UPDATE campaign_enrolments SET status='invited', invited_at=?, fee_pence=?, discount_code=NULL, discount_pence=0, invoice_wanted=1, lay_program=0, responded_at=NULL,
+            enrolled_at=NULL, completed_at=NULL, dropped_at=NULL, accepted_via=NULL, points=0, start_on=NULL, paused_at=NULL, paused_days=0, behind_since=NULL, note=NULL WHERE id=?`).run(now.toISOString(), c.fee_pence, id);
+          db.prepare('DELETE FROM campaign_progress WHERE enrolment_id=?').run(id);
+          db.prepare('DELETE FROM campaign_nudges WHERE enrolment_id=?').run(id);
+        }
         else db.prepare(`INSERT INTO campaign_enrolments (id, campaign_id, coach_id, client_id, status, fee_pence, invited_at) VALUES (?,?,?,?,'invited',?,?)`).run(id, c.id, ctx.coachId, ctx.client.id, c.fee_pence, now.toISOString());
         const e = reload(db, id);
         // Always an invitation: automations never enrol anyone into spending.

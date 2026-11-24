@@ -236,12 +236,23 @@ endsOn, lengthDays, feePence, placesLeft}]` for live public campaigns).
 4. WP11: `publicOffers` returns campaign objects; build the offer link and interest count on your side. The demo's
    "January Reset" is a **draft** (as the spec says), so it is not a live public offer until the coach makes it live.
 5. WP3: `campaign.enrolled` carries `campaignId` and `startOn` besides the spec's keys; the Campaigns board reads
-   `GET /api/billing/invoices?sourceRef=<enrolmentId>` when `billing` is in `/api/coach/capabilities`.
+   `GET /api/billing/invoices?sourceRef=<enrolmentId>` (expects `{invoices:[{id, status}]}`) when `billing` is in
+   `/api/coach/capabilities`. The Enrol tab's live code check posts `POST /api/offers/discounts/check {code, amountPence, clientId}` and
+   reads `discountPence` (or `amountOffPence`) from the answer: WP-Z, align it with WP3's real shape.
+6. WP2 (`clients.js`): on a phone the Client 360 header squeezes the name column when registered client actions are wide
+   ("Invite to campaign"); let the action buttons wrap under the name below 820 px.
+7. WP1: the `campaigns-live` widget is registered at `order: 60`, size `m`; place it in the bento as you see fit.
 
 ## Parity gaps
 
 - The apps' invitation card, campaign card and native guide renderer are WP9/WP10's (P1); the plan page is the guaranteed client
-  surface and is what was exercised locally.
+  surface and is what was exercised locally (Accept by form, today's activities, every guide in full).
+- Billing is not in this worktree: the invoice column on the board and the live discount check are coded against the spec's
+  endpoints but were not exercised (the board hides the column when `billing` is absent; the code check says billing applies it).
+- `client.paused`, `client.resumed` and `client.offboarded` come from WP2, which is not here: they are proved by tests that emit them.
+- Daily nudges were exercised with injected clocks in tests; the local server sends the demo's real nudge after 07:00 London.
+- The guide editor uploads files through `POST /api/media?purpose=other` (WP6 adds `guide`); video and audio blocks were checked by
+  test, not uploaded through the browser.
 
 ## Design notes
 
@@ -249,4 +260,16 @@ endsOn, lengthDays, feePence, placesLeft}]` for live public campaigns).
   for the invitation text), `lay_program`, `behind_since` (once-per-crossing and the 3-day needs rule) and `note`;
   `campaign_kit.archived`; a new `coach_guide_opens (guide_id, client_id, opened_at)` table for `guide.opened` once per client.
 - Endpoints added beyond the spec: `POST …/invitation-preview`, `POST …/nudge` (the board's "Nudge behind").
-- The plan page's styles are inline with a CSP **hash** (no `unsafe-inline`), so no extra public stylesheet route is needed.
+- The plan page's styles are inline with a CSP **hash** (no `unsafe-inline`), so no extra public stylesheet route is needed. It follows
+  `prefers-color-scheme` (Atelier dark, paper light) and uses the desk palette's values; the progress bar width is a class, never an
+  inline style.
+- Desk: covers are a tokenised tint (`color-mix` of the status's chart tone over `--surface`, plus `--sheen`), no gradients beyond the
+  token. Status is always a word plus a glyph. Phase colours are `chart-1…6`; the progress matrix uses `--heat-0…4`.
+- Keyboard: phase edges move with ←/→ (⇧ a week), activities change day with ↑/↓ on their handle (⇧ a week), guide blocks move with
+  ⌥↑/⌥↓; every drag has that alternative. ⌘S saves a campaign design; unsaved edits survive switching tabs.
+- The new-campaign wizard is a slide-over with four template cards rather than the kit `wizard()` stepper: one step is enough.
+
+## Local preview (WP4 worktree)
+
+- `http://100.83.68.108:5684/desk#/campaigns`, `#/campaigns/<id>/board|design|kit|enrol|settings`, `#/guidebook`, `#/guidebook/<id>`,
+  `#/clients/<id>/campaigns`, and `http://100.83.68.108:5684/plan/<token>` (sign in with the demo coach code).

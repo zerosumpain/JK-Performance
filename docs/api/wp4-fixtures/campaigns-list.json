@@ -1,7 +1,7 @@
 {
   "campaigns": [
     {
-      "id": "cg_u8qSi4Q8PpHK",
+      "id": "cg_yLwEzsljoFMV",
       "name": "12-Week Marathon Build",
       "tagline": "From 10 km to race day, one week at a time",
       "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
@@ -25,34 +25,34 @@
       "welcomeText": "Welcome to the build. Read \"Your first week\" before Monday and tick as you go.",
       "completionText": "You did it. Twelve weeks, every long run. Enjoy race day.",
       "createdAt": "2026-10-15T07:30:00.000Z",
-      "updatedAt": "2026-11-24T00:48:16.519Z",
+      "updatedAt": "2026-11-24T01:12:47.818Z",
       "enrolled": 4,
       "invited": 1,
       "placesLeft": 2,
-      "avgProgress": 24,
-      "behind": 2,
+      "avgProgress": 23,
+      "behind": 1,
       "activityCount": 64,
       "phaseCount": 4,
       "expectedSpendPence": 15300,
       "requiredKitPence": 15300,
       "people": [
         {
-          "id": "u_fGx2sUY4KLMF",
+          "id": "u_O8u5CuM-L1Ea",
           "name": "Priya Shah",
           "initials": "PS"
         },
         {
-          "id": "u_Y94-s_UtqNb9",
+          "id": "u__6nm9Dc2kZYN",
           "name": "Rory Kane",
           "initials": "RK"
         },
         {
-          "id": "u_DzavUIdHs2JS",
+          "id": "u_ABBVYvFaObxH",
           "name": "Sam Carter",
           "initials": "SC"
         },
         {
-          "id": "u_CW2TA6R9-JAv",
+          "id": "u_kQnt25hn12lf",
           "name": "Leo Grant",
           "initials": "LG"
         }
@@ -60,7 +60,7 @@
       "today": 24
     },
     {
-      "id": "cg_Jht_RTtQy3pN",
+      "id": "cg_NdM6O4UQNFPu",
       "name": "January Reset",
       "tagline": "Thirty days to get the basics back",
       "description": "A daily walk, protein at breakfast, lights out by eleven and one short session a week. Small things, every day.",
@@ -84,7 +84,7 @@
       "welcomeText": "Start when you are ready. One day at a time.",
       "completionText": "",
       "createdAt": "2026-10-15T07:30:00.000Z",
-      "updatedAt": "2026-11-24T00:48:16.519Z",
+      "updatedAt": "2026-11-24T01:12:47.818Z",
       "enrolled": 0,
       "invited": 0,
       "placesLeft": null,
@@ -98,7 +98,7 @@
       "today": null
     },
     {
-      "id": "cg_RSQHjRLvCdUM",
+      "id": "cg_9euXrh3OgZiw",
       "name": "Ski-fit 6 weeks",
       "tagline": "Legs, lungs and knees for the slopes",
       "description": "Strength, power and balance for a week on the mountain.",
@@ -122,7 +122,7 @@
       "welcomeText": "",
       "completionText": "Ready for the hill. Send me a photo from the top.",
       "createdAt": "2026-10-15T07:30:00.000Z",
-      "updatedAt": "2026-11-24T00:48:16.519Z",
+      "updatedAt": "2026-11-24T01:12:47.818Z",
       "enrolled": 2,
       "invited": 0,
       "placesLeft": 6,
@@ -134,12 +134,12 @@
       "requiredKitPence": 1800,
       "people": [
         {
-          "id": "u_DzavUIdHs2JS",
+          "id": "u_ABBVYvFaObxH",
           "name": "Sam Carter",
           "initials": "SC"
         },
         {
-          "id": "u_mr-IG2AeA6FP",
+          "id": "u_Qo3g-o_2qZV7",
           "name": "Alex Morgan",
           "initials": "AM"
         }

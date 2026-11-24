@@ -1,6 +1,6 @@
 {
   "campaign": {
-    "id": "cg_u8qSi4Q8PpHK",
+    "id": "cg_yLwEzsljoFMV",
     "name": "12-Week Marathon Build",
     "tagline": "From 10 km to race day, one week at a time",
     "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
@@ -24,34 +24,34 @@
     "welcomeText": "Welcome to the build. Read \"Your first week\" before Monday and tick as you go.",
     "completionText": "You did it. Twelve weeks, every long run. Enjoy race day.",
     "createdAt": "2026-10-15T07:30:00.000Z",
-    "updatedAt": "2026-11-24T00:48:16.519Z",
+    "updatedAt": "2026-11-24T01:12:47.818Z",
     "enrolled": 4,
     "invited": 1,
     "placesLeft": 2,
-    "avgProgress": 24,
-    "behind": 2,
+    "avgProgress": 23,
+    "behind": 1,
     "activityCount": 64,
     "phaseCount": 4,
     "expectedSpendPence": 15300,
     "requiredKitPence": 15300,
     "people": [
       {
-        "id": "u_fGx2sUY4KLMF",
+        "id": "u_O8u5CuM-L1Ea",
         "name": "Priya Shah",
         "initials": "PS"
       },
       {
-        "id": "u_Y94-s_UtqNb9",
+        "id": "u__6nm9Dc2kZYN",
         "name": "Rory Kane",
         "initials": "RK"
       },
       {
-        "id": "u_DzavUIdHs2JS",
+        "id": "u_ABBVYvFaObxH",
         "name": "Sam Carter",
         "initials": "SC"
       },
       {
-        "id": "u_CW2TA6R9-JAv",
+        "id": "u_kQnt25hn12lf",
         "name": "Leo Grant",
         "initials": "LG"
       }
@@ -60,42 +60,42 @@
   },
   "phases": [
     {
-      "id": "cph_19Q2nQxStAtZ",
+      "id": "cph_raFX2jpytrDc",
       "name": "Base",
       "startDay": 0,
       "endDay": 20,
       "color": "chart-2",
-      "guideId": "gb_uz5SQfzB2U48",
+      "guideId": "gb_GqImph4czhXs",
       "summary": "Easy miles, hills and habits.",
       "position": 0
     },
     {
-      "id": "cph_1UYEiPc2Bimf",
+      "id": "cph_O55ZtOzS3YY9",
       "name": "Build",
       "startDay": 21,
       "endDay": 48,
       "color": "chart-1",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "summary": "Long runs grow; practise fuelling.",
       "position": 1
     },
     {
-      "id": "cph_z3Mg3SvWPRVv",
+      "id": "cph_IpEWiepyz3J_",
       "name": "Peak",
       "startDay": 49,
       "endDay": 69,
       "color": "chart-5",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "summary": "Biggest weeks. Sleep and mobility matter most.",
       "position": 2
     },
     {
-      "id": "cph_9WjYMY6ytRC7",
+      "id": "cph_Xq_vxFH7L1ye",
       "name": "Taper",
       "startDay": 70,
       "endDay": 83,
       "color": "chart-3",
-      "guideId": "gb_tWSP1b7_2Yxu",
+      "guideId": "gb_FcUxy0T3eYCF",
       "summary": "Less volume, same intensity.",
       "position": 3
     }
@@ -103,40 +103,40 @@
   "clients": [
     {
       "enrolment": {
-        "id": "ce_WgEeyBJJmxIp",
-        "campaignId": "cg_u8qSi4Q8PpHK",
-        "clientId": "u_fGx2sUY4KLMF",
+        "id": "ce_xpgJQuiRI908",
+        "campaignId": "cg_yLwEzsljoFMV",
+        "clientId": "u_O8u5CuM-L1Ea",
         "status": "active",
         "startOn": "2026-11-01",
         "endsOn": "2027-01-23",
         "day": 24,
         "lengthDays": 84,
-        "pct": 31,
-        "pace": 100,
+        "pct": 30,
+        "pace": 94,
         "behind": false,
         "behindSince": null,
-        "points": 215,
+        "points": 200,
         "cells": [
           {
-            "phaseId": "cph_19Q2nQxStAtZ",
+            "phaseId": "cph_raFX2jpytrDc",
             "pct": 100,
             "duePct": 100,
             "due": 18
           },
           {
-            "phaseId": "cph_1UYEiPc2Bimf",
-            "pct": 10,
-            "duePct": 100,
+            "phaseId": "cph_O55ZtOzS3YY9",
+            "pct": 5,
+            "duePct": 50,
             "due": 2
           },
           {
-            "phaseId": "cph_z3Mg3SvWPRVv",
+            "phaseId": "cph_IpEWiepyz3J_",
             "pct": 0,
             "duePct": 0,
             "due": 0
           },
           {
-            "phaseId": "cph_9WjYMY6ytRC7",
+            "phaseId": "cph_Xq_vxFH7L1ye",
             "pct": 0,
             "duePct": 0,
             "due": 0
@@ -155,41 +155,41 @@
         "droppedAt": null,
         "pausedDays": 0,
         "note": null,
-        "spentPence": 29980,
+        "spentPence": 18499,
         "expectedSpendPence": 15300
       },
       "client": {
-        "id": "u_fGx2sUY4KLMF",
+        "id": "u_O8u5CuM-L1Ea",
         "name": "Priya Shah",
         "initials": "PS"
       },
-      "pct": 31,
-      "pace": 100,
+      "pct": 30,
+      "pace": 94,
       "behind": false,
-      "points": 215,
+      "points": 200,
       "expectedSpendPence": 15300,
-      "spentPence": 29980,
+      "spentPence": 18499,
       "cells": [
         {
-          "phaseId": "cph_19Q2nQxStAtZ",
+          "phaseId": "cph_raFX2jpytrDc",
           "pct": 100,
           "duePct": 100,
           "due": 18
         },
         {
-          "phaseId": "cph_1UYEiPc2Bimf",
-          "pct": 10,
-          "duePct": 100,
+          "phaseId": "cph_O55ZtOzS3YY9",
+          "pct": 5,
+          "duePct": 50,
           "due": 2
         },
         {
-          "phaseId": "cph_z3Mg3SvWPRVv",
+          "phaseId": "cph_IpEWiepyz3J_",
           "pct": 0,
           "duePct": 0,
           "due": 0
         },
         {
-          "phaseId": "cph_9WjYMY6ytRC7",
+          "phaseId": "cph_Xq_vxFH7L1ye",
           "pct": 0,
           "duePct": 0,
           "due": 0
@@ -199,40 +199,40 @@
     },
     {
       "enrolment": {
-        "id": "ce_Xb9BpwOOix4d",
-        "campaignId": "cg_u8qSi4Q8PpHK",
-        "clientId": "u_Y94-s_UtqNb9",
+        "id": "ce_0Hm72Sj7Vndz",
+        "campaignId": "cg_yLwEzsljoFMV",
+        "clientId": "u__6nm9Dc2kZYN",
         "status": "active",
         "startOn": "2026-11-01",
         "endsOn": "2027-01-23",
         "day": 24,
         "lengthDays": 84,
-        "pct": 30,
-        "pace": 94,
+        "pct": 28,
+        "pace": 88,
         "behind": false,
         "behindSince": null,
-        "points": 210,
+        "points": 190,
         "cells": [
           {
-            "phaseId": "cph_19Q2nQxStAtZ",
-            "pct": 94,
-            "duePct": 94,
+            "phaseId": "cph_raFX2jpytrDc",
+            "pct": 89,
+            "duePct": 89,
             "due": 18
           },
           {
-            "phaseId": "cph_1UYEiPc2Bimf",
+            "phaseId": "cph_O55ZtOzS3YY9",
             "pct": 10,
             "duePct": 100,
             "due": 2
           },
           {
-            "phaseId": "cph_z3Mg3SvWPRVv",
+            "phaseId": "cph_IpEWiepyz3J_",
             "pct": 0,
             "duePct": 0,
             "due": 0
           },
           {
-            "phaseId": "cph_9WjYMY6ytRC7",
+            "phaseId": "cph_Xq_vxFH7L1ye",
             "pct": 0,
             "duePct": 0,
             "due": 0
@@ -251,41 +251,41 @@
         "droppedAt": null,
         "pausedDays": 0,
         "note": null,
-        "spentPence": 28501,
+        "spentPence": 14150,
         "expectedSpendPence": 15300
       },
       "client": {
-        "id": "u_Y94-s_UtqNb9",
+        "id": "u__6nm9Dc2kZYN",
         "name": "Rory Kane",
         "initials": "RK"
       },
-      "pct": 30,
-      "pace": 94,
+      "pct": 28,
+      "pace": 88,
       "behind": false,
-      "points": 210,
+      "points": 190,
       "expectedSpendPence": 15300,
-      "spentPence": 28501,
+      "spentPence": 14150,
       "cells": [
         {
-          "phaseId": "cph_19Q2nQxStAtZ",
-          "pct": 94,
-          "duePct": 94,
+          "phaseId": "cph_raFX2jpytrDc",
+          "pct": 89,
+          "duePct": 89,
           "due": 18
         },
         {
-          "phaseId": "cph_1UYEiPc2Bimf",
+          "phaseId": "cph_O55ZtOzS3YY9",
           "pct": 10,
           "duePct": 100,
           "due": 2
         },
         {
-          "phaseId": "cph_z3Mg3SvWPRVv",
+          "phaseId": "cph_IpEWiepyz3J_",
           "pct": 0,
           "duePct": 0,
           "due": 0
         },
         {
-          "phaseId": "cph_9WjYMY6ytRC7",
+          "phaseId": "cph_Xq_vxFH7L1ye",
           "pct": 0,
           "duePct": 0,
           "due": 0
@@ -295,40 +295,40 @@
     },
     {
       "enrolment": {
-        "id": "ce_T6TVXx6qweVa",
-        "campaignId": "cg_u8qSi4Q8PpHK",
-        "clientId": "u_DzavUIdHs2JS",
+        "id": "ce_hOdT6amCqpnF",
+        "campaignId": "cg_yLwEzsljoFMV",
+        "clientId": "u_ABBVYvFaObxH",
         "status": "active",
         "startOn": "2026-11-01",
         "endsOn": "2027-01-23",
         "day": 24,
         "lengthDays": 84,
-        "pct": 20,
-        "pace": 65,
-        "behind": true,
+        "pct": 22,
+        "pace": 76,
+        "behind": false,
         "behindSince": null,
-        "points": 130,
+        "points": 155,
         "cells": [
           {
-            "phaseId": "cph_19Q2nQxStAtZ",
+            "phaseId": "cph_raFX2jpytrDc",
             "pct": 67,
             "duePct": 67,
             "due": 18
           },
           {
-            "phaseId": "cph_1UYEiPc2Bimf",
-            "pct": 5,
-            "duePct": 50,
+            "phaseId": "cph_O55ZtOzS3YY9",
+            "pct": 10,
+            "duePct": 100,
             "due": 2
           },
           {
-            "phaseId": "cph_z3Mg3SvWPRVv",
+            "phaseId": "cph_IpEWiepyz3J_",
             "pct": 0,
             "duePct": 0,
             "due": 0
           },
           {
-            "phaseId": "cph_9WjYMY6ytRC7",
+            "phaseId": "cph_Xq_vxFH7L1ye",
             "pct": 0,
             "duePct": 0,
             "due": 0
@@ -351,37 +351,37 @@
         "expectedSpendPence": 15300
       },
       "client": {
-        "id": "u_DzavUIdHs2JS",
+        "id": "u_ABBVYvFaObxH",
         "name": "Sam Carter",
         "initials": "SC"
       },
-      "pct": 20,
-      "pace": 65,
-      "behind": true,
-      "points": 130,
+      "pct": 22,
+      "pace": 76,
+      "behind": false,
+      "points": 155,
       "expectedSpendPence": 15300,
       "spentPence": 18499,
       "cells": [
         {
-          "phaseId": "cph_19Q2nQxStAtZ",
+          "phaseId": "cph_raFX2jpytrDc",
           "pct": 67,
           "duePct": 67,
           "due": 18
         },
         {
-          "phaseId": "cph_1UYEiPc2Bimf",
-          "pct": 5,
-          "duePct": 50,
+          "phaseId": "cph_O55ZtOzS3YY9",
+          "pct": 10,
+          "duePct": 100,
           "due": 2
         },
         {
-          "phaseId": "cph_z3Mg3SvWPRVv",
+          "phaseId": "cph_IpEWiepyz3J_",
           "pct": 0,
           "duePct": 0,
           "due": 0
         },
         {
-          "phaseId": "cph_9WjYMY6ytRC7",
+          "phaseId": "cph_Xq_vxFH7L1ye",
           "pct": 0,
           "duePct": 0,
           "due": 0
@@ -391,40 +391,40 @@
     },
     {
       "enrolment": {
-        "id": "ce_V6pp7ksuWbqs",
-        "campaignId": "cg_u8qSi4Q8PpHK",
-        "clientId": "u_CW2TA6R9-JAv",
+        "id": "ce_PaIcN5IuCuHv",
+        "campaignId": "cg_yLwEzsljoFMV",
+        "clientId": "u_kQnt25hn12lf",
         "status": "active",
         "startOn": "2026-11-01",
         "endsOn": "2027-01-23",
         "day": 24,
         "lengthDays": 84,
         "pct": 13,
-        "pace": 41,
+        "pace": 47,
         "behind": true,
         "behindSince": "2026-11-19",
-        "points": 95,
+        "points": 90,
         "cells": [
           {
-            "phaseId": "cph_19Q2nQxStAtZ",
-            "pct": 44,
-            "duePct": 44,
+            "phaseId": "cph_raFX2jpytrDc",
+            "pct": 39,
+            "duePct": 39,
             "due": 18
           },
           {
-            "phaseId": "cph_1UYEiPc2Bimf",
-            "pct": 0,
-            "duePct": 0,
+            "phaseId": "cph_O55ZtOzS3YY9",
+            "pct": 5,
+            "duePct": 50,
             "due": 2
           },
           {
-            "phaseId": "cph_z3Mg3SvWPRVv",
+            "phaseId": "cph_IpEWiepyz3J_",
             "pct": 0,
             "duePct": 0,
             "due": 0
           },
           {
-            "phaseId": "cph_9WjYMY6ytRC7",
+            "phaseId": "cph_Xq_vxFH7L1ye",
             "pct": 0,
             "duePct": 0,
             "due": 0
@@ -447,37 +447,37 @@
         "expectedSpendPence": 15300
       },
       "client": {
-        "id": "u_CW2TA6R9-JAv",
+        "id": "u_kQnt25hn12lf",
         "name": "Leo Grant",
         "initials": "LG"
       },
       "pct": 13,
-      "pace": 41,
+      "pace": 47,
       "behind": true,
-      "points": 95,
+      "points": 90,
       "expectedSpendPence": 15300,
       "spentPence": 8999,
       "cells": [
         {
-          "phaseId": "cph_19Q2nQxStAtZ",
-          "pct": 44,
-          "duePct": 44,
+          "phaseId": "cph_raFX2jpytrDc",
+          "pct": 39,
+          "duePct": 39,
           "due": 18
         },
         {
-          "phaseId": "cph_1UYEiPc2Bimf",
-          "pct": 0,
-          "duePct": 0,
+          "phaseId": "cph_O55ZtOzS3YY9",
+          "pct": 5,
+          "duePct": 50,
           "due": 2
         },
         {
-          "phaseId": "cph_z3Mg3SvWPRVv",
+          "phaseId": "cph_IpEWiepyz3J_",
           "pct": 0,
           "duePct": 0,
           "due": 0
         },
         {
-          "phaseId": "cph_9WjYMY6ytRC7",
+          "phaseId": "cph_Xq_vxFH7L1ye",
           "pct": 0,
           "duePct": 0,
           "due": 0
@@ -489,9 +489,9 @@
   "invited": [
     {
       "enrolment": {
-        "id": "ce_y6QMZ-wL4pg0",
-        "campaignId": "cg_u8qSi4Q8PpHK",
-        "clientId": "u_yLDC75EPRe1n",
+        "id": "ce_B8-8i6N7N-g1",
+        "campaignId": "cg_yLwEzsljoFMV",
+        "clientId": "u_owxBaRkD-xpU",
         "status": "declined",
         "startOn": null,
         "endsOn": null,
@@ -520,16 +520,16 @@
         "expectedSpendPence": 15300
       },
       "client": {
-        "id": "u_yLDC75EPRe1n",
+        "id": "u_owxBaRkD-xpU",
         "name": "Tom Burke",
         "initials": "TB"
       }
     },
     {
       "enrolment": {
-        "id": "ce_3yrC1pueo4IJ",
-        "campaignId": "cg_u8qSi4Q8PpHK",
-        "clientId": "u_mr-IG2AeA6FP",
+        "id": "ce_UW50WTRP2zHu",
+        "campaignId": "cg_yLwEzsljoFMV",
+        "clientId": "u_Qo3g-o_2qZV7",
         "status": "invited",
         "startOn": null,
         "endsOn": null,
@@ -558,7 +558,7 @@
         "expectedSpendPence": 15300
       },
       "client": {
-        "id": "u_mr-IG2AeA6FP",
+        "id": "u_Qo3g-o_2qZV7",
         "name": "Alex Morgan",
         "initials": "AM"
       }
@@ -566,7 +566,7 @@
   ],
   "totals": {
     "expectedSpendPence": 61200,
-    "spentPence": 85979,
+    "spentPence": 60147,
     "requiredKitPence": 15300,
     "optionalKitPence": 5300
   }

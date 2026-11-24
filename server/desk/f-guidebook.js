@@ -221,7 +221,8 @@ export function blockEditor({ blocks = [], onChange = null, compact = false } = 
   function draw(focusIndex = null, focusInput = false) {
     el.replaceChildren(...list.map(row), adder);
     if (focusIndex !== null) {
-      const target = el.querySelector(`.gb-row[data-i="${focusIndex}"] ${focusInput ? '.gb-edit input, .gb-edit textarea' : '.gb-handle'}`);
+      const rowEl = el.querySelector(`.gb-row[data-i="${focusIndex}"]`);
+      const target = rowEl?.querySelector(focusInput ? '.gb-edit input:not([type=file]), .gb-edit textarea' : '.gb-handle');
       target?.focus({ preventScroll: false });
     }
   }

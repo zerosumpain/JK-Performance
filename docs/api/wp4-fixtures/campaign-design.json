@@ -1,6 +1,6 @@
 {
   "campaign": {
-    "id": "cg_u8qSi4Q8PpHK",
+    "id": "cg_yLwEzsljoFMV",
     "name": "12-Week Marathon Build",
     "tagline": "From 10 km to race day, one week at a time",
     "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
@@ -24,59 +24,59 @@
     "welcomeText": "Welcome to the build. Read \"Your first week\" before Monday and tick as you go.",
     "completionText": "You did it. Twelve weeks, every long run. Enjoy race day.",
     "createdAt": "2026-10-15T07:30:00.000Z",
-    "updatedAt": "2026-11-24T00:48:16.519Z"
+    "updatedAt": "2026-11-24T01:12:47.818Z"
   },
   "phases": [
     {
-      "id": "cph_19Q2nQxStAtZ",
+      "id": "cph_raFX2jpytrDc",
       "name": "Base",
       "startDay": 0,
       "endDay": 20,
       "color": "chart-2",
-      "guideId": "gb_uz5SQfzB2U48",
+      "guideId": "gb_GqImph4czhXs",
       "summary": "Easy miles, hills and habits.",
       "position": 0
     },
     {
-      "id": "cph_1UYEiPc2Bimf",
+      "id": "cph_O55ZtOzS3YY9",
       "name": "Build",
       "startDay": 21,
       "endDay": 48,
       "color": "chart-1",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "summary": "Long runs grow; practise fuelling.",
       "position": 1
     },
     {
-      "id": "cph_z3Mg3SvWPRVv",
+      "id": "cph_IpEWiepyz3J_",
       "name": "Peak",
       "startDay": 49,
       "endDay": 69,
       "color": "chart-5",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "summary": "Biggest weeks. Sleep and mobility matter most.",
       "position": 2
     },
     {
-      "id": "cph_9WjYMY6ytRC7",
+      "id": "cph_Xq_vxFH7L1ye",
       "name": "Taper",
       "startDay": 70,
       "endDay": 83,
       "color": "chart-3",
-      "guideId": "gb_tWSP1b7_2Yxu",
+      "guideId": "gb_FcUxy0T3eYCF",
       "summary": "Less volume, same intensity.",
       "position": 3
     }
   ],
   "activities": [
     {
-      "id": "ca_4sqEdw79bmnA",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_DXked-wsidvY",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 0,
       "title": "Read: Your first week",
       "kind": "read",
       "detail": "",
-      "guideId": "gb_uz5SQfzB2U48",
+      "guideId": "gb_GqImph4czhXs",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -85,8 +85,8 @@
       "position": 0
     },
     {
-      "id": "ca_hycPNN5oza_u",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_-3fxANx7iZto",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 0,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -100,23 +100,23 @@
       "position": 1
     },
     {
-      "id": "ca_wei9pgjgGrV2",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_hbH9NvOs6zfl",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 1,
       "title": "Buy race shoes",
       "kind": "purchase",
       "detail": "Get fitted. Neutral unless you have been told otherwise.",
       "guideId": null,
       "blocks": null,
-      "linkRef": "ck_BVbV9B057KlA",
+      "linkRef": "ck_3IAApvym7pID",
       "points": 5,
       "required": true,
       "spendPence": 12000,
       "position": 2
     },
     {
-      "id": "ca_CsGv-8B9uUfG",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_hKDtEfdiVEm_",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 2,
       "title": "Starting 5 km time trial",
       "kind": "measure",
@@ -130,8 +130,8 @@
       "position": 3
     },
     {
-      "id": "ca_EAM86gfY7GbG",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_rcsj_cmXRTKR",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 2,
       "title": "Hills 8 × 60 s",
       "kind": "workout",
@@ -145,13 +145,13 @@
       "position": 4
     },
     {
-      "id": "ca_42AqIN6vfxMv",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_TCeHhYMA0Rz3",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 3,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -160,13 +160,13 @@
       "position": 5
     },
     {
-      "id": "ca_-WKwKnJN6pvM",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_hvx9tcI8p7Ao",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 5,
       "title": "Long run 10 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -175,8 +175,8 @@
       "position": 6
     },
     {
-      "id": "ca_9DwbS81nmI_x",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_OEFloEGiBFe-",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 6,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -190,8 +190,8 @@
       "position": 7
     },
     {
-      "id": "ca_Nm3XbAGL6RFy",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_6zqEr_5DMqe6",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 7,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -205,8 +205,8 @@
       "position": 8
     },
     {
-      "id": "ca_uTAU3Hhl1Taj",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_Q9UReoIHbOGx",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 9,
       "title": "Hills 8 × 60 s",
       "kind": "workout",
@@ -220,13 +220,13 @@
       "position": 9
     },
     {
-      "id": "ca_FNzgPxveZqNu",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_aWyiM53wxgO9",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 10,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -235,13 +235,13 @@
       "position": 10
     },
     {
-      "id": "ca_V1RYKuwXLd0W",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_mzHW1WRui0Se",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 12,
       "title": "Long run 12 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -250,8 +250,8 @@
       "position": 11
     },
     {
-      "id": "ca_PSEzpY0uw2In",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_IzpoBlv4Tcv7",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 13,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -265,8 +265,8 @@
       "position": 12
     },
     {
-      "id": "ca_0GWIE32Xb7_o",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_UoWbCyWy4Q2A",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 14,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -280,8 +280,8 @@
       "position": 13
     },
     {
-      "id": "ca_Pwpg20bTp9OW",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_JBcsKkiEcKTH",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 16,
       "title": "Hills 8 × 60 s",
       "kind": "workout",
@@ -295,13 +295,13 @@
       "position": 14
     },
     {
-      "id": "ca_AAiwS_7el9Zt",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_9Q1y7M7XUaXL",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 17,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -310,13 +310,13 @@
       "position": 15
     },
     {
-      "id": "ca_4k4NIhAIixj5",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_povxufkS6JEH",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 19,
       "title": "Long run 14 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -325,8 +325,8 @@
       "position": 16
     },
     {
-      "id": "ca_WhZjuPF8QI9O",
-      "phaseId": "cph_19Q2nQxStAtZ",
+      "id": "ca_DBkxXkx3kOai",
+      "phaseId": "cph_raFX2jpytrDc",
       "day": 20,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -340,8 +340,8 @@
       "position": 17
     },
     {
-      "id": "ca_9wZnDGzB7ihF",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_jlALU40WPsfe",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 21,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -355,8 +355,8 @@
       "position": 18
     },
     {
-      "id": "ca_NL_iuNMNKrEo",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_3NW6a8Gyc6z5",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 23,
       "title": "Intervals 6 × 800 m",
       "kind": "workout",
@@ -370,13 +370,13 @@
       "position": 19
     },
     {
-      "id": "ca_KVqFrQfQSGns",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_brINwUcPpnFC",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 24,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -385,13 +385,13 @@
       "position": 20
     },
     {
-      "id": "ca_6skbwBgccCLO",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_qgWKCSafWWri",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 26,
       "title": "Long run 16 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -400,8 +400,8 @@
       "position": 21
     },
     {
-      "id": "ca__YGv2aTzt0mG",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_miIKIc7mYK33",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 27,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -415,8 +415,8 @@
       "position": 22
     },
     {
-      "id": "ca_AczEIpmwHzS1",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_cICrdaPpArvF",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 28,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -430,8 +430,8 @@
       "position": 23
     },
     {
-      "id": "ca_Ts4TjxuT3KW1",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_Ho0zS38y6cas",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 30,
       "title": "Intervals 6 × 800 m",
       "kind": "workout",
@@ -445,13 +445,13 @@
       "position": 24
     },
     {
-      "id": "ca_pcfD3X-asfAy",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_JBNURnRTnasF",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 31,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -460,13 +460,13 @@
       "position": 25
     },
     {
-      "id": "ca_RoNO4RCJ39wJ",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_H3r2fKhKca5z",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 33,
       "title": "Long run 18 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -475,8 +475,8 @@
       "position": 26
     },
     {
-      "id": "ca_nJg4r_DvYSbc",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_zOC1mPI9E1Tx",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 34,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -490,8 +490,8 @@
       "position": 27
     },
     {
-      "id": "ca_l2t-kptMdgwg",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_nltwbx53TvNg",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 35,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -505,8 +505,8 @@
       "position": 28
     },
     {
-      "id": "ca_LA4Ij76pxU0W",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_yjJR1IYJ5Wp-",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 37,
       "title": "Intervals 6 × 800 m",
       "kind": "workout",
@@ -520,13 +520,13 @@
       "position": 29
     },
     {
-      "id": "ca_VWVHZ8yrf16P",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_EADhqQDOmlQx",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 38,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -535,13 +535,13 @@
       "position": 30
     },
     {
-      "id": "ca_fhN-aja9RwF0",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_r6kYeZiS8SDy",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 40,
       "title": "Long run 16 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -550,8 +550,8 @@
       "position": 31
     },
     {
-      "id": "ca_S_Zd8duv6GUC",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_keb_QTGlkuxV",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 41,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -565,8 +565,8 @@
       "position": 32
     },
     {
-      "id": "ca_2wN6QaVcoO5f",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_KcJBecpw1QqU",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 42,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -580,8 +580,8 @@
       "position": 33
     },
     {
-      "id": "ca_zAhgN9ppnvFK",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_z_S9HMTfo3P3",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 44,
       "title": "Intervals 6 × 800 m",
       "kind": "workout",
@@ -595,13 +595,13 @@
       "position": 34
     },
     {
-      "id": "ca_k0f2vDdKYWRk",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_dZMN9CyF641_",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 45,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -610,13 +610,13 @@
       "position": 35
     },
     {
-      "id": "ca_WErIgIkoLEZJ",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_MliyaSJ8Zzgp",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 47,
       "title": "Long run 20 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -625,8 +625,8 @@
       "position": 36
     },
     {
-      "id": "ca_znNzRUnrY_nD",
-      "phaseId": "cph_1UYEiPc2Bimf",
+      "id": "ca_iUWgN6F5svxb",
+      "phaseId": "cph_O55ZtOzS3YY9",
       "day": 48,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -640,8 +640,8 @@
       "position": 37
     },
     {
-      "id": "ca_iNiJ6mWDQknP",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_zQeptZoS0voZ",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 49,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -655,8 +655,8 @@
       "position": 38
     },
     {
-      "id": "ca_QDk_Tmol9hnX",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_vqkxlk5e-wWW",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 51,
       "title": "Intervals 6 × 800 m",
       "kind": "workout",
@@ -670,13 +670,13 @@
       "position": 39
     },
     {
-      "id": "ca_ayDgMBVSKfoa",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_n841l5rq--sn",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 52,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -685,13 +685,13 @@
       "position": 40
     },
     {
-      "id": "ca_GHcoJ2SeFUA4",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_WDD0MP1UBaB3",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 54,
       "title": "Long run 22 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -700,8 +700,8 @@
       "position": 41
     },
     {
-      "id": "ca_ECoCoHXbxlfE",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_yUZH0Gm-dxhD",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 55,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -715,8 +715,8 @@
       "position": 42
     },
     {
-      "id": "ca_mXY_WtGAJnqN",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_6UCxKGovHLig",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 56,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -730,8 +730,8 @@
       "position": 43
     },
     {
-      "id": "ca_SGrxBWaIanCX",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_MzDZuLQDolM5",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 58,
       "title": "Intervals 6 × 800 m",
       "kind": "workout",
@@ -745,13 +745,13 @@
       "position": 44
     },
     {
-      "id": "ca_LFCmmPCdslSF",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_gauFDxh9sqbc",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 59,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -760,13 +760,13 @@
       "position": 45
     },
     {
-      "id": "ca_KpLk9xkJsF8e",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_8IIWva_lB65z",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 61,
       "title": "Long run 24 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -775,8 +775,8 @@
       "position": 46
     },
     {
-      "id": "ca_lZaLvbmmAcSa",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_LCULIPTPNe4z",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 62,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -790,8 +790,8 @@
       "position": 47
     },
     {
-      "id": "ca_RMOdpfg9nesz",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_gNgngeBMGev2",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 63,
       "title": "Easy run 6 km",
       "kind": "workout",
@@ -805,8 +805,8 @@
       "position": 48
     },
     {
-      "id": "ca_x2LHs37iWk3F",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_lspQvip3dWYX",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 65,
       "title": "Race-pace 5 km",
       "kind": "workout",
@@ -820,13 +820,13 @@
       "position": 49
     },
     {
-      "id": "ca_1xfg2i-RS2tr",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_KY7yY433dkWb",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 66,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -835,13 +835,13 @@
       "position": 50
     },
     {
-      "id": "ca_CLf7CIHxV-Oq",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_HuWzkD4qLRfV",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 68,
       "title": "Long run 26 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_hDxv41Peg6H_",
+      "guideId": "gb_eFOwwJ8vQaj9",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -850,8 +850,8 @@
       "position": 51
     },
     {
-      "id": "ca_ikFQ0r-jbO8a",
-      "phaseId": "cph_z3Mg3SvWPRVv",
+      "id": "ca_1xHuoJrDUIpL",
+      "phaseId": "cph_IpEWiepyz3J_",
       "day": 69,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -865,8 +865,8 @@
       "position": 52
     },
     {
-      "id": "ca_U3Vt9PCpXRF6",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_c_4oySEhw9xa",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 70,
       "title": "Easy run 5 km",
       "kind": "workout",
@@ -880,8 +880,8 @@
       "position": 53
     },
     {
-      "id": "ca_vKDiTa7vYrkw",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_vARSeB_FAwiI",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 72,
       "title": "Race-pace 5 km",
       "kind": "workout",
@@ -895,13 +895,13 @@
       "position": 54
     },
     {
-      "id": "ca_pjdSbpBi0hpz",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_mUnWWFvlEFIx",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 73,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -910,13 +910,13 @@
       "position": 55
     },
     {
-      "id": "ca_Bit6Hl7HxXQ7",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_lsWy3jGn_bjs",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 75,
       "title": "Long run 18 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_tWSP1b7_2Yxu",
+      "guideId": "gb_FcUxy0T3eYCF",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -925,8 +925,8 @@
       "position": 56
     },
     {
-      "id": "ca_5ZmWmuNTWg_t",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_mLsDrwdu3bH6",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 76,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -940,8 +940,8 @@
       "position": 57
     },
     {
-      "id": "ca_aS1_IO89_sPm",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_uh57ngX3nLl9",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 77,
       "title": "Easy run 5 km",
       "kind": "workout",
@@ -955,8 +955,8 @@
       "position": 58
     },
     {
-      "id": "ca_d0AZ7vVQCp45",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_sIAFbHw9PelB",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 77,
       "title": "Race-day kit check",
       "kind": "task",
@@ -970,8 +970,8 @@
       "position": 59
     },
     {
-      "id": "ca_DtoibisfBor7",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_USMhi-UZdG0H",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 79,
       "title": "Race-pace 5 km",
       "kind": "workout",
@@ -985,13 +985,13 @@
       "position": 60
     },
     {
-      "id": "ca_plreduOfmh15",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_eiOxGuuCsHaU",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 80,
       "title": "Mobility 10",
       "kind": "habit",
       "detail": "",
-      "guideId": "gb_jYwQl3PK3wOY",
+      "guideId": "gb_sqo4QjMQj8va",
       "blocks": null,
       "linkRef": null,
       "points": 5,
@@ -1000,13 +1000,13 @@
       "position": 61
     },
     {
-      "id": "ca_WeiR7CVkUkTp",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_D0qPGac42M41",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 82,
       "title": "Long run 12 km",
       "kind": "workout",
       "detail": "",
-      "guideId": "gb_tWSP1b7_2Yxu",
+      "guideId": "gb_FcUxy0T3eYCF",
       "blocks": null,
       "linkRef": null,
       "points": 20,
@@ -1015,8 +1015,8 @@
       "position": 62
     },
     {
-      "id": "ca_bsDntKI-fcRi",
-      "phaseId": "cph_9WjYMY6ytRC7",
+      "id": "ca_eN8adfVv3yhK",
+      "phaseId": "cph_Xq_vxFH7L1ye",
       "day": 83,
       "title": "Weekly check-in",
       "kind": "checkin",
@@ -1032,7 +1032,7 @@
   ],
   "kit": [
     {
-      "id": "ck_BVbV9B057KlA",
+      "id": "ck_3IAApvym7pID",
       "name": "Running shoes",
       "estPence": 12000,
       "required": true,
@@ -1041,7 +1041,7 @@
       "position": 0
     },
     {
-      "id": "ck_S74mLtrKAnDY",
+      "id": "ck_deZcMSa7Rcrq",
       "name": "Energy gels (box of 12)",
       "estPence": 2500,
       "required": true,
@@ -1050,7 +1050,7 @@
       "position": 1
     },
     {
-      "id": "ck_t85ZWFFUuyx3",
+      "id": "ck_ujJLiWCAMLdH",
       "name": "Running belt",
       "estPence": 1500,
       "required": false,
@@ -1059,7 +1059,7 @@
       "position": 2
     },
     {
-      "id": "ck_iuCEWv1B4iU5",
+      "id": "ck_1y7J5JIKUxWq",
       "name": "Foam roller",
       "estPence": 2000,
       "required": false,
@@ -1068,7 +1068,7 @@
       "position": 3
     },
     {
-      "id": "ck_rUSYcnnV5US4",
+      "id": "ck_Jg-h9qE8X_BJ",
       "name": "Anti-chafe balm",
       "estPence": 800,
       "required": true,
@@ -1077,7 +1077,7 @@
       "position": 4
     },
     {
-      "id": "ck_IMMkM07xAPPC",
+      "id": "ck_-PLIjqXad-sR",
       "name": "Reflective vest",
       "estPence": 1800,
       "required": false,

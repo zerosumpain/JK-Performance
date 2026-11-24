@@ -1,10 +1,10 @@
 {
   "invitations": [
     {
-      "enrolmentId": "ce_3yrC1pueo4IJ",
+      "enrolmentId": "ce_UW50WTRP2zHu",
       "status": "invited",
       "campaign": {
-        "id": "cg_u8qSi4Q8PpHK",
+        "id": "cg_yLwEzsljoFMV",
         "name": "12-Week Marathon Build",
         "tagline": "From 10 km to race day, one week at a time",
         "description": "Three runs a week, one strength session, a long run that grows every weekend and a proper taper. Built for the spring marathon.",
@@ -57,10 +57,10 @@
   ],
   "enrolments": [
     {
-      "id": "ce_y8xWBLhca_8s",
+      "id": "ce_8Evqi7XbvoI9",
       "status": "completed",
       "campaign": {
-        "id": "cg_RSQHjRLvCdUM",
+        "id": "cg_9euXrh3OgZiw",
         "name": "Ski-fit 6 weeks",
         "tagline": "Legs, lungs and knees for the slopes",
         "coverUrl": null
@@ -73,7 +73,7 @@
       "points": 270,
       "today": [
         {
-          "id": "ca_e-RjcuBelNHa",
+          "id": "ca_v-1f6KR9RmgP",
           "day": 41,
           "date": "2026-11-05",
           "title": "Weekly check-in",
@@ -88,7 +88,7 @@
         }
       ],
       "next": [],
-      "planUrl": "https://jk.example.com/plan/ce_y8xWBLhca_8s.1799369296.KjTdpSQHjz2ze3QHWuaiGUx76OQq89ZjlAYOetl9_F8"
+      "planUrl": "https://jk.example.com/plan/ce_8Evqi7XbvoI9.1799370767.ybRA-7NVDq2OEbOgqafqThzaqAN8ZAsGEsIqjBjTags"
     }
   ]
 }
