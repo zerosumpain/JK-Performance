@@ -1,4 +1,5 @@
 import { fail, raw } from './http.mjs';
+import { hasTable } from './bookings.mjs';
 import { hash, nowIso, secret } from './store.mjs';
 import { addDays, londonDay, londonToUtc } from './time.mjs';
 
@@ -60,6 +61,14 @@ function event({ uid, start, end, title, location, description }) {
   ];
 }
 
+const HOLD_FEED_TITLE = { consult: 'Consult', trial: 'Trial' };
+
+/** An all-day VEVENT: DATE values, the end day exclusive. */
+function allDayEvent({ uid, startDay, endDay, title }) {
+  return ['BEGIN:VEVENT', `UID:${uid}@jkperformance`, `DTSTAMP:${stamp(nowIso())}`,
+    `DTSTART;VALUE=DATE:${startDay.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${endDay.replace(/-/g, '')}`, `SUMMARY:${esc(title)}`, 'TRANSP:OPAQUE', 'END:VEVENT'];
+}
+
 export function calendarFor(db, user) {
   const from = londonToUtc(addDays(londonDay(), -30)).toISOString();
   const events = [];
@@ -70,6 +79,19 @@ export function calendarFor(db, user) {
     for (const b of rows) {
       events.push(event({ uid: b.id, start: b.start, end: b.end, location: b.location,
         title: b.kind === 'group' ? b.title : `${b.client_name ?? 'Client'} · ${b.title}`, description: kindLabel[b.kind] }));
+    }
+    // Desk v2 (F20): time off and holds go out too. A hold is titled by its kind ("Consult", "Trial")
+    // or, for admin time, its own title; a lead's name never leaves in the feed.
+    if (hasTable(db, 'time_off')) {
+      for (const t of db.prepare('SELECT id, start, end, all_day FROM time_off WHERE coach_id=? AND end>=? ORDER BY start').all(user.id, from)) {
+        events.push(t.all_day ? allDayEvent({ uid: t.id, startDay: londonDay(new Date(t.start)), endDay: londonDay(new Date(t.end)), title: 'Time off' })
+          : event({ uid: t.id, start: t.start, end: t.end, title: 'Time off' }));
+      }
+    }
+    if (hasTable(db, 'calendar_holds')) {
+      for (const h of db.prepare('SELECT id, kind, title, start, end FROM calendar_holds WHERE coach_id=? AND start>=? ORDER BY start').all(user.id, from)) {
+        events.push(event({ uid: h.id, start: h.start, end: h.end, title: HOLD_FEED_TITLE[h.kind] ?? h.title, description: h.kind === 'admin' ? h.title : 'Held time' }));
+      }
     }
   } else {
     const coach = user.coach_id ? db.prepare('SELECT name FROM users WHERE id=?').get(user.coach_id)?.name : null;
