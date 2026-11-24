@@ -236,3 +236,21 @@ button.cl-upcoming:hover{background:var(--raised)}
 .lc-answer{margin-top:4px}
 .cl-checkin{display:flex;flex-direction:column;gap:4px;padding:12px 16px}
 .lc-actions>.row,.cl-sheet-actions>.row{margin-left:auto}
+
+/* Desk v2 Overview top row (WP2): health, onboarding, pinned notes, the AI brief */
+.ov-top{margin:16px 0 4px}
+.ov-top .ui-tile{min-height:0}
+.ov-health{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"ring chart" "parts parts";gap:16px 22px;align-items:center}
+.ov-health-ring{grid-area:ring;display:flex;flex-direction:column;align-items:center;gap:6px}
+.ov-health-chart{grid-area:chart;min-width:0}
+.ov-health-parts{grid-area:parts}
+.ov-health-parts .crm-factors{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ov-health-parts .crm-notes-list{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 16px;padding:0;list-style:none}
+.ov-health-parts .crm-notes-list li{display:inline-flex;align-items:center;gap:6px}
+.ov-health-parts .crm-notes-list li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.ov-pins{display:grid;gap:10px;margin:0 0 12px}
+.ov-pin{margin:0;padding:2px 0 2px 12px;border-left:2px solid var(--accent);font-family:var(--serif);font-size:15.5px;line-height:1.45;white-space:pre-wrap}
+@media (max-width:820px){
+  .ov-health{grid-template-columns:minmax(0,1fr);grid-template-areas:"ring" "chart" "parts"}
+  .ov-health-parts .crm-factors{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

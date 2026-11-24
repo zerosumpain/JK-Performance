@@ -163,16 +163,27 @@ function scoresBefore(db, ids, day) {
  * otherwise live. Map<clientId, {health, band, factors, trend}>.
  */
 function currentScores(db, coachId, clients, today) {
+  if (!clients.length) return new Map();
+  // Ended clients have no current score; a paused one keeps the last score from before the pause.
+  const held = new Map(db.prepare(`SELECT client_id, stage FROM client_lifecycle WHERE client_id IN (${IDS}) AND stage IN ('paused','churned','alumni')`)
+    .all(JSON.stringify(clients.map(c => c.id))).map(r => [r.client_id, r.stage]));
+  clients = clients.filter(c => !['churned', 'alumni'].includes(held.get(c.id)));
+  const paused = clients.filter(c => held.get(c.id) === 'paused');
   const ids = clients.map(c => c.id);
   const stored = latestScores(db, ids, today);
-  const missing = clients.filter(c => !stored.has(c.id));
+  for (const c of paused) {
+    if (stored.has(c.id)) continue;
+    const r = db.prepare('SELECT * FROM client_scores WHERE client_id=? AND day<=? ORDER BY day DESC LIMIT 1').get(c.id, today);
+    if (r) stored.set(c.id, { health: r.health, band: r.band, factors: JSON.parse(r.factors), day: r.day, held: true });
+  }
+  const missing = clients.filter(c => !stored.has(c.id) && held.get(c.id) !== 'paused');
   const live = missing.length ? computeScores(db, coachId, missing, today) : new Map();
   const before = scoresBefore(db, ids, today);
   const out = new Map();
   for (const c of clients) {
     const s = stored.get(c.id) ?? live.get(c.id);
     if (!s) continue;
-    out.set(c.id, { ...s, trend: before.has(c.id) ? s.health - before.get(c.id) : null });
+    out.set(c.id, { ...s, trend: !s.held && before.has(c.id) ? s.health - before.get(c.id) : null });
   }
   return out;
 }
@@ -585,6 +596,13 @@ function lastActive(db, coachId, clients, now) {
       UNION ALL SELECT w.client_id, MAX(s.at) FROM set_logs s JOIN workout_items i ON i.id=s.item_id JOIN workouts w ON w.id=i.workout_id WHERE w.client_id IN (${IDS}) GROUP BY w.client_id
       UNION ALL SELECT client_id, MAX(submitted_at) FROM checkins WHERE client_id IN (${IDS}) GROUP BY client_id) GROUP BY k`).all(json, json, json, json);
   const out = new Map(rows.map(r => [r.k, r.v]));
+  // Habit ticks count as activity too (a day, read as noon London).
+  for (const r of db.prepare(`SELECT h.client_id k, MAX(d.date) v FROM habit_days d JOIN habits h ON h.id=d.habit_id
+      WHERE h.client_id IN (${IDS}) AND (d.done=1 OR d.value>0) AND d.date<=? GROUP BY h.client_id`).all(json, londonDay(now))) {
+    const at = londonToUtc(r.v, '12:00').toISOString();
+    const when = at > now.toISOString() ? now.toISOString() : at;
+    if (!out.get(r.k) || when > out.get(r.k)) out.set(r.k, when);
+  }
   const sessions = attendedSessions(db, coachId, clients.map(c => c.id), new Date(now.getTime() - 400 * 86_400_000).toISOString(), now.toISOString(), now);
   for (const [id, list] of sessions) {
     const s = list.at(-1)?.start;

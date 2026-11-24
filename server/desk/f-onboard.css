@@ -1,0 +1,27 @@
+/* WP2 onboarding checklist (F27): the Overview card, the Today widget and Settings › Onboarding. */
+.onb-head{display:flex;align-items:center;gap:14px;margin:0 0 12px}
+.onb-ring{position:relative;display:grid;place-items:center;flex:none;color:var(--accent)}
+.onb-pct{position:absolute;font-size:13px;font-weight:650;color:var(--text)}
+.onb-title{font-size:16px;font-weight:600}
+.onb-steps{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.onb-step{display:flex;align-items:flex-start;gap:10px;padding:7px 8px;margin:0 -8px;border-radius:10px}
+.onb-step.next{background:var(--accent-wash)}
+.onb-tick{display:grid;place-items:center;width:22px;height:22px;margin-top:1px;border-radius:50%;border:1.5px solid var(--input-border);background:none;color:var(--primary-label);cursor:pointer;flex:none;transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease)}
+.onb-tick:hover{border-color:var(--text)}
+.onb-step.done .onb-tick{background:var(--on-track);border-color:var(--on-track)}
+.onb-step.done .onb-label{color:var(--text-secondary)}
+.onb-label{font-size:14px}
+.onb-empty{display:grid;gap:10px;justify-items:start}
+.onb-w{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}
+.onb-w-list{list-style:none;margin:0 0 6px;padding:0;display:grid;gap:2px}
+.onb-w-row{display:flex;align-items:center;gap:8px;padding:4px 6px;margin:0 -6px;border-radius:8px;color:var(--text);text-decoration:none;font-size:13px}
+.onb-w-row:hover{background:var(--tile-hover)}
+.onb-edit{list-style:none;margin:14px 0;padding:0;display:grid;gap:8px}
+.onb-edit-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--tile);border:1px solid var(--tile-edge)}
+.onb-edit-row.hidden-step{opacity:.6}
+.onb-edit-move{display:flex;flex-direction:column}
+.onb-edit-label{font-weight:500;margin:0 0 4px}
+.onb-edit-ref{margin-top:6px;max-width:320px}
+.onb-edit-foot{align-items:flex-end;flex-wrap:wrap}
+.onb-edit-foot .field{margin:0}
+.onb-stall{width:90px}
