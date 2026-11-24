@@ -375,7 +375,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system
 main{max-width:640px;margin:0 auto;padding:48px 20px 80px}
 .mark{display:inline-grid;place-items:center;width:56px;height:56px;border:1px solid #999;border-radius:12px;font-weight:600;font-size:22px}
 h1{font-size:32px;line-height:1.15;margin:20px 0 6px;letter-spacing:-.01em}
-.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:24px 0 0}
+.offer .eyebrow{margin:0}
 p,li{color:var(--muted)}a{color:var(--text)}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:14px;padding:18px 20px;margin:16px 0}
 .offer{border-color:var(--accent)}
@@ -440,7 +441,7 @@ function formPage(status, { form, coach, offer, values = {}, errors = [], ref = 
     errors.length ? `<div class="errors" role="alert"><b>Please check the form</b><ul>${errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '',
     `<label>Your name<input type="text" name="name" required maxlength="80" autocomplete="name" value="${v('name')}"></label>`,
     `<label>E-mail<input type="email" name="email" required maxlength="190" autocomplete="email" value="${v('email')}"></label>`,
-    `<label>Phone <span class="hint">Optional</span><input type="tel" name="phone" maxlength="24" autocomplete="tel" value="${v('phone')}"></label>`,
+    `<label><span>Phone <span class="hint">Optional</span></span><input type="tel" name="phone" maxlength="24" autocomplete="tel" value="${v('phone')}"></label>`,
     fields.includes('goal') ? `<label>What would you like to achieve?<textarea name="goal" maxlength="1000">${v('goal')}</textarea></label>` : '',
     fields.includes('experience') ? sel('experience', EXPERIENCE, 'Your training so far') : '',
     fields.includes('times') ? `<fieldset><legend>When suits you to train?</legend><div class="choices">${TIMES.map(([k, l]) => `<label class="choice"><input type="checkbox" name="times" value="${k}"${picked.has(k) ? ' checked' : ''}> ${esc(l)}</label>`).join('')}</div></fieldset>` : '',
@@ -673,12 +674,13 @@ function buildDemo(db, { coach, byName, today }) {
       answers: { goal: 'Tone up for a wedding in June.', experience: 'new', budget: 'under80' },
       log: [['email', 'Sent pricing and the Foundation plan.', 32], ['call', 'Liked it but the budget is tight until January.', 22]], next: 40, campaign: true },
   ];
-  const won = [['Rory', 'instagram', 'Saw the marathon build posts', 15000, 'elite'], ['Tom', 'word', 'Colleague of Leo', 8000, null], ['Alex', 'enquiryForm', '', 15000, null], ['Leo', 'referral', 'Referred by Sam', 10000, null]];
-  for (const [first, source, detail, value] of won) {
+  // [first name, source, detail, value, days from enquiry to joining]
+  const won = [['Rory', 'instagram', 'Saw the marathon build posts', 15000, 18], ['Tom', 'word', 'Colleague of Leo', 8000, 9], ['Alex', 'enquiryForm', '', 15000, 21], ['Leo', 'referral', 'Referred by Sam', 10000, 12]];
+  for (const [first, source, detail, value, lead] of won) {
     const c = byName[first];
     if (!c) continue;
     const j = joined(c) ?? ago(30);
-    specs.push({ name: c.name, email: null, source, detail, referralCode: source === 'referral' ? 'SAM-K7QP' : null, stage: 'won', value, createdDay: addDays(j, -12), closedDay: j, client: c,
+    specs.push({ name: c.name, email: null, source, detail, referralCode: source === 'referral' ? 'SAM-K7QP' : null, stage: 'won', value, createdDay: addDays(j, -lead), closedDay: j, client: c,
       answers: { goal: first === 'Rory' ? 'A spring marathon without the calf trouble.' : first === 'Tom' ? 'Lose 10 kg and keep it off.' : first === 'Alex' ? 'Put on size, train four days a week.' : 'Move without my back hurting.' },
       logAt: [['email', 'Replied the same day.', -11], ['call', 'Consult call.', -8], ['note', 'Trial went well; signing up.', -3]] });
   }

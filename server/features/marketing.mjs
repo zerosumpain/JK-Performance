@@ -271,7 +271,7 @@ function renderFor(_req, ctx) {
   const vars = varsFor(ctx.db, ctx.config, ctx.user, l, offers);
   const suggested = suggest(ctx.db, l, templates);
   return {
-    suggestedId: suggested?.id ?? null,
+    lead: leadLite(l, londonDay(requestNow(ctx))), suggestedId: suggested?.id ?? null,
     options: templates.map(t => {
       const rendered = { subject: renderFollowup(t.subject, vars), body: renderFollowup(t.body, vars) };
       return { template: templateOut(t), rendered, mailto: mailtoFor(l.email, rendered.subject, rendered.body) };
