@@ -89,7 +89,7 @@ registerWidget({
       try { data = await needsYou(); draw(); } catch (err) { if (view.fresh()) fill(body, errorBox(err, reload)); }
     };
     await reload();
-    view.onLeave(onLetters(draw));
+    if (view.fresh()) view.onLeave(onLetters(draw));
     onRefresh(view, reload);
   },
 });
@@ -228,7 +228,7 @@ registerWidget({
       try { data = await needsYou(); draw(); } catch (err) { if (view.fresh()) fill(body, errorBox(err, reload)); }
     };
     await reload();
-    view.onLeave(onLetters(draw));
+    if (view.fresh()) view.onLeave(onLetters(draw));
     view.onLeave(() => setLettersOnly(false));
     onRefresh(view, reload, { types: ['letter.', 'checkin.'] });
   },
@@ -312,6 +312,7 @@ registerWidget({
       if (view.fresh() && list.children.length) fill(body, list, more);
     } catch (err) { if (view.fresh()) fill(body, errorBox(err, () => page())); return; }
     clients().catch(() => null);
+    if (!view.fresh()) return;
     const off = live.on('*', ev => {
       if (QUIET_TYPES.has(ev.type) || !ev.seq) { if (ev.type === 'poll') page().catch(() => {}); return; }
       if (list.querySelector(`[data-key="ev:${ev.seq}"]`)) return;

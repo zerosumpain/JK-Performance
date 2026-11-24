@@ -234,6 +234,7 @@ route('/inbox/:filter?', async (el, params, view) => {
   // MARK: The item pane
 
   function drawDetailEmpty() {
+    subView(); // stops whatever the last item was doing (a thread's polling)
     layout.classList.remove('has-detail');
     fill(detail, h('div', { class: 'cmd-ib-none' }, h('span', { class: 'brand-rule', 'aria-hidden': 'true' }),
       h('p', { class: 'cmd-ib-none-title' }, items.length ? 'Pick something to work on.' : 'Nothing waiting.'),
@@ -243,7 +244,7 @@ route('/inbox/:filter?', async (el, params, view) => {
   function itemBar(item) {
     const c = item.client;
     return h('header', { class: 'cmd-ib-dhead' },
-      h('button', { type: 'button', class: 'ui-icon-btn cmd-ib-back', 'aria-label': 'Back to the list', onclick: () => { layout.classList.remove('has-detail'); opened = null; drawList(); listEl.focus(); } }, icon('chevron_left', 20)),
+      h('button', { type: 'button', class: 'ui-icon-btn cmd-ib-back', 'aria-label': 'Back to the list', onclick: () => { opened = null; drawDetailEmpty(); drawList(); listEl.focus(); } }, icon('chevron_left', 20)),
       h('span', { class: `cmd-ib-dkind ib-${item.tone}` }, icon(item.icon || 'inbox', 16), KIND_LABEL[item.kind] || item.kind),
       h('span', { class: 'grow' }),
       item.status === 'open'

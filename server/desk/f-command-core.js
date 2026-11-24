@@ -33,6 +33,7 @@ export const invalidate = () => cache.clear();
  * goes. `types` limits the live events (by prefix, e.g. 'booking.').
  */
 export function onRefresh(view, fn, { types = null, everyMs = 60_000, wait = 700 } = {}) {
+  if (!view.fresh()) return; // the screen has gone already: its onLeave would never run, so listen to nothing
   let timer = null;
   const kick = () => { clearTimeout(timer); timer = setTimeout(() => { invalidate(); if (view.fresh()) fn(); }, wait); };
   const offLive = live.on('*', ev => {
