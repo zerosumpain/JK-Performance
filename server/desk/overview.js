@@ -6,12 +6,16 @@
  * (docs/design/atelier-spec.md, "Coach screens" 3.)
  */
 import {
-  DAYS, HABIT_KEYS, HABIT_KEY_LABEL, addDays, api, button, busy, card, confirmBox, daysBetween, errorLine, field,
+  DAYS, HABIT_KEYS, HABIT_KEY_LABEL, addDays, api, button, busy, capabilities, card, confirmBox, daysBetween, errorLine, field,
   fill, fmtShort, fmtTime, fmtWeekday, h, icon, link, loading, londonParts, mediaImage, parseDay, pill, q, ring, segmented,
   sheet, sparkline, state, toast, todayLondon, weekDots,
 } from './core.js';
 import { letterComposer } from './letters.js';
 import { parSection } from './par.js';
+import { lineChart } from './charts.js';
+import { tile } from './ui.js';
+import { factorBars, healthRing, openNote, trendChip } from './f-crm.js';
+import { onboardingCard } from './f-onboard.js';
 
 const enc = encodeURIComponent;
 const fmtN = (v, digits = 1) => (v === null || v === undefined ? '–' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: digits }));
@@ -67,7 +71,8 @@ export async function overviewTab(box, ctx, { openLetter = false } = {}) {
   const habitBox = h('section', { class: 'ov-sec' });
   const checkinBox = h('section', { class: 'ov-sec' });
   const healthBox = h('section', { class: 'ov-sec' });
-  fill(box, h('div', { class: 'ov-grid' },
+  const top = h('div', { class: 'ov-top ui-bento' });
+  fill(box, top, h('div', { class: 'ov-grid' },
     h('div', { class: 'ov-main' },
       has(features, 'progress') ? goalBox : null,
       has(features, 'progress') || has(features, 'checkin') ? parBox : null,
@@ -79,12 +84,63 @@ export async function overviewTab(box, ctx, { openLetter = false } = {}) {
       rowsSection(ctx, detail, features, writeLetter),
       aboutSection(detail.profile, ctx.first()))));
 
+  topTiles(top, ctx, detail);
   goalSection(goalBox, ctx, detail, reload);
   if (has(features, 'progress') || has(features, 'checkin')) parSection(parBox, ctx, sectionHead);
   if (has(features, 'checkin')) checkinSection(checkinBox, ctx, detail, writeLetter);
   if (detail.healthShared) healthSection(healthBox, ctx);
   if (has(features, 'habits')) await habitSection(habitBox, ctx, detail, features, reload);
   if (openLetter && ctx.view.fresh()) writeLetter({});
+}
+
+// MARK: - The top of the Overview: health, onboarding, pinned notes, the AI brief (desk v2, F5 and F27)
+
+async function topTiles(top, ctx, detail) {
+  const client = { id: ctx.id, name: ctx.name, plan: detail.client.plan };
+  const health = tile({ id: 'health', eyebrow: 'Health score', icon: 'monitor_heart', size: 'xl', hero: true, loading: true });
+  const onb = tile({ id: 'onboarding', eyebrow: 'Onboarding', icon: 'checklist', size: 'l', loading: true });
+  const notes = tile({ id: 'notes', eyebrow: 'Pinned notes', icon: 'sticky_note_2', size: 'm', loading: true,
+    action: { label: 'All notes', path: `/clients/${enc(ctx.id)}/notes` } });
+  top.append(health, notes);
+  // Health: ring, 90 days, and the four parts.
+  api('GET', `/api/coach/clients/${enc(ctx.id)}/score`).then(s => {
+    if (!ctx.view.fresh()) return;
+    const series = (s.series || []).map(p => ({ x: p.day, y: p.health }));
+    fill(health.body, h('div', { class: 'ov-health' },
+      h('div', { class: 'ov-health-ring' }, healthRing(s.health, s.band, { size: 96 }), trendChip(s.trend),
+        h('div', { class: 'tiny muted center' }, s.trend === null ? 'No trend yet' : '14-day change')),
+      h('div', { class: 'ov-health-chart' }, series.length > 1
+        ? lineChart({ series: [{ label: 'Health', tone: 1, points: series }], area: true, height: 132, ariaLabel: `Health over ${series.length} days`, yFormat: v => String(Math.round(v)),
+          xFormat: d => fmtShort(String(d)) })
+        : h('p', { class: 'small muted' }, 'The line fills in night by night.')),
+      h('div', { class: 'ov-health-parts' }, factorBars(s.factors))));
+    health.classList.add(`band-${s.band}`);
+  }).catch(err => fill(health.body, errorLine(err)));
+  // Onboarding while the checklist is open; otherwise the notes tile widens.
+  const shown = await onboardingCard(onb.body, client, { onChange: () => ctx.reloadDetail() }).catch(() => false);
+  if (!ctx.view.fresh()) return;
+  if (shown) {
+    health.classList.replace('ui-s-xl', 'ui-s-l');
+    top.insertBefore(onb, notes);
+    notes.classList.replace('ui-s-m', 'ui-s-full');
+  }
+  // Pinned notes.
+  api('GET', `/api/coach/clients/${enc(ctx.id)}/notes`).then(({ notes: list }) => {
+    if (!ctx.view.fresh()) return;
+    const pinned = list.filter(n => n.pinned).slice(0, 2);
+    fill(notes.body, pinned.length ? h('div', { class: 'ov-pins' }, pinned.map(n => h('blockquote', { class: 'ov-pin' }, n.body))) : h('p', { class: 'small muted' }, 'Pin what you must never forget: injuries, life, what works.'),
+      h('button', { type: 'button', class: 'btn small', onclick: () => openNote(client).then(saved => { if (saved && ctx.view.fresh()) { top.replaceChildren(); topTiles(top, ctx, detail); } }) }, icon('add', 16), 'Add a note'));
+  }).catch(err => fill(notes.body, errorLine(err)));
+  // The AI brief (WP6), only when that feature is here.
+  const caps = await capabilities();
+  if (caps.features.includes('aireview') && ctx.view.fresh()) {
+    try {
+      const ai = await import('./f-ai.js');
+      const brief = tile({ id: 'brief', size: 'full' });
+      top.append(brief);
+      ai.briefBody(brief.body, client);
+    } catch { /* the brief stays a client action */ }
+  }
 }
 
 // MARK: - GoalCard
