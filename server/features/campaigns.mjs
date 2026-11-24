@@ -1681,7 +1681,7 @@ function buildDemo(db, { coach, clients, byName, today, rng }) {
       if (a.day > idx) continue;
       if (!(a.day === idx ? rng.chance(rate * 0.5) : rng.chance(rate))) continue;
       db.prepare('INSERT OR IGNORE INTO campaign_progress (enrolment_id, client_id, item_id, done_at, spent_pence) VALUES (?,?,?,?,?)')
-        .run(eid, client.id, a.id, at(addDays(start, a.day), `0${6 + (a.day % 3)}:1${a.day % 6}`), spend[a.id] ?? (a.kind === 'purchase' ? a.spend_pence + rng.int(-1500, 2500) : null));
+        .run(eid, client.id, a.id, at(addDays(start, a.day), `0${6 + (a.day % 3)}:1${a.day % 6}`), spend[a.id] ?? (a.kind === 'purchase' && !a.link_ref ? a.spend_pence + rng.int(-1500, 2500) : null));
     }
   };
   const idx = 23;
