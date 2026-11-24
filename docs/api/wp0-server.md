@@ -27,10 +27,10 @@ What `desk-v2-foundation-server` adds (docs/design/desk-v2.md 3.1–3.8, 3.10, 3
 | DELETE | `/api/segments/:id` | – | `{ok}` |
 | POST | `/api/segments/preview` | `{rules}` or `{audience}` | `{count, clients:[{id, name, initials}] (≤50)}` |
 | GET | `/api/coach/prefs/:key` | key `^[a-zA-Z0-9.-]{1,64}$` | `{value}` (`null` if unset) |
-| PUT | `/api/coach/prefs/:key` | `{value}` (any JSON ≤ 16 KB) | `{ok}`; 413 over 16 KB |
+| PUT | `/api/coach/prefs/:key` | `{value}` (any JSON ≤ 16 KB) | `{ok}`; 413 over 16 KB, or a new key past 200 per coach (demo rebuilds keep the 40 newest `desk.*`) |
 | GET / PUT | `/api/coach/clients/:id/outreach` | `{paused?, noBroadcasts?, note?}` | `{outreach:{paused, noBroadcasts, note, sentToday, cap}}` |
 | GET | `/api/search` | `?q=(≥2, ≤100)&types=client,message,…&limit=20 (≤50)` | `{results:[{type, id, title, detail, path, icon, score, at}]}` |
-| GET | `/api/ai/status` | – | `{provider, model, audio, reason, reviewMode, enabled, transcribe, analyse, drafts, usedToday:{calls, audioSeconds}, limits:{dailyCalls, dailyAudioSeconds, clientDailyNotes, clientDailyAudioSeconds}}` |
+| GET | `/api/ai/status` | – | `{provider, model, audio, reason, reviewMode, enabled, transcribe, analyse, drafts, usedToday:{calls, audioSeconds} (calls that reached the provider, failed ones included; quota refusals never count), limits:{dailyCalls, dailyAudioSeconds, clientDailyNotes, clientDailyAudioSeconds}}` |
 | PUT | `/api/ai/settings` | `{enabled?, reviewMode?: off\|ask\|always, transcribe?, analyse?, drafts?}` | the settings |
 
 Changed existing endpoints:
@@ -146,7 +146,10 @@ string `"21:00-07:30"`, or `null` / `"off"` for none.
 
 - **WP6**: `messageOut(m, {coachView})` and the `messageExtras` aggregation are left to WP6 with `messages.mjs` (F19). `settings.mjs`
   `featuresOf` does not merge `hooks('meFeatures')` yet (WP6 owns `settings.mjs` in wave 1).
-- **WP2**: `timeline.mjs` does not merge `hooks('timeline')` yet; `eventsFor` is ready for it.
+- **WP2**: F5's timeline is a new endpoint, `GET /api/coach/clients/:id/timeline`, served by `features/crm.mjs`, which merges
+  `eventsFor(db, {clientId})` and iterates `hooks('timeline')` itself (3.7). `server/timeline.mjs` (WP6) is not involved.
+- **WP1**: needs reasons from features reach Today as `primaryAction: {kind: 'feature', label, path}`; the wave-0 `today.js` renders
+  them as a link to `path`. Keep that when WP1 rewrites `today.js`.
 - `core.pain14` does not include voice flags; WP6 can expose a `voice.flagged14` fact or WP-Z can extend `core.pain14` with a hook.
 
 ## Parity gaps

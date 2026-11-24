@@ -656,7 +656,8 @@ export function timeline(items, { groupByDay = true } = {}) {
 // MARK: - Wizard
 
 /**
- * wizard([{id, label, render(box, data), valid(data)}], {onFinish(data), finishLabel, data}) → {el, data}.
+ * wizard([{id, label, render(box, data), valid(data)}], {onFinish(data), finishLabel, data}) → {el, data, refresh()}.
+ * Not an element: append `.el` (refresh() re-checks the current step's valid()).
  * A stepper with Back and Next; Next stays disabled until the step is valid.
  */
 export function wizard(steps, { onFinish, finishLabel = 'Finish', data = {} } = {}) {
@@ -706,7 +707,7 @@ const opsFor = type => OPS[type] || OPS.number;
 
 /**
  * ruleBuilder({facts:[{id, label, type, options}], value, onChange, count: rules → Promise<number>})
- * → {el, value()}. One level of nested any/all groups, at most 20 rules.
+ * → {el, value()}, not an element: append `.el`. One level of nested any/all groups, at most 20 rules.
  */
 export function ruleBuilder({ facts = [], value = null, onChange = null, count = null, tags = [] }) {
   let rules = value && value.rules ? structuredClone(value) : { match: 'all', rules: [] };

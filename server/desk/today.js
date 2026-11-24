@@ -131,6 +131,8 @@ function needsYouRow(item) {
       h('span', { class: 'ny-glyphs' }, glyphs)),
     action && ACTION_PATH[action.kind]
       ? link(ACTION_PATH[action.kind](c), { class: 'btn small ny-action' }, action.label)
+      // A feature's reason carries its own path (needs.mjs primaryAction {kind:'feature', label, path}).
+      : action?.kind === 'feature' && action.path ? link(action.path, { class: 'btn small ny-action' }, action.label || 'Open')
       : null);
 }
 

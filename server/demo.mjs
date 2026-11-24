@@ -106,14 +106,18 @@ const CLIENT_TABLES = ['workouts', 'habits', 'nutrition_targets', 'nutrition_ent
 const USER_TABLES = ['measurements', 'health_samples', 'health_activities', 'challenge_members', 'class_attendees', 'membership_events'];
 const COACH_TABLES = ['bookings', 'programs', 'challenges', 'forms', 'autoflows', 'plan_settings', 'plan_price_events'];
 
-// Media that survive a rebuild: the coach's portrait and signature, and the reusable demo fixtures (purpose demo:<key>).
-const KEPT_MEDIA = "purpose IN ('avatar','signature') OR purpose LIKE 'demo:%'";
+// Media that survive a rebuild: the reusable demo fixtures (purpose demo:<key>),
+// plus the portrait and signature the coach's settings point at (wipe adds those
+// by id, so extra uploads through the public demo code do not pile up).
+const KEPT_MEDIA = "purpose LIKE 'demo:%'";
+// Desk preferences (desk.*) kept per demo account across a rebuild: the most recently written ones.
+const KEPT_DESK_PREFS = 40;
 
 /**
  * Empty the demo accounts for a rebuild: the foundation tables, every
  * feature's demo.tables (features later in name order first), the existing
  * lists, and media the demo accounts uploaded (their files go after commit).
- * Desk layout and theme preferences (desk.*) are kept.
+ * Desk layout and theme preferences (desk.*) are kept, the 40 most recent per account.
  */
 function wipe(db, config, coach, clients) {
   const ids = [coach.id, ...clients.map(c => c.user.id)];
@@ -125,6 +129,9 @@ function wipe(db, config, coach, clients) {
   for (const t of ['ai_calls', 'deferred_messages', 'client_outreach', 'client_tags']) db.prepare(`DELETE FROM ${t} WHERE client_id ${IN}`).run(json);
   for (const t of ['ai_settings', 'tags', 'segments']) db.prepare(`DELETE FROM ${t} WHERE coach_id ${IN}`).run(json);
   db.prepare(`DELETE FROM coach_prefs WHERE coach_id ${IN} AND key NOT LIKE 'desk.%'`).run(json);
+  db.prepare(`DELETE FROM coach_prefs WHERE coach_id ${IN} AND rowid NOT IN (
+    SELECT rowid FROM (SELECT rowid, ROW_NUMBER() OVER (PARTITION BY coach_id ORDER BY updated_at DESC, key) n FROM coach_prefs WHERE coach_id ${IN}) WHERE n<=?)`)
+    .run(json, json, KEPT_DESK_PREFS);
   for (const f of [...FEATURES].reverse()) {
     const t = f.demo?.tables ?? {};
     for (const table of t.client ?? []) db.prepare(`DELETE FROM ${table} WHERE client_id ${IN}`).run(json);
@@ -136,7 +143,9 @@ function wipe(db, config, coach, clients) {
     for (const t of USER_TABLES) db.prepare(`DELETE FROM ${t} WHERE user_id=?`).run(user.id);
   }
   for (const t of COACH_TABLES) db.prepare(`DELETE FROM ${t} WHERE coach_id=?`).run(coach.id);
-  const media = db.prepare(`SELECT id, ext FROM media WHERE (owner_id ${IN} OR client_id ${IN}) AND NOT (${KEPT_MEDIA})`).all(json, json);
+  const s = coachSettings(db, coach.id);
+  const keep = JSON.stringify([s.avatarMediaId, s.signatureMediaId].filter(Boolean));
+  const media = db.prepare(`SELECT id, ext FROM media WHERE (owner_id ${IN} OR client_id ${IN}) AND NOT (${KEPT_MEDIA}) AND id NOT IN (SELECT value FROM json_each(?))`).all(json, json, keep);
   for (const m of media) db.prepare('DELETE FROM media WHERE id=?').run(m.id);
   if (config?.dataDir && media.length) afterCommit(() => { for (const m of media) rmSync(mediaFilePath(config, m), { force: true }); });
 }

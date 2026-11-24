@@ -60,8 +60,11 @@ glyph. The glass top bar carries breadcrumbs, the ⌘K search trigger, + New, th
 - Added beyond 3.9: `registerPanel(kind, id => ({title, build, wide}))` with `openPanel(kind, id)` in `ui.js`, which is how `?panel=<kind>:<id>`
   deep links reopen after a reload (a default `client` panel is registered with `fallback`); `setClientScorer(fn)` in `palette.js` for WP1's
   scorer; `splitView`, `pageHead`, `flash`, `clientQuickView` in `ui.js`.
-- The hash query (`#/route?panel=…&kit=1&tab=…`) is never part of the route: changing only the query does not redraw the screen
+- The hash query (`#/route?panel=…&kit=1&tab=…`) is never part of the route. A hashchange that changes only `panel` keeps the screen
+  (panels reopen through `onHashQuery`); any other query change (`?kit=1`, a pasted `?tab=`) redraws it. `setHashQuery` never redraws
   (`setHashQuery`, `onHashQuery`, `view.query` in `core.js`).
+- `wizard(...)` returns `{el, data, refresh()}` and `ruleBuilder(...)` returns `{el, value()}`: objects, not elements (spec 2.4 lists no
+  return shape for them). Append `.el`; handing the object to `h()` or `append()` draws "[object Object]".
 - A send guard continues only through `ctx.proceed(meta)` from the coach's click (ignored without a user gesture, `navigator.userActivation`)
   or stops with `ctx.dismiss()`.
 - Glyphs: `scripts/export-symbols.mjs --desk` writes `symbols.js` (174 glyphs). Google's repository files `card_giftcard` under `redeem`, and

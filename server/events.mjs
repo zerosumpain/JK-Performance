@@ -45,14 +45,23 @@ export function emit(db, type, { coachId = null, clientId = null, summary = '', 
   return id;
 }
 
+/**
+ * Queue one drain for after the commit. The `scheduled` flag is only set once
+ * the commit has happened: a rolled-back transaction drops its after-commit
+ * work, and a flag set before then would never be cleared, stalling every later
+ * emit until the 10 s backstop.
+ */
 function scheduleDrain(db) {
   const state = attached.get(db);
-  if (!state || state.scheduled) return;
-  state.scheduled = true;
-  afterCommit(() => setImmediate(() => {
-    state.scheduled = false;
-    try { drainEvents(db, state.config); } catch (e) { console.error('Event drain failed', e); }
-  }));
+  if (!state) return;
+  afterCommit(() => {
+    if (state.scheduled) return;
+    state.scheduled = true;
+    setImmediate(() => {
+      state.scheduled = false;
+      try { drainEvents(db, state.config); } catch (e) { console.error('Event drain failed', e); }
+    });
+  });
 }
 
 const eventOut = e => ({ seq: e.seq, id: e.id, type: e.type, coachId: e.coach_id, clientId: e.client_id, summary: e.summary, payload: JSON.parse(e.payload), isDemo: !!e.is_demo, at: e.at });

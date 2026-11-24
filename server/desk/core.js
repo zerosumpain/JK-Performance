@@ -549,9 +549,13 @@ export function startRouter(getOutlet, navChanged) {
   render();
 }
 let renderedPath = null;
+let renderedQuery = null;
+// The query the screen was drawn for, without the keys the shell owns (`panel`).
+const screenQuery = () => { const q = hashQuery(); q.delete('panel'); q.sort(); return q.toString(); };
 function hashChanged() {
-  // Only the query changed (a panel opened or closed): keep the screen.
-  if (currentPath() === renderedPath && document.contains(outlet())) {
+  // Only a shell-owned key changed (a panel opened or closed): keep the screen.
+  // Any other query change (?kit=1, ?tab=…) redraws, as a pasted link expects.
+  if (currentPath() === renderedPath && screenQuery() === renderedQuery && document.contains(outlet())) {
     for (const fn of queryListeners) { try { fn(); } catch (err) { console.warn(err); } }
     return;
   }
@@ -559,7 +563,10 @@ function hashChanged() {
 }
 /** The route part of the hash (before any `?`), decoded. */
 export const currentPath = () => decodeURIComponent(location.hash.replace(/^#/, '').split('?')[0]) || '/today';
-/** The hash's query (`#/clients?panel=client:u_1`): panels and harness flags, never part of the route. */
+/**
+ * The hash's query (`#/clients?panel=client:u_1`): panels, synced tabs and harness flags, never part of the route.
+ * A hashchange that changes only `panel` keeps the screen; any other query change redraws it.
+ */
 export const hashQuery = () => new URLSearchParams(location.hash.split('?').slice(1).join('?'));
 /**
  * Change the hash query without redrawing the screen or adding history
@@ -571,6 +578,8 @@ export function setHashQuery(changes) {
   const base = location.hash.split('?')[0] || '#/today';
   const qs = params.toString();
   history.replaceState(history.state, '', base + (qs ? `?${qs}` : ''));
+  // The screen made this change itself (tabs({sync})), so it already shows it.
+  if (currentPath() === renderedPath) renderedQuery = screenQuery();
 }
 /** fn() runs when only the hash query changes (Back over a panel, a pasted deep link). Returns off(). */
 const queryListeners = new Set();
@@ -590,6 +599,7 @@ function render() {
   if (current) for (const fn of current.leave) { try { fn(); } catch { /* ignore */ } }
   const path = currentPath();
   renderedPath = path;
+  renderedQuery = screenQuery();
   const mine = ++seq;
   current = { leave: [], seq: mine };
   const view = { fresh: () => mine === seq, onLeave: fn => current?.seq === mine && current.leave.push(fn), query: hashQuery() };
@@ -704,11 +714,18 @@ const REG = {
   panel: new Map(),
 };
 const registryListeners = new Set();
-let registryQueued = false;
+// Registrations in one tick are told once per kind (a module registering a quick-create and a nav item redraws both hosts).
+const registryQueued = new Set();
 function changed(kind) {
-  if (registryQueued) return;
-  registryQueued = true;
-  queueMicrotask(() => { registryQueued = false; for (const fn of registryListeners) { try { fn(kind); } catch (err) { console.warn(err); } } });
+  if (registryQueued.has(kind)) return;
+  const first = !registryQueued.size;
+  registryQueued.add(kind);
+  if (!first) return;
+  queueMicrotask(() => {
+    const kinds = [...registryQueued];
+    registryQueued.clear();
+    for (const k of kinds) for (const fn of registryListeners) { try { fn(k); } catch (err) { console.warn(err); } }
+  });
 }
 /** fn(kind) after registrations change (hosts already on screen redraw). Returns off(). */
 export const onRegistryChange = fn => { registryListeners.add(fn); return () => registryListeners.delete(fn); };

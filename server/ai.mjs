@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { requireCoach } from './access.mjs';
-import { ffmpegAvailable, toModelMp3 } from './audio.mjs';
+import { audioJob, ffmpegAvailable, toModelMp3 } from './audio.mjs';
 import { fail, oneOf } from './http.mjs';
 import { newId, nowIso } from './store.mjs';
 import { addDays, londonDay, londonToUtc } from './time.mjs';
@@ -86,20 +86,48 @@ const dayBounds = now => {
   return [londonToUtc(d).toISOString(), londonToUtc(addDays(d, 1)).toISOString()];
 };
 
-/** What a coach has used today (OpenRouter calls only; the stub is free). */
+// A refusal for quota never reached the provider, so it charges nothing.
+const CHARGED = "provider='openrouter' AND COALESCE(error, '')<>'quota'";
+
+/**
+ * What a coach has used today (OpenRouter calls only; the stub is free).
+ * Calls that reached the provider count, failed ones included; quota refusals
+ * do not. Text calls are rows with audio_seconds NULL (audio rows always carry a number).
+ */
 export function usedToday(db, coachId, now = new Date()) {
   const [from, to] = dayBounds(now);
   const r = db.prepare(`SELECT SUM(audio_seconds IS NULL) calls, COALESCE(SUM(audio_seconds), 0) secs FROM ai_calls
-    WHERE coach_id=? AND provider='openrouter' AND at>=? AND at<?`).get(coachId, from, to);
+    WHERE coach_id=? AND ${CHARGED} AND at>=? AND at<?`).get(coachId, from, to);
   return { calls: r.calls ?? 0, audioSeconds: Math.round(r.secs ?? 0) };
 }
 
-/** A client's voice notes and seconds sent to the model today. */
+/** A client's voice notes transcribed today (successful calls) and seconds sent to the model (every charged call). */
 export function clientAudioToday(db, clientId, now = new Date()) {
   const [from, to] = dayBounds(now);
-  const r = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(audio_seconds), 0) secs FROM ai_calls
-    WHERE client_id=? AND provider='openrouter' AND audio_seconds IS NOT NULL AND at>=? AND at<?`).get(clientId, from, to);
+  const r = db.prepare(`SELECT COALESCE(SUM(ok=1), 0) n, COALESCE(SUM(audio_seconds), 0) secs FROM ai_calls
+    WHERE client_id=? AND ${CHARGED} AND audio_seconds IS NOT NULL AND at>=? AND at<?`).get(clientId, from, to);
   return { notes: r.n, seconds: r.secs };
+}
+
+// Calls admitted but not yet recorded in ai_calls: parallel requests reserve
+// here before any await, so they cannot all pass the same count.
+const inflight = new Map(); // coachId -> { calls, secs, clients: Map(clientId -> { notes, secs }) }
+
+function reserve(coachId, clientId, audioSeconds) {
+  const c = inflight.get(coachId) ?? { calls: 0, secs: 0, clients: new Map() };
+  inflight.set(coachId, c);
+  const cl = clientId && audioSeconds !== null ? (c.clients.get(clientId) ?? { notes: 0, secs: 0 }) : null;
+  if (cl) c.clients.set(clientId, cl);
+  if (audioSeconds === null) c.calls++; else c.secs += audioSeconds;
+  if (cl) { cl.notes++; cl.secs += audioSeconds; }
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    if (audioSeconds === null) c.calls--; else c.secs -= audioSeconds;
+    if (cl) { cl.notes--; cl.secs -= audioSeconds; if (!cl.notes) c.clients.delete(clientId); }
+    if (!c.calls && !c.secs && !c.clients.size) inflight.delete(coachId);
+  };
 }
 
 /**
@@ -110,11 +138,13 @@ export function clientAudioToday(db, clientId, now = new Date()) {
 export function withinBudget(db, config, { coachId, clientId = null, audioSeconds = null, now = new Date() }) {
   const ai = aiConfig(config);
   const used = usedToday(db, coachId, now);
-  if (audioSeconds === null) return used.calls < ai.dailyCalls;
-  if (used.audioSeconds + audioSeconds > ai.dailyAudioSeconds) return false;
+  const pending = inflight.get(coachId);
+  if (audioSeconds === null) return used.calls + (pending?.calls ?? 0) < ai.dailyCalls;
+  if (used.audioSeconds + (pending?.secs ?? 0) + audioSeconds > ai.dailyAudioSeconds) return false;
   if (clientId) {
     const c = clientAudioToday(db, clientId, now);
-    if (c.notes + 1 > ai.clientDailyNotes || c.seconds + audioSeconds > ai.clientDailyAudioSeconds) return false;
+    const p = pending?.clients.get(clientId);
+    if (c.notes + (p?.notes ?? 0) + 1 > ai.clientDailyNotes || c.seconds + (p?.secs ?? 0) + audioSeconds > ai.clientDailyAudioSeconds) return false;
   }
   return true;
 }
@@ -129,6 +159,8 @@ function record(db, { coachId, clientId, purpose, provider, model, ok, error = n
 
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"')]+/gi;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// A bare host with a common TLD ("example.com/x", "bit.ly/abc"), applied after e-mail addresses.
+const BARE_URL_RE = /\b(?:[a-z0-9-]+\.)+(?:com|net|org|co\.uk|org\.uk|uk|io|me|app|dev|co|info|biz|ly|gl|ai|ie|eu|xyz|site|link|tv|fm)\b(?::\d+)?(?:\/(?:[^\s<>"')]*[^\s<>"'),.;:!?])?)?/gi;
 const PHONE_RE = /(?:(?:\+|\b00)\d{1,3}[\s.-]?(?:\(0\))?[\s.-]?\d[\d\s().-]{6,}\d|\b0\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b)/g;
 const POSTCODE_RE = /\b(?:GIR ?0AA|[A-PR-UWYZ][A-HK-Y]?\d[A-Z\d]? ?\d[ABD-HJLNP-UW-Z]{2})\b/gi;
 
@@ -141,6 +173,7 @@ export function redactForAi(text, { surname = null } = {}) {
   let out = String(text ?? '')
     .replace(URL_RE, '[link]')
     .replace(EMAIL_RE, '[email]')
+    .replace(BARE_URL_RE, '[link]')
     .replace(PHONE_RE, '[phone]')
     .replace(POSTCODE_RE, '[postcode]');
   const s = String(surname ?? '').trim();
@@ -216,7 +249,22 @@ async function openRouter(config, { model, system, content, schema, purpose, max
   return { text, usage: j?.usage ?? null, model: j?.model ?? model };
 }
 
-async function call(db, config, { user, clientId, purpose, system, prompt, schema, maxTokens, temperature, stub, audioPath = null, audioFormat = null, durationSec = null }) {
+/**
+ * Admit an OpenRouter call against today's budgets and reserve its share
+ * until it is recorded. Over budget: records a quota refusal (which charges
+ * nothing) and throws AiError('quota'). Synchronous, so no parallel call can
+ * slip between the check and the reservation. Returns the release function.
+ */
+function admit(db, config, { base, model, isAudio, durationSec }) {
+  const audioSeconds = isAudio ? durationSec ?? 0 : null;
+  if (!withinBudget(db, config, { coachId: base.coachId, clientId: isAudio ? base.clientId : null, audioSeconds })) {
+    record(db, { ...base, provider: 'openrouter', model, ok: false, error: 'quota', audioSeconds: isAudio ? 0 : null, ms: 0 });
+    throw new AiError('quota');
+  }
+  return reserve(base.coachId, isAudio ? base.clientId : null, audioSeconds);
+}
+
+async function call(db, config, { user, clientId, purpose, system, prompt, schema, maxTokens, temperature, stub, audioPath = null, audioFormat = null, durationSec = null, admitted = null }) {
   if (typeof stub !== 'function') throw new Error('complete() and listen() need a stub function');
   const info = aiInfo(db, config, user);
   const isAudio = audioPath !== null || durationSec !== null;
@@ -233,13 +281,11 @@ async function call(db, config, { user, clientId, purpose, system, prompt, schem
   const ai = aiConfig(config);
   const model = isAudio ? ai.audioModel : ai.model;
   if (isAudio && !info.audio) throw new AiError('upstream', 'no audio model or ffmpeg');
-  if (!withinBudget(db, config, { coachId: user.id, clientId: isAudio ? clientId : null, audioSeconds: isAudio ? durationSec ?? 0 : null })) {
-    record(db, { ...base, provider: 'openrouter', model, ok: false, error: 'quota', audioSeconds: null, ms: 0 });
-    throw new AiError('quota');
-  }
-  const release = await (isAudio ? audioSlot() : textSlot());
+  const unreserve = admitted ?? admit(db, config, { base, model, isAudio, durationSec });
+  let release = null;
   let note = null;
   try {
+    release = await (isAudio ? audioSlot() : textSlot());
     const content = [{ type: 'text', text: schema ? `${prompt}\n\nReply with JSON only.` : prompt }];
     if (isAudio) content.push({ type: 'input_audio', input_audio: { data: readFileSync(audioPath).toString('base64'), format: audioFormat ?? 'mp3' } });
     const opts = { model, system, content, schema, purpose, maxTokens, temperature, timeoutMs: isAudio ? AUDIO_TIMEOUT_MS : TEXT_TIMEOUT_MS };
@@ -267,7 +313,8 @@ async function call(db, config, { user, clientId, purpose, system, prompt, schem
       audioSeconds: isAudio ? durationSec ?? 0 : null, ms: Date.now() - started });
     throw err;
   } finally {
-    release();
+    unreserve();
+    release?.();
   }
 }
 
@@ -290,11 +337,25 @@ export async function listen(db, config, { user, clientId = null, purpose, audio
   if (typeof durationSec !== 'number' || !(durationSec >= 0)) throw new Error('listen() needs the probed durationSec');
   const info = aiInfo(db, config, user);
   if (info.provider !== 'openrouter') return call(db, config, { user, clientId, purpose, system, prompt, schema, maxTokens, temperature, stub, durationSec });
+  // Refuse before converting: no audio model, or over budget, never runs ffmpeg.
+  if (!info.audio) throw new AiError('upstream', 'no audio model or ffmpeg');
+  const model = aiConfig(config).audioModel;
+  const base = { coachId: user.id, clientId: clientId ?? null, purpose };
+  const unreserve = admit(db, config, { base, model, isAudio: true, durationSec });
   let mp3 = null;
   try {
-    mp3 = await toModelMp3(config, audioPath, { fmt });
-    return await call(db, config, { user, clientId, purpose, system, prompt, schema, maxTokens, temperature, stub, audioPath: mp3, audioFormat: 'mp3', durationSec });
+    const started = Date.now();
+    try {
+      // The shared audio queue: one ffmpeg at a time, at most 4 waiting (3.14).
+      mp3 = await audioJob(() => toModelMp3(config, audioPath, { fmt }));
+    } catch (e) {
+      const err = new AiError('upstream', `convert: ${e?.message ?? e}`);
+      record(db, { ...base, provider: 'openrouter', model, ok: false, error: `upstream: ${err.detail}`, audioSeconds: 0, ms: Date.now() - started });
+      throw err;
+    }
+    return await call(db, config, { user, clientId, purpose, system, prompt, schema, maxTokens, temperature, stub, audioPath: mp3, audioFormat: 'mp3', durationSec, admitted: unreserve });
   } finally {
+    unreserve();
     if (mp3) rmSync(mp3, { force: true });
   }
 }

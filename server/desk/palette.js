@@ -12,7 +12,7 @@
  * (registerSearchRenderer in core.js); everything else is here.
  */
 import {
-  api, avatar, capabilities, clients, fill, go, h, icon, planName, registered, sheet, state,
+  NAV_GROUPS, api, avatar, capabilities, clients, fill, go, h, icon, planName, registered, sheet, state,
 } from './core.js';
 import { kbd, openPanel, pushLayer, trapFocus } from './ui.js';
 
@@ -117,9 +117,13 @@ export function openPalette(initial = '') {
       const usable = recent.map(r => ({ ...r, cmd: again(r) })).filter(r => r.cmd || r.path || r.panel);
       if (usable.length) groups.push(['Recent', usable.map(r => ({ ...r, run: preview => (r.cmd ? r.cmd() : preview && r.panel ? openPanel(...r.panel) : r.path ? go(r.path) : null) }))]);
     }
-    const jump = navs.flatMap(n => [{ key: `nav:${n.id}`, label: n.label, icon: n.icon, path: navPath(n), keys: Object.entries(GO_KEYS).find(([, id]) => id === n.id)?.[0] ? `g ${Object.entries(GO_KEYS).find(([, id]) => id === n.id)[0]}` : null, score: fuzzyScore(n.label, q) },
-      ...(n.tabs || []).map(t => ({ key: `nav:${n.id}:${t.id}`, label: `${n.label} › ${t.label}`, icon: n.icon, path: t.path, score: fuzzyScore(`${n.label} ${t.label}`, q) * 0.9 }))])
-      .filter(r => r.score > 0).sort((a, b) => b.score - a.score).slice(0, q ? 6 : 12)
+    // With no query, the sidebar's order: group, then the item's own order (navs() is already sorted that way); tabs after every item.
+    const groupAt = n => { const i = NAV_GROUPS.findIndex(([g]) => g === (n.group || 'build')); return i < 0 ? NAV_GROUPS.length : i; };
+    const jump = navs.flatMap((n, i) => [{ key: `nav:${n.id}`, label: n.label, icon: n.icon, path: navPath(n), keys: Object.entries(GO_KEYS).find(([, id]) => id === n.id)?.[0] ? `g ${Object.entries(GO_KEYS).find(([, id]) => id === n.id)[0]}` : null, score: fuzzyScore(n.label, q), place: [0, groupAt(n), i] },
+      ...(n.tabs || []).map((t, j) => ({ key: `nav:${n.id}:${t.id}`, label: `${n.label} › ${t.label}`, icon: n.icon, path: t.path, score: fuzzyScore(`${n.label} ${t.label}`, q) * 0.9, place: [1, groupAt(n), i, j] }))])
+      .filter(r => r.score > 0)
+      .sort(q ? (a, b) => b.score - a.score : (a, b) => a.place.reduce((d, v, k) => d || v - (b.place[k] ?? 0), 0))
+      .slice(0, q ? 6 : 12)
       .map(r => ({ ...r, run: () => go(r.path) }));
     if (jump.length) groups.push(['Jump to', jump]);
     let topClient = null;
@@ -144,7 +148,10 @@ export function openPalette(initial = '') {
     const byGroup = new Map();
     for (const a of actions.sort((x, y) => y.score - x.score)) { if (!byGroup.has(a.group)) byGroup.set(a.group, []); byGroup.get(a.group).push(a); }
     for (const [g, items] of byGroup) groups.push([g, items.slice(0, q ? 6 : 8)]);
-    if (q.length >= 2 && results.length) groups.push(['Results', results.map(r => ({
+    // A client already listed under Clients is not repeated under Results.
+    const listed = new Set(groups.find(([g]) => g === 'Clients')?.[1].map(r => r.key) ?? []);
+    const fresh = results.filter(r => !(r.type === 'client' && listed.has(`client:${r.id}`)));
+    if (q.length >= 2 && fresh.length) groups.push(['Results', fresh.map(r => ({
       key: `res:${r.type}:${r.id}`, label: r.title, detail: r.detail, icon: r.icon || 'search', path: r.path, panel: [r.type, r.id],
       render: registered.searchRenderer(r.type) ? () => registered.searchRenderer(r.type)(r) : null,
       run: preview => (preview && openPanel(r.type, r.id) ? null : r.path ? go(r.path) : null),
@@ -217,8 +224,10 @@ export function installShortcuts(handlers) {
   document.addEventListener('keydown', e => {
     if (e.defaultPrevented) return;
     const mod = e.metaKey || e.ctrlKey;
-    if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
-    if (!state.me || document.querySelector('dialog[open]') || document.querySelector('.pal-host')) return;
+    // Nothing before sign-in; and a native modal dialog makes the rest of the page inert, so the palette waits until it closes.
+    if (!state.me) return;
+    if (mod && e.key.toLowerCase() === 'k') { if (!document.querySelector('dialog[open]')) { e.preventDefault(); openPalette(); } return; }
+    if (document.querySelector('dialog[open]') || document.querySelector('.pal-host')) return;
     if (typing(document.activeElement)) return;
     if (mod && e.key === '\\') { e.preventDefault(); handlers.toggleRail?.(); return; }
     if (mod && e.key === '.') { e.preventDefault(); handlers.toggleTheme?.(); return; }

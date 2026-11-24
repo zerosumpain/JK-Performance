@@ -6,7 +6,7 @@ import { seedDemo } from './demo.mjs';
 import { drainEvents, emitDayStarted, pruneEvents } from './events.mjs';
 import { sendDeferred } from './messages.mjs';
 import { pruneNotifications, pushDueNotifications } from './notifications.mjs';
-import { RESERVED_EXACT, RESERVED_NAMESPACES, FEATURES, installFeatures } from './registry.mjs';
+import { FOUNDATION_VARIABLES, RESERVED_EXACT, RESERVED_NAMESPACES, FEATURES, installFeatures } from './registry.mjs';
 import { deliverDue } from './reports.mjs';
 import { addColumn, tx } from './store.mjs';
 import { londonClock, londonDay } from './time.mjs';
@@ -38,14 +38,18 @@ const isAsync = fn => fn?.constructor?.name === 'AsyncFunction';
  * Check a list of `{ file, feature }` pairs (file name without .mjs) and return
  * the features. Throws on: an unknown key; a duplicate name; a name that is not
  * the file name; an id outside the feature's namespaces and `exact` list; two
- * features claiming one namespace or exact id; a foundation-reserved id; an
- * AI-derived variable; an async event handler.
+ * features claiming one namespace or exact id (including a namespace that
+ * covers another owner's exact id); a foundation-reserved id; a variable
+ * name used twice or already a foundation variable; an AI-derived variable;
+ * an async event handler.
  */
 export function validateFeatures(list) {
   const nsOwner = new Map(RESERVED_NAMESPACES.map(n => [n, 'foundation']));
   const exactOwner = new Map(RESERVED_EXACT.map(n => [n, 'foundation']));
   const names = new Set();
   const clockIds = new Set();
+  const variableOwner = new Map(Object.keys(FOUNDATION_VARIABLES).map(v => [v, 'foundation']));
+  const claimed = (owner, what) => owner === 'foundation' ? `${what} is reserved by the foundation` : `${what} is already claimed by ${owner}`;
   for (const { file, feature: f } of list) {
     if (!f || typeof f !== 'object') bad(file, 'must export a `feature` object');
     const name = f.name;
@@ -59,11 +63,14 @@ export function validateFeatures(list) {
     if (!Array.isArray(namespaces) || namespaces.some(n => !NAMESPACE.test(n))) bad(name, 'namespaces must be a list of lower-case words');
     if (!Array.isArray(exact) || exact.some(id => !ID.test(id))) bad(name, 'exact must be a list of ids like "booking.rescheduled"');
     for (const n of namespaces) {
-      if (nsOwner.has(n)) bad(name, nsOwner.get(n) === 'foundation' ? `namespace "${n}" is reserved by the foundation` : `namespace "${n}" is already claimed by ${nsOwner.get(n)}`);
+      if (nsOwner.has(n)) bad(name, claimed(nsOwner.get(n), `namespace "${n}"`));
+      for (const [id, owner] of exactOwner) if (owner !== name && id.startsWith(`${n}.`)) bad(name, `namespace "${n}" covers id "${id}", which ${owner === 'foundation' ? 'is reserved by the foundation' : `is claimed by ${owner}`}`);
       nsOwner.set(n, name);
     }
     for (const id of exact) {
-      if (exactOwner.has(id)) bad(name, exactOwner.get(id) === 'foundation' ? `id "${id}" is reserved by the foundation` : `id "${id}" is already claimed by ${exactOwner.get(id)}`);
+      if (exactOwner.has(id)) bad(name, claimed(exactOwner.get(id), `id "${id}"`));
+      const prefix = id.split('.')[0], ns = nsOwner.get(prefix);
+      if (ns && ns !== name) bad(name, `id "${id}" is in namespace "${prefix}", which ${ns === 'foundation' ? 'is reserved by the foundation' : `is claimed by ${ns}`}`);
       exactOwner.set(id, name);
     }
     const owns = id => exact.includes(id) || namespaces.some(n => id.startsWith(`${n}.`));
@@ -83,6 +90,8 @@ export function validateFeatures(list) {
       if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(v)) bad(name, `variable "${v}" must be a plain word`);
       if (spec?.aiDerived) bad(name, `variable "${v}" is AI-derived; no template may quote a model`);
       if (typeof spec?.value !== 'function') bad(name, `variable ${v} needs value(db, coachId, client)`);
+      if (variableOwner.has(v)) bad(name, claimed(variableOwner.get(v), `variable "${v}"`));
+      variableOwner.set(v, name);
     }
     for (const [type, fn] of Object.entries(f.on ?? {})) {
       if (type !== '*' && !ID.test(type)) bad(name, `on "${type}" is not an event type`);

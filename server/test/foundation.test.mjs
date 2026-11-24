@@ -124,6 +124,12 @@ describe('the feature loader', () => {
     assert.throws(() => load({ name: 'two', namespaces: ['message'] }), /reserved by the foundation/);
     assert.throws(() => load({ name: 'two', exact: ['client.joined'] }), /reserved by the foundation/);
     assert.throws(() => load(ok, { name: 'two', exact: ['booking.x'] }, { name: 'three', exact: ['booking.x'] }), /already claimed by two/);
+    assert.throws(() => load({ name: 'two', namespaces: ['client'] }), /covers id "client.joined", which is reserved/);
+    assert.throws(() => load(ok, { name: 'two', exact: ['one.extra'] }), /in namespace "one", which is claimed by one/);
+    assert.throws(() => load({ name: 'two', exact: ['zed.x'] }, { name: 'three', namespaces: ['zed'] }), /covers id "zed.x", which is claimed by two/);
+    const word = { label: 'w', value: () => 'w' };
+    assert.throws(() => load({ ...ok, variables: { first: word } }), /variable "first" is reserved/);
+    assert.throws(() => load({ ...ok, variables: { word } }, { name: 'two', namespaces: ['two'], variables: { word } }), /variable "word" is already claimed by one/);
     assert.throws(() => load({ ...ok, colour: 'red' }), /unknown key "colour"/);
     assert.throws(() => validateFeatures([{ file: 'other', feature: ok }]), /must equal the file name/);
     assert.throws(() => load({ ...ok, variables: { mood: { label: 'm', aiDerived: true, value: () => 1 } } }), /AI-derived/);
@@ -186,6 +192,15 @@ describe('events', () => {
     await w.ok('POST', '/api/messages', { as: w.client, body: { text: 'Again' } });
     await w.settle();
     assert.equal(seen('received', eventsFor(w.db, { clientId: w.client.id, types: ['message.received'] })[0].seq), 1, 'the cursor moved on');
+  });
+
+  test('a rolled-back emit does not stall the immediate drain', async () => {
+    const turns = async n => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
+    assert.throws(() => tx(w.db, () => { emit(w.db, 'client.joined', { coachId: w.coach.id, clientId: w.client.id }); throw new Error('roll back'); }));
+    await turns(3);
+    const seq = emit(w.db, 'client.joined', { coachId: w.coach.id, clientId: w.client.id }) && w.db.prepare('SELECT MAX(seq) seq FROM events').get().seq;
+    await turns(5); // no settle(): only the after-commit drain can have run the handler
+    assert.equal(seen('joined', seq), 1);
   });
 
   test('existing code emits: message.sent, checkin, form, booking, workout, membership, letter', async () => {
@@ -486,9 +501,9 @@ describe('the AI module', () => {
   });
 
   test('redaction removes email, phone, link, postcode and surname', () => {
-    const out = ai.redactForAi('Mail sam.carter@example.com or call 07700 900123 / +44 20 7946 0958, see https://x.example/a?b=1 at SW1A 1AA. Carter said hi.', { surname: 'Carter' });
+    const out = ai.redactForAi('Mail sam.carter@example.com or call 07700 900123 / +44 20 7946 0958, see https://x.example/a?b=1 or example.com/x at SW1A 1AA. Carter said hi.', { surname: 'Carter' });
     for (const p of ['[email]', '[phone]', '[link]', '[postcode]', '[surname]']) assert.ok(out.includes(p), `${p} in ${out}`);
-    for (const o of ['sam.carter@example.com', '07700', '7946', 'https://', 'SW1A', 'Carter']) assert.ok(!out.includes(o), `${o} gone from ${out}`);
+    for (const o of ['sam.carter@example.com', '07700', '7946', 'https://', 'example.com/x', 'SW1A', 'Carter']) assert.ok(!out.includes(o), `${o} gone from ${out}`);
   });
 
   test('OpenRouter: privacy settings, json_schema with require_parameters, a downgrade on 400, and a visible privacy failure', async () => {
@@ -531,6 +546,41 @@ describe('the AI module', () => {
         const demo = w.user('Demo Coach', 'coach', null, { isDemo: true });
         assert.equal((await ai.complete(w.db, w.config, { user: demo.row, purpose: 'draft', system: 's', prompt: 'p', stub })).provider, 'stub');
       } finally { w.config.ai.dailyCalls = 300; }
+    });
+  });
+
+  test('parallel calls cannot pass the daily cap, and quota refusals charge nothing', async () => {
+    await withKey(async () => {
+      const used = ai.usedToday(w.db, w.coach.id).calls;
+      w.config.ai.dailyCalls = used + 3;
+      let fetches = 0;
+      try {
+        w.onFetch(async () => { fetches++; await new Promise(r => setTimeout(r, 5)); return { ok: true, json: async () => ({ choices: [{ message: { content: 'fine' } }] }) }; });
+        const all = await Promise.allSettled(Array.from({ length: 10 }, () => ai.complete(w.db, w.config, { user: coachRow(), purpose: 'draft', system: 's', prompt: 'p', stub })));
+        assert.equal(fetches, 3);
+        assert.equal(all.filter(r => r.status === 'fulfilled').length, 3);
+        assert.ok(all.filter(r => r.status === 'rejected').every(r => r.reason.kind === 'quota'));
+        assert.equal(ai.usedToday(w.db, w.coach.id).calls, used + 3, 'the seven refusals are not charged');
+        w.db.prepare("INSERT INTO ai_calls (id, coach_id, client_id, purpose, provider, ok, error, audio_seconds, ms, at) VALUES ('ai_q1', ?, ?, 'transcribe', 'openrouter', 0, 'quota', 0, 0, ?)")
+          .run(w.coach.id, w.client.id, new Date().toISOString());
+        assert.equal(ai.usedToday(w.db, w.coach.id).calls, used + 3, 'an audio refusal is not a text call');
+        assert.equal(ai.clientAudioToday(w.db, w.client.id).notes, 0);
+      } finally { w.config.ai.dailyCalls = 300; }
+    });
+  });
+
+  test('listen() refuses over budget before converting, and a failed conversion is a recorded AiError', { skip: !audio.ffmpegAvailable(w?.config ?? { ffmpegPath: 'ffmpeg' }) && 'no ffmpeg' }, async () => {
+    await withKey(async () => {
+      Object.assign(w.config.ai, { audioModel: 'vendor/audio-model', dailyAudioSeconds: 10 });
+      try {
+        const missing = join(FIXTURE_DIR, 'missing.m4a');
+        await assert.rejects(ai.listen(w.db, w.config, { user: coachRow(), clientId: w.client.id, purpose: 'transcribe', audioPath: missing, durationSec: 100, system: 's', prompt: 'p', stub }), e => e.kind === 'quota');
+        await assert.rejects(ai.listen(w.db, w.config, { user: coachRow(), clientId: w.client.id, purpose: 'transcribe', audioPath: missing, durationSec: 5, system: 's', prompt: 'p', stub }), e => e.kind === 'upstream' && /convert/.test(e.detail));
+        const row = w.db.prepare("SELECT * FROM ai_calls WHERE purpose='transcribe' ORDER BY rowid DESC LIMIT 1").get();
+        assert.equal(row.ok, 0);
+        assert.match(row.error, /^upstream: convert/);
+        assert.equal(row.audio_seconds, 0);
+      } finally { Object.assign(w.config.ai, { audioModel: null, dailyAudioSeconds: 7200 }); }
     });
   });
 
@@ -670,6 +720,13 @@ describe('the demo world and features', () => {
     const upload = (await import('../media.mjs')).storeMedia(w.db, w.config, { ownerId: sam.id, clientId: sam.id, bytes: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(10)]), mime: 'image/jpeg', purpose: 'mealPhoto' });
     setCoachPref(w.db, coach.id, 'desk.theme', 'light');
     setCoachPref(w.db, coach.id, 'notify.prefs', { x: false });
+    for (let i = 0; i < 45; i++) setCoachPref(w.db, coach.id, `desk.junk${i}`, 'x'.repeat(100));
+    w.db.prepare("UPDATE coach_prefs SET updated_at='2099-01-01T00:00:00.000Z' WHERE coach_id=? AND key='desk.theme'").run(coach.id);
+    const { storeMedia } = await import('../media.mjs');
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
+    const avatars = [0, 1, 2].map(() => storeMedia(w.db, w.config, { ownerId: coach.id, bytes: png, mime: 'image/png', purpose: 'avatar' }));
+    const { coachSettings, saveCoachSettings } = await import('../settings.mjs');
+    saveCoachSettings(w.db, coach.id, { ...coachSettings(w.db, coach.id), avatarMediaId: avatars[2].id });
     buildDemo(w.db, addDays(today, 1), w.config);
     await w.settle();
     assert.equal(w.db.prepare('SELECT COUNT(*) n FROM events').get().n, events, 'builders emit nothing');
@@ -677,7 +734,10 @@ describe('the demo world and features', () => {
     assert.equal(w.db.prepare("SELECT id FROM media WHERE purpose='demo:sample-voice'").get().id, fixture1, 'the fixture is reused');
     assert.equal(w.db.prepare('SELECT 1 FROM media WHERE id=?').get(upload.id), undefined, 'a demo upload is gone');
     assert.equal(existsSync(join(w.config.dataDir, 'media', `${upload.id}.jpg`)), false, 'and its file');
-    assert.deepEqual(w.db.prepare('SELECT key FROM coach_prefs WHERE coach_id=? ORDER BY key').all(coach.id).map(r => r.key), ['desk.theme']);
+    const kept = w.db.prepare('SELECT key FROM coach_prefs WHERE coach_id=?').all(coach.id).map(r => r.key);
+    assert.equal(kept.length, 40, 'desk prefs are bounded');
+    assert.ok(kept.includes('desk.theme') && !kept.includes('notify.prefs'));
+    assert.deepEqual(avatars.map(m => !!w.db.prepare('SELECT 1 FROM media WHERE id=?').get(m.id)), [false, false, true], 'only the portrait in use survives');
     const files = readdirSync(join(w.config.dataDir, 'media')).length;
     assert.equal(files, w.db.prepare('SELECT COUNT(*) n FROM media').get().n, 'one file per media row');
   });

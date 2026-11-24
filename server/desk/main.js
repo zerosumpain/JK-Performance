@@ -421,7 +421,8 @@ async function loadBadges() {
     }
     const grew = Object.keys(next).filter(k => (next[k] || 0) > (badgeCounts[k] || 0));
     badgeCounts = next;
-    for (const el of document.querySelectorAll('.shell [data-badge]')) {
+    // The whole document: the More sheet's badges live in a slide-over outside .shell.
+    for (const el of document.querySelectorAll('[data-badge]')) {
       const n = badgeCounts[el.dataset.badge] || 0;
       el.hidden = !n;
       el.textContent = n ? String(n > 99 ? '99+' : n) : '';
@@ -458,7 +459,7 @@ function renderShell() {
       icon('search', 18), h('span', { class: 'shell-search-text' }, 'Search or jump to…'), h('span', { class: 'shell-search-kbd' }, h('kbd', { class: 'ui-kbd' }, '⌘'), h('kbd', { class: 'ui-kbd' }, 'K'))),
     h('div', { class: 'shell-actions' }, newBtn, bell, ai,
       h('button', { class: 'top-btn shell-avatar-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-label': 'Account and theme', onclick: e => avatarMenu(e.currentTarget) },
-        h('span', { class: 'avatar coach' }, (state.me?.name || 'JK').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()))));
+        h('span', { class: 'avatar coach' }, monogram(17, { label: 'JK' })))));
   const sideNav = h('div', { class: 'nav-list' });
   const sideFoot = h('div', { class: 'sidebar-foot' });
   const side = h('nav', { class: 'sidebar', 'aria-label': 'Main' },

@@ -117,7 +117,9 @@ export function lineChart({ series = [], yFormat = fmtDefault, xFormat = x => St
         s('text', { x: pad.l - 8, y: Y(v), 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ch-label' }, yFormat(v)),
       ]));
       const every = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((w - pad.l) / 90))));
-      const xl = s('g', null, xs.map((x, i) => (i % every === 0 || i === xs.length - 1) ? s('text', { x: X(i), y: height - 6, 'text-anchor': i === 0 ? 'start' : i === xs.length - 1 ? 'end' : 'middle', class: 'ch-label' }, xFormat(x)) : null));
+      // The last label is always drawn (end-anchored), so a ticked label closer than `every` steps to it would collide and is dropped.
+      const last = xs.length - 1;
+      const xl = s('g', null, xs.map((x, i) => (i === last || (i % every === 0 && last - i >= every)) ? s('text', { x: X(i), y: height - 6, 'text-anchor': i === 0 ? 'start' : i === xs.length - 1 ? 'end' : 'middle', class: 'ch-label' }, xFormat(x)) : null));
       const lines = series.map((sr, si) => {
         const pts = xs.map((x, i) => [i, sr.points.find(p => p.x === x)?.y]).filter(([, v]) => v !== null && v !== undefined);
         if (!pts.length) return null;

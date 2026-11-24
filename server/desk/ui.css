@@ -153,7 +153,7 @@
 .ui-tl-day{position:relative;padding:14px 0 6px 40px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary)}
 .ui-tl-item{position:relative}
 .ui-tl-item>.ui-tl-link,.ui-tl-item{display:flex;gap:12px;align-items:flex-start;padding:6px 0;text-decoration:none;color:var(--text)}
-.ui-tl-link{border-radius:var(--r-control);margin:0 -6px;padding:6px!important}
+.ui-tl-link{flex:1;min-width:0;border-radius:var(--r-control);margin:0 -6px;padding:6px!important}
 .ui-tl-link:hover{background:var(--surface)}
 .ui-tl-dot{position:relative;z-index:1;display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:50%;background:var(--bg);border:1px solid var(--hairline);color:var(--text-secondary)}
 .ui-tl-text{flex:1;min-width:0;padding-top:4px}

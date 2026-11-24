@@ -485,6 +485,7 @@ function clientFactsRoute(_req, ctx) {
 }
 
 const PREF_KEY = /^[a-zA-Z0-9.-]{1,64}$/;
+const MAX_PREF_KEYS = 200;
 
 function getPref(_req, ctx) {
   requireCoach(ctx);
@@ -497,6 +498,8 @@ function putPref(_req, ctx) {
   if (!PREF_KEY.test(ctx.params.key)) fail(400, 'key must be letters, digits, dots and dashes');
   if (!('value' in ctx.body)) fail(400, 'value is required');
   if (JSON.stringify(ctx.body.value ?? null).length > 16 * 1024) fail(413, 'value is limited to 16 KB');
+  const exists = ctx.db.prepare('SELECT 1 FROM coach_prefs WHERE coach_id=? AND key=?').get(ctx.user.id, ctx.params.key);
+  if (!exists && ctx.db.prepare('SELECT COUNT(*) n FROM coach_prefs WHERE coach_id=?').get(ctx.user.id).n >= MAX_PREF_KEYS) fail(413, `At most ${MAX_PREF_KEYS} preferences`);
   setCoachPref(ctx.db, ctx.user.id, ctx.params.key, ctx.body.value);
   return { ok: true };
 }
