@@ -60,7 +60,9 @@ import com.jkperformance.app.net.MessagesResponse
 import com.jkperformance.app.net.ThreadsResponse
 import com.jkperformance.app.net.PlansResponse
 import com.jkperformance.app.net.ClientsResponse
+import com.jkperformance.app.net.VoiceCopy
 import com.jkperformance.app.net.isCancellation
+import com.jkperformance.app.net.mergeById
 import com.jkperformance.app.net.readable
 import java.time.Instant
 import kotlin.math.roundToInt
@@ -88,26 +90,34 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
     var sendError by remember { mutableStateOf<String?>(null) }
     val list = rememberLazyListState()
     val myId = AppSession.me?.id
+    var cursor by remember { mutableStateOf<String?>(null) }
+    val pendingClock = remember { PendingVoiceClock() }
+    val recorder = rememberVoiceRecorder(cap = AppSession.gate.voiceMaxSec.toDouble(), purpose = "voice")
+    val (voice, voiceOverlay) = rememberVoiceStarter(recorder, asClient = clientId == null)
+    val makingVoice = recorder.recording || recorder.file != null
+    // A coach always has voice notes; a client only when their coach allows them.
+    val voiceAllowed = AppSession.isCoach || AppSession.gate.voiceNotes
 
     /**
      * First load fetches the thread; each poll asks only for messages after
-     * the last one's instant (exclusive) and appends them.
+     * the last one's instant (exclusive) and appends them, and with `since`
+     * picks up changed ones (a transcript that arrived), merged by id.
      */
     suspend fun load() {
         val last = messages?.lastOrNull()?.at
         try {
             val reply: MessagesResponse = APIClient.get(
                 "/api/messages",
-                mapOf("clientId" to clientId, "after" to last?.let(InstantSerializer::format)),
+                mapOf("clientId" to clientId, "after" to last?.let(InstantSerializer::format), "since" to cursor),
             )
             val current = messages
             if (current != null) {
-                val known = current.map { it.id }.toSet()
-                val fresh = reply.messages.filter { it.id !in known }
-                if (fresh.isNotEmpty()) messages = current + fresh
+                val merged = mergeById(mergeById(current, reply.messages) { it.id }, reply.updated.orEmpty()) { it.id }
+                if (merged != current) messages = merged
             } else {
-                messages = reply.messages
+                messages = mergeById(reply.messages, reply.updated.orEmpty()) { it.id }
             }
+            reply.cursor?.let { cursor = it }
             error = null
         } catch (e: Exception) {
             if (!e.isCancellation) error = e.readable
@@ -133,11 +143,26 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
         }
     }
 
+    suspend fun sendVoice() {
+        sending = true
+        try {
+            val sent = sendVoiceNote(recorder, clientId = clientId, caption = draft.trim())
+            draft = ""
+            sendError = null
+            messages = mergeById(messages ?: emptyList(), listOf(sent)) { it.id }
+        } catch (e: Exception) {
+            if (e.isCancellation) throw e
+            sendError = e.readable
+        } finally {
+            sending = false
+        }
+    }
+
     // Poll while visible; leaving the screen cancels the effect.
     LaunchedEffect(clientId) {
         while (isActive) {
             load()
-            delay(POLL_MS)
+            delay(pendingClock.delayFor(messages.orEmpty().anyPendingVoice(), POLL_MS))
         }
     }
 
@@ -149,6 +174,7 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
         if (shown != null && shown.isNotEmpty()) list.animateScrollToItem(leading + shown.size - 1)
     }
 
+    VoicePlayerScope {
     Column(Modifier.jkScreen().keyboardAware()) {
         ThreadBar(otherName, subtitle)
         LazyColumn(
@@ -184,11 +210,24 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
             }
         }
         sendError?.let { ErrorBanner(it, Modifier.padding(horizontal = 16.dp)) }
-        Row(
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
+            voiceOverlay()
+            if (makingVoice) {
+                VoiceRecordBar(recorder, sending = sending, onSend = { scope.launch { sendVoice() } })
+            } else if (BuildConfig.DEBUG && voiceAllowed && recorder.testClipAvailable()) {
+                // Debug builds only: the emulator has no microphone (desk-v2 WP10).
+                TextButton(onClick = { voice.testClip() }, enabled = !sending) {
+                    Glyph(IconKey.mic, JKType.caption)
+                    Text("Send test clip", style = JKType.caption)
+                }
+            }
+        }
+        if (!makingVoice) Row(
             Modifier.fillMaxWidth().background(JKColors.bg).padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (voiceAllowed && draft.isBlank()) MicButton(enabled = !sending) { voice.start() }
             val style = JKType.body.copy(color = JKColors.text)
             val field = JKShape.sheetAll
             BasicTextField(
@@ -224,6 +263,7 @@ fun MessagesThreadView(clientId: String?, otherName: String, subtitle: String) {
                 if (sending) ProgressView() else Glyph(IconKey.send, JKType.body, JKColors.primaryLabel)
             }
         }
+    }
     }
 }
 
@@ -287,6 +327,7 @@ private fun bubbleTag(message: Message, mine: Boolean): Pair<IconKey, String>? =
     "mealPhoto" -> IconKey.mealPhoto to "Meal photo"
     "answer" -> IconKey.reply to (if (mine) "Your answer to the letter" else "Answered your letter")
     "letter" -> IconKey.letter to "Letter delivered"
+    "voice" -> IconKey.voiceNote to (if (mine) "Your voice note" else "Voice note")
     else -> if (message.workoutId != null) IconKey.workout to "Plan updated" else null
 }
 
@@ -296,12 +337,14 @@ private fun bubbleTag(message: Message, mine: Boolean): Pair<IconKey, String>? =
  */
 @Composable
 private fun Bubble(message: Message, mine: Boolean) {
+    val nav = LocalNav.current
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val width = minOf(300.dp, maxWidth - JKSpace.huge)
+        val width = minOf(if (message.isVoice) 340.dp else 300.dp, maxWidth - JKSpace.huge)
         Column(
             Modifier
                 .align(if (mine) Alignment.CenterEnd else Alignment.CenterStart)
                 .widthIn(max = width)
+                .then(if (message.isVoice) Modifier.widthIn(min = width) else Modifier)
                 .background(if (mine) JKColors.raised else JKColors.surface, JKShape.card)
                 .padding(JKSpace.m)
                 .semantics(mergeDescendants = true) {},
@@ -313,8 +356,13 @@ private fun Bubble(message: Message, mine: Boolean) {
                     Text(text, style = JKType.caption, color = JKColors.textSecondary)
                 }
             }
-            if (message.text.isNotEmpty()) Text(message.text, style = JKType.body, color = JKColors.text)
-            message.mediaId?.let { MessageMedia(it, isVideo = message.kind == "formCheck") }
+            if (message.isVoice) {
+                // Chosen by kind, never by mediaId: the coach view carries the analysis when the server sent it.
+                VoiceNoteBubble(message, asClient = !AppSession.isCoach, onChangeConsent = { nav.push { PrivacyView() } })
+            } else {
+                if (message.text.isNotEmpty()) LinkedText(message.text, style = JKType.body, color = JKColors.text)
+                message.mediaId?.let { MessageMedia(it, isVideo = message.kind == "formCheck") }
+            }
             Text(Fmt.time(message.at), style = JKType.caption, color = JKColors.textSecondary, modifier = Modifier.align(Alignment.End))
         }
     }
@@ -430,6 +478,7 @@ private fun threadPreview(t: MessageThread): String {
         "formCheck" -> "Form check$tail"
         "mealPhoto" -> "Meal photo$tail"
         "answer" -> "Answered your letter · ${last.text}"
+        "voice" -> VoiceCopy.preview(last)
         else -> last.text
     }
 }

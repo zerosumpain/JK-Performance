@@ -74,7 +74,7 @@ fun LetterComposer(client: PersonRef, week: String? = null, milestone: NeedsReas
     val dismiss = LocalDismiss.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val voice = remember { VoiceRecorder(context.applicationContext) }
+    val voice = rememberVoiceRecorder(cap = VoiceRecorder.LETTER_CAP, purpose = "letter")
     var report by remember { mutableStateOf<Report?>(null) }
     var loadedWeek by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -316,13 +316,7 @@ private fun VoiceSection(voice: VoiceRecorder, attached: Boolean, hadMedia: Bool
         refused = !granted
         if (granted) voice.start()
     }
-    // A 4 Hz tick while recording or playing, to move the clock and notice the 90 s cap.
-    LaunchedEffect(voice.recording, voice.playing) {
-        while (isActive && (voice.recording || voice.playing)) {
-            voice.tick()
-            delay(250)
-        }
-    }
+    // rememberVoiceRecorder ticks it while recording or playing (the clock and the 90 s cap).
 
     Column(verticalArrangement = Arrangement.spacedBy(JKSpace.s)) {
         Text("Voice note", style = JKType.headline, color = JKColors.text)
@@ -366,141 +360,4 @@ private fun VoiceSection(voice: VoiceRecorder, attached: Boolean, hadMedia: Bool
 private fun clock(seconds: Double): String {
     val s = Math.round(seconds).toInt()
     return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
-}
-
-// MARK: - Voice note
-
-/**
- * Records an m4a (AAC in MPEG-4) voice note of at most 90 seconds, plays it
- * back, and uploads it as letter media. State is Compose state; the screen's
- * tick loop calls [tick] while recording or playing.
- */
-class VoiceRecorder(private val context: Context) {
-    companion object {
-        const val CAP_SECONDS = 90.0
-    }
-
-    var recording by mutableStateOf(false)
-        private set
-    var playing by mutableStateOf(false)
-        private set
-    var elapsed by mutableStateOf(0.0)
-        private set
-    var duration by mutableStateOf(0.0)
-        private set
-    var file by mutableStateOf<File?>(null)
-        private set
-    var error by mutableStateOf<String?>(null)
-
-    private var recorder: MediaRecorder? = null
-    private var player: MediaPlayer? = null
-    private var startedAt = 0L
-
-    fun start() {
-        error = null
-        discard()
-        val out = File(context.cacheDir, "letter-${UUID.randomUUID()}.m4a")
-        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
-        try {
-            r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            r.setAudioChannels(1)
-            r.setAudioSamplingRate(44_100)
-            r.setAudioEncodingBitRate(96_000)
-            r.setMaxDuration((CAP_SECONDS * 1000).toInt())
-            r.setOutputFile(out.absolutePath)
-            r.setOnInfoListener { _, what, _ ->
-                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) stop()
-            }
-            r.prepare()
-            r.start()
-        } catch (e: Exception) {
-            r.release()
-            out.delete()
-            error = "Couldn't start recording."
-            return
-        }
-        recorder = r
-        file = out
-        startedAt = SystemClock.elapsedRealtime()
-        elapsed = 0.0
-        recording = true
-    }
-
-    fun stop() {
-        val r = recorder ?: return
-        elapsed = minOf((SystemClock.elapsedRealtime() - startedAt) / 1000.0, CAP_SECONDS)
-        duration = elapsed
-        try {
-            r.stop()
-        } catch (_: RuntimeException) {
-            // Stopped before any audio was captured: nothing usable.
-            file?.delete()
-            file = null
-            duration = 0.0
-        }
-        r.release()
-        recorder = null
-        recording = false
-    }
-
-    fun tick() {
-        if (recording) {
-            elapsed = minOf((SystemClock.elapsedRealtime() - startedAt) / 1000.0, CAP_SECONDS)
-            if (elapsed >= CAP_SECONDS) stop()
-        }
-    }
-
-    fun togglePlay() {
-        val f = file ?: return
-        val p = player
-        if (playing && p != null) {
-            p.pause()
-            playing = false
-            return
-        }
-        try {
-            val ready = p ?: MediaPlayer().also {
-                it.setDataSource(f.absolutePath)
-                it.setOnCompletionListener { done ->
-                    done.seekTo(0)
-                    playing = false
-                }
-                it.prepare()
-                player = it
-            }
-            ready.start()
-            playing = true
-        } catch (e: Exception) {
-            error = "Couldn't play the recording."
-        }
-    }
-
-    fun discard() {
-        player?.release()
-        player = null
-        playing = false
-        file?.delete()
-        file = null
-        duration = 0.0
-        elapsed = 0.0
-    }
-
-    /** Stop everything when the screen goes; the recording file is deleted. */
-    fun release() {
-        if (recording) stop()
-        discard()
-    }
-
-    /** POST /api/media (audio/mp4, purpose letter); returns the media id. */
-    suspend fun upload(clientId: String): String {
-        val f = file ?: throw APIError.config("No recording to send.")
-        val seconds = Math.round(duration).toInt().coerceIn(1, CAP_SECONDS.toInt())
-        val media = APIClient.upload<Media>(
-            "/api/media", f.readBytes(), "audio/mp4",
-            mapOf("purpose" to "letter", "clientId" to clientId, "durationSec" to "$seconds"),
-        )
-        return media.id
-    }
 }

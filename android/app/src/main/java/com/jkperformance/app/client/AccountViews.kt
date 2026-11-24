@@ -407,6 +407,8 @@ fun PrivacyView() {
                 "Photos are private to you and JK.",
             style = JKType.body, color = JKColors.text,
         )
+        // F19: a client's voice-note transcription choice (absent on a server that predates it).
+        if (!AppSession.isCoach && AppSession.me?.features?.voiceTranscription != null) VoicePrivacySection()
         TextButton("Read the privacy policy", onClick = { runCatching { uriHandler.openUri(APIClient.privacyURL) } })
         Text(
             "Acknowledgements",

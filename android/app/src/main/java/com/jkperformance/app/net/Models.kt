@@ -581,16 +581,33 @@ data class Message(
     var workoutId: String? = null,
     val at: Instant,
     var readAt: Instant? = null,
-    /** text | letter | answer | formCheck | mealPhoto */
+    /** text | letter | answer | formCheck | mealPhoto | voice */
     var kind: String? = null,
     var reportId: String? = null,
     var exerciseId: String? = null,
+    /** Never set on a voice note (its audio is in [voice]). */
     var mediaId: String? = null,
     var mediaUrl: String? = null,
-)
+    /** image | video | audio, with media (desk-v2 F19). */
+    var mediaKind: String? = null,
+    var durationSec: Double? = null,
+    /** Changes when a transcript arrives; equals [at] until then. */
+    var updatedAt: Instant? = null,
+    /** A voice note's audio, transcript state and (coach view) analysis. */
+    var voice: VoiceInfo? = null,
+) {
+    /** Chosen by kind, never by mediaId (the contract). */
+    val isVoice: Boolean get() = kind == "voice"
+}
 
 @Serializable
-data class MessagesResponse(val messages: List<Message>)
+data class MessagesResponse(
+    val messages: List<Message>,
+    /** With `since=`: messages changed (or new) at or after it. */
+    var updated: List<Message>? = null,
+    /** Pass back as `since` on the next poll. */
+    var cursor: String? = null,
+)
 
 @Serializable
 data class MessageThread(
