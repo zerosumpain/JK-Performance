@@ -681,7 +681,10 @@ export const prefs = {
     let value = prefLocal(key);
     try {
       const out = await foundationApi('GET', `/api/coach/prefs/${encodeURIComponent(key)}`);
-      if (out) value = out.value ?? undefined;
+      // The server's value wins when it has one; when it has none, this browser's
+      // copy (saved while the server was unreachable) is kept and sent up.
+      if (out && out.value !== null && out.value !== undefined) value = out.value;
+      else if (out && value !== undefined) foundationApi('PUT', `/api/coach/prefs/${encodeURIComponent(key)}`, { value }).catch(() => {});
     } catch { /* keep the local copy */ }
     prefCache.set(key, value);
     return value ?? fallback;
