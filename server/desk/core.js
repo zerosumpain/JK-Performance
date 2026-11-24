@@ -188,17 +188,23 @@ export function icon(name, size = 20, { filled = false, label = null } = {}) {
 }
 
 /** The JK monogram (docs/design/brand/jk-monogram.svg), in the accent. */
-const MONOGRAM = 'M 34 15.5 L 44 15.5 L 44 63.5 C 44 78.5 37 87.5 25 87.5 C 18 87.5 13 83.5 13 78.5 C 13 74.5 16 71.5 20 71.5 C 24 71.5 27 74.5 27 78.5 C 31 77.5 34 72.5 34 63.5 Z M 24 12.5 L 54 12.5 L 54 15.5 C 48 15.5 45 16.5 44 18.5 L 34 18.5 C 33 16.5 30 15.5 24 15.5 Z M 44 49.5 L 70.5 15.5 L 75 15.5 L 44 55.5 Z M 65 12.5 L 82 12.5 L 82 15.5 L 65 15.5 Z M 51 42 L 57 34.5 L 83 69.5 L 72 69.5 Z M 67 66.5 L 87 66.5 L 87 69.5 L 67 69.5 Z';
 export function monogram(size = 32, { label = 'JK' } = {}) {
+  // The silver "JK." mark (docs/design/brand/jk-mark-silver-1024.png): heavy sans
+  // letters in currentColor and a chrome dot (.mono-dot, coloured by app.css).
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('width', size); svg.setAttribute('height', size);
   svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', label);
   svg.classList.add('monogram');
-  const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', MONOGRAM);
-  svg.append(path);
+  const text = document.createElementNS(SVG, 'text');
+  for (const [k, v] of Object.entries({ x: '43', y: '72', 'text-anchor': 'middle', 'font-size': '66', 'font-weight': '800', 'letter-spacing': '-2',
+    'font-family': '"Inter Display","Inter",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif' })) text.setAttribute(k, v);
+  text.textContent = 'JK';
+  const dot = document.createElementNS(SVG, 'circle');
+  dot.setAttribute('cx', '89'); dot.setAttribute('cy', '65'); dot.setAttribute('r', '7.5');
+  dot.classList.add('mono-dot');
+  svg.append(text, dot);
   return svg;
 }
 

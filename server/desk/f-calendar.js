@@ -17,7 +17,7 @@ import { emptyHero, menu, moneyInput, segmentedNav, skeleton, slideOver } from '
 import { HOLD_WORD, KIND_WORD, londonIso, longDay, shortDay, spanOf, whenOf } from './f-calendar-lib.js';
 
 const COLORS = ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6'];
-const COLOR_NAME = { 'chart-1': 'Champagne', 'chart-2': 'Slate', 'chart-3': 'Sage', 'chart-4': 'Lilac', 'chart-5': 'Amber', 'chart-6': 'Stone' };
+const COLOR_NAME = { 'chart-1': 'Silver', 'chart-2': 'Slate', 'chart-3': 'Sage', 'chart-4': 'Lilac', 'chart-5': 'Amber', 'chart-6': 'Stone' };
 /** Where each provider hides its secret iCal address (F20). */
 const PROVIDERS = [
   { id: 'google', name: 'Google', steps: ['Open Google Calendar on a computer and go to Settings.', 'Under “Settings for my calendars”, pick your calendar.', 'Scroll to “Integrate calendar” and copy “Secret address in iCal format”.'] },

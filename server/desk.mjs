@@ -50,7 +50,7 @@ FILES.set('features.js', {
 const HTML = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0E0D0C">
+<meta name="theme-color" content="#0A0A0A">
 <title>JK Performance · Coach</title>
 ${[...FONTS.keys()].filter(n => n.includes('roman')).map(n => `<link rel="preload" href="/desk/fonts/${n}" as="font" type="font/woff2" crossorigin>`).join('\n')}
 ${STYLES.map(n => `<link rel="stylesheet" href="/desk/${n}">`).join('\n')}

@@ -72,3 +72,11 @@ glyph. The glass top bar carries breadcrumbs, the ⌘K search trigger, + New, th
 - `/account/kit?kit=1` is the living style guide; `/account/kit/widgets`, `/account/kit/client-tab/:key` and `/account/kit/composer` are the
   registry harness. Opening any desk route with `?kit=1` registers the kit's test-only widget, client tab, client action, bulk action, composer
   tool, slash item and send guard. Settings shows a "Design kit" link, which WP-Z hides.
+
+## 2026-11-24: the desk moves to the silver JK. palette (owner)
+
+John: "you've used an old style design system for the desk app. the new style is this [the silver JK. app icon]. replace, move gold's
+to grey/silvers". The desk's warm off-black/bone/champagne tokens become the neutral Plan. Act. Review. greys, the accent is silver
+(#D9D9D9 dark, #3A3A3A light), primary buttons use the chrome gradient (`--chrome`), and the J monogram is replaced by the "JK." mark
+with a chrome dot. Status colours are unchanged. This supersedes D8 ("the colours do not change") in desk-v2.md. The public client pages
+(`/plan/<token>`, the enquiry form) follow the same palette.

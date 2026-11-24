@@ -216,7 +216,7 @@ function applyTheme(choice = prefs.peek('desk.theme', 'dark')) {
   const theme = choice === 'system' ? (systemDark.matches ? 'dark' : 'light') : choice === 'light' ? 'light' : 'dark';
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.themeChoice = choice;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#F5F0E8' : '#0E0D0C'); // the browser chrome mirrors --bg
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#F5F5F5' : '#0A0A0A'); // the browser chrome mirrors --bg
 }
 systemDark.addEventListener('change', () => applyTheme(prefs.peek('desk.theme', 'dark')));
 function setTheme(choice) {

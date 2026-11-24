@@ -12,50 +12,53 @@
 :root{
   color-scheme:dark;
   /* Surfaces: elevation comes from surface steps only */
-  --bg:#0E0D0C;--surface:#171614;--raised:#211F1C;--paper:#1A1815;
-  --hairline:#2E2B27;--input-border:#6B655C;
-  --track:rgba(242,238,231,.10);--track-strong:rgba(242,238,231,.40);--scrim:rgba(14,13,12,.60);
+  --bg:#0A0A0A;--surface:#121212;--raised:#1A1A1A;--paper:#141414;
+  --hairline:#262626;--input-border:#707070;
+  --track:rgba(242,242,242,.10);--track-strong:rgba(242,242,242,.40);--scrim:rgba(10,10,10,.60);
   /* Text */
-  --text:#F2EEE7;--text-secondary:#A39D94;--text-tertiary:#8A847B;
+  --text:#F2F2F2;--text-secondary:#A3A3A3;--text-tertiary:#8A8A8A;
   /* The one accent: achievement and JK only */
-  --accent:#C8A970;--accent-pressed:#B08F52;--accent-wash:rgba(200,169,112,.16);
-  --accent-control:#F2EEE7;
+  --accent:#D9D9D9;--accent-pressed:#BEBEBE;--accent-wash:rgba(217,217,217,.16);
+  --accent-control:#F2F2F2;
   /* Actions */
-  --primary-fill:#F2EEE7;--primary-label:#0E0D0C;--primary-pressed:#DCD6CC;
+  --primary-fill:#F2F2F2;--primary-label:#0A0A0A;--primary-pressed:#D6D6D6;
+  /* Silver chrome (the JK. mark): primary buttons and the mark's dot */
+  --chrome:linear-gradient(170deg,#FAFAFA 0%,#BEBEBE 55%,#E8E8E8 100%);--chrome-edge:rgba(255,255,255,.6);--chrome-dot:#C8C8C8;
   /* Status (desk: always with a word and a glyph) */
   --on-track:#9FB39A;--attention:#D98E5B;--data:#8FA3B3;--error:#C9735F;--urgent:#E8816F;
   /* Booking kinds (agenda and month grid dots only) */
   --kind-inperson:#8FA3B3;--kind-video:#A898C4;--kind-group:#9FB39A;
   /* Desk v2: glass, tiles, light and depth (floating layers only) */
-  --glass:rgba(14,13,12,.72);--glass-light-edge:rgba(242,238,231,.06);
-  --tile-hover:#1C1A18;--tile-edge:rgba(242,238,231,.06);
-  --sheen:radial-gradient(120% 80% at 100% 0%,rgba(200,169,112,.14) 0%,rgba(200,169,112,0) 60%);
-  --shimmer:linear-gradient(90deg,rgba(242,238,231,0) 0%,rgba(242,238,231,.06) 50%,rgba(242,238,231,0) 100%);
+  --glass:rgba(10,10,10,.72);--glass-light-edge:rgba(242,242,242,.06);
+  --tile-hover:#171717;--tile-edge:rgba(242,242,242,.06);
+  --sheen:radial-gradient(120% 80% at 100% 0%,rgba(217,217,217,.14) 0%,rgba(217,217,217,0) 60%);
+  --shimmer:linear-gradient(90deg,rgba(242,242,242,0) 0%,rgba(242,242,242,.06) 50%,rgba(242,242,242,0) 100%);
   --shadow-float:0 24px 64px -16px rgba(0,0,0,.6),0 0 0 1px var(--hairline);
   --shadow-drag:0 18px 40px -12px rgba(0,0,0,.7);
-  --heat-0:rgba(200,169,112,.04);--heat-1:rgba(200,169,112,.18);--heat-2:rgba(200,169,112,.34);
-  --heat-3:rgba(200,169,112,.55);--heat-4:rgba(200,169,112,.85);
+  --heat-0:rgba(217,217,217,.04);--heat-1:rgba(217,217,217,.18);--heat-2:rgba(217,217,217,.34);
+  --heat-3:rgba(217,217,217,.55);--heat-4:rgba(217,217,217,.85);
 }
 /* Light ("paper"): ships in desk v2, chosen in the avatar menu (data-theme on <html>). */
 :root[data-theme="light"]{
   color-scheme:light;
-  --bg:#F5F0E8;--surface:#FBF8F3;--raised:#EDE6DA;--paper:#FBF6EC;
-  --hairline:#DDD5C8;--input-border:#8F887E;
-  --track:rgba(28,26,23,.08);--track-strong:#86817A;--scrim:rgba(14,13,12,.60);
-  --text:#1C1A17;--text-secondary:#5E5950;--text-tertiary:#66615A;
-  --accent:#7A5C2C;--accent-pressed:#664C22;--accent-wash:rgba(122,92,44,.10);
-  --accent-control:#1C1A17;
-  --primary-fill:#1C1A17;--primary-label:#FBF8F3;--primary-pressed:#3A3631;
+  --bg:#F5F5F5;--surface:#FBFBFB;--raised:#EAEAEA;--paper:#FAFAFA;
+  --hairline:#DDDDDD;--input-border:#858585;
+  --track:rgba(28,28,28,.08);--track-strong:#868686;--scrim:rgba(10,10,10,.60);
+  --text:#1C1C1C;--text-secondary:#5E5E5E;--text-tertiary:#666666;
+  --accent:#3A3A3A;--accent-pressed:#262626;--accent-wash:rgba(58,58,58,.10);
+  --accent-control:#1C1C1C;
+  --primary-fill:#1C1C1C;--primary-label:#FBFBFB;--primary-pressed:#3A3A3A;
+  --chrome:linear-gradient(170deg,#3A3A3A 0%,#111111 60%,#2A2A2A 100%);--chrome-edge:rgba(255,255,255,.14);--chrome-dot:#6E6E6E;
   --on-track:#4F6B4A;--attention:#9A5530;--data:#4A6072;--error:#9A4632;--urgent:#A8432F;
   --kind-inperson:#4A6072;--kind-video:#6A5A8E;--kind-group:#4F6B4A;
-  --glass:rgba(245,240,232,.78);--glass-light-edge:rgba(28,26,23,.06);
-  --tile-hover:#F4EFE6;--tile-edge:rgba(28,26,23,.07);
-  --sheen:radial-gradient(120% 80% at 100% 0%,rgba(122,92,44,.10) 0%,rgba(122,92,44,0) 60%);
-  --shimmer:linear-gradient(90deg,rgba(28,26,23,0) 0%,rgba(28,26,23,.06) 50%,rgba(28,26,23,0) 100%);
-  --shadow-float:0 24px 64px -20px rgba(28,26,23,.22),0 0 0 1px var(--hairline);
-  --shadow-drag:0 18px 40px -14px rgba(28,26,23,.30);
-  --heat-0:rgba(122,92,44,.04);--heat-1:rgba(122,92,44,.14);--heat-2:rgba(122,92,44,.28);
-  --heat-3:rgba(122,92,44,.48);--heat-4:rgba(122,92,44,.78);
+  --glass:rgba(245,240,232,.78);--glass-light-edge:rgba(28,28,28,.06);
+  --tile-hover:#F3F3F3;--tile-edge:rgba(28,28,28,.07);
+  --sheen:radial-gradient(120% 80% at 100% 0%,rgba(58,58,58,.10) 0%,rgba(58,58,58,0) 60%);
+  --shimmer:linear-gradient(90deg,rgba(28,28,28,0) 0%,rgba(28,28,28,.06) 50%,rgba(28,28,28,0) 100%);
+  --shadow-float:0 24px 64px -20px rgba(28,28,28,.22),0 0 0 1px var(--hairline);
+  --shadow-drag:0 18px 40px -14px rgba(28,28,28,.30);
+  --heat-0:rgba(58,58,58,.04);--heat-1:rgba(58,58,58,.14);--heat-2:rgba(58,58,58,.28);
+  --heat-3:rgba(58,58,58,.48);--heat-4:rgba(58,58,58,.78);
 }
 :root{
   /* Older names the screens use, mapped onto the tokens */
@@ -186,8 +189,9 @@ em.accent,.accent-word{font-style:italic;color:var(--accent)}
 /* The shared progress ring (core.js ring()): colours by class, never SVG attributes */
 .ring .ring-track{stroke:var(--track)}.ring .ring-sweep{stroke:var(--accent)}
 
-/* Brand: the JK monogram and the 2pt champagne rule */
-.monogram{display:inline-block;color:var(--accent);flex:none}
+/* Brand: the silver JK. mark and the 2pt silver rule */
+.monogram .mono-dot{fill:var(--chrome-dot)}
+.monogram{display:inline-block;color:var(--text);flex:none}
 .brand-rule{display:block;width:32px;height:2px;background:var(--accent);border:none;margin:0 0 12px}
 .empty-state{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:20px 0}
 .empty-state .t-quote{color:var(--text)}
@@ -217,7 +221,7 @@ em.accent,.accent-word{font-style:italic;color:var(--accent)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;background:transparent;border:1px solid var(--input-border);border-radius:var(--r-control);padding:7px 15px;cursor:pointer;text-decoration:none;color:var(--text);white-space:nowrap;font-size:14px;font-weight:500;transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease)}
 .btn:active:not(:disabled){transform:scale(.98)}
 .btn:hover{border-color:var(--text-secondary);background:var(--surface)}
-.btn.primary{background:var(--primary-fill);color:var(--primary-label);border-color:var(--primary-fill);font-weight:600}
+.btn.primary{background:var(--chrome);color:var(--primary-label);border-color:transparent;box-shadow:inset 0 1px 0 var(--chrome-edge);font-weight:600}
 .btn.primary:hover{background:var(--primary-pressed);border-color:var(--primary-pressed)}
 .btn.primary.block{display:flex;width:100%;min-height:52px;font-size:17px;white-space:normal}
 .btn.text{border-color:transparent;padding:8px 6px;min-height:36px}

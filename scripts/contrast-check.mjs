@@ -130,7 +130,7 @@ const over = ([r, g, b, a], under) => [r, g, b].map((c, i) => c * a + under[i] *
 
 function deskCheck() {
   const css = readFileSync(join(root, 'server/desk/app.css'), 'utf8');
-  if (!/--accent:#C8A970;/.test(css)) failures.push('dark --accent is no longer #C8A970 (the colours do not change, D8)');
+  if (!/--accent:#D9D9D9;/.test(css)) failures.push('dark --accent is no longer silver #D9D9D9 (the owner moved the desk to the silver JK. palette, 2026-11-24)');
   const themes = deskTokens(css);
   const ALL = ['bg', 'surface', 'raised', 'paper', 'tile', 'tile-hover'];
   // [foreground, [backgrounds], minimum, note]; a background "a/b" is token a composited over token b.

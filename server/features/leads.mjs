@@ -368,8 +368,8 @@ const TIMES = [['early', 'Early mornings'], ['daytime', 'Daytime'], ['evening', 
 const BUDGET = [['under80', 'Up to £80 a month', 8000], ['80to150', '£80 to £150 a month', 12000], ['over150', '£150 or more a month', 18000], ['unsure', 'Not sure yet', 0]];
 export const ANSWER_LABELS = { experience: Object.fromEntries(EXPERIENCE), times: Object.fromEntries(TIMES), budget: Object.fromEntries(BUDGET.map(([k, l]) => [k, l])) };
 
-export const ENQUIRE_CSS = `:root{color-scheme:dark;--bg:#000;--card:#121212;--edge:#222;--line:#333;--text:#f2f2f2;--muted:#c8c8c8;--faint:#888;--accent:#C8A970;
---btn-top:#f4f4f4;--btn-bottom:#bdbdbd;--btn-text:#000;--error:#E8816F;--error-wash:rgba(232,129,111,.12);--focus:#C8A970}
+export const ENQUIRE_CSS = `:root{color-scheme:dark;--bg:#000;--card:#121212;--edge:#222;--line:#333;--text:#f2f2f2;--muted:#c8c8c8;--faint:#888;--accent:#D9D9D9;
+--btn-top:#f4f4f4;--btn-bottom:#bdbdbd;--btn-text:#000;--error:#E8816F;--error-wash:rgba(232,129,111,.12);--focus:#D9D9D9}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 main{max-width:640px;margin:0 auto;padding:48px 20px 80px}

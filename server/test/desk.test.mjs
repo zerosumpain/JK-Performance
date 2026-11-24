@@ -70,7 +70,7 @@ describe('Coach desk', () => {
       assert.equal(Buffer.from(await font.arrayBuffer()).subarray(0, 4).toString('latin1'), 'wOF2');
     }
     assert.equal((await call('GET', '/desk/fonts/OFL-Newsreader.txt')).status, 404);
-    assert.match((await call('GET', '/desk/app.css')).body, /--accent:#C8A970/);
+    assert.match((await call('GET', '/desk/app.css')).body, /--accent:#D9D9D9/);
     assert.equal((await call('GET', '/desk/..%2Fapp.mjs')).status, 404);
     const login = await fetch(base + '/login', { redirect: 'manual' });
     assert.equal(login.status, 302);
