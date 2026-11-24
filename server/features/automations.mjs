@@ -215,7 +215,15 @@ const rowParts = r => ({ ...r, trigger: parse(r.trigger, { type: 'manual' }), co
 
 // MARK: - Words ("Wait 2 days, then at 07:30")
 
-const eventLabel = type => allEvents().find(e => e.type === type)?.label ?? type;
+/** Labels for ids other packages provide, so recipes and sentences read well before those packages are merged in. */
+const KNOWN_LABELS = {
+  'client.stageChanged': 'A client changed lifecycle stage', 'booking.upcoming': 'A session is coming up', 'booking.noShow': 'A client missed a session',
+  'payment.recorded': 'A payment came in', 'package.low': 'A package is running low', 'campaign.enrolled': 'A client joined a campaign',
+  'campaign.completed': 'A client finished a campaign', 'onboarding.stalled': 'Onboarding stalled', 'voice.flagged': 'A voice note was flagged',
+  'crm.birthdayInDays': 'Days to birthday', 'crm.daysSinceEnded': 'Days since coaching ended', 'billing.packageExpiresDays': 'Days until a package expires',
+  'billing.credits': 'Package sessions left', 'task.create': 'Add a task for me', 'offer.issue': 'Send a personal offer code', 'pulse.send': 'Send a pulse survey',
+};
+const eventLabel = type => allEvents().find(e => e.type === type)?.label ?? KNOWN_LABELS[type] ?? type;
 const actionOf = id => allActions().find(a => a.id === id) ?? null;
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const OP_WORD = { eq: 'is', ne: 'is not', gt: '>', gte: '≥', lt: '<', lte: '≤', in: 'is any of', notIn: 'is none of', has: 'has', hasNot: 'does not have', isSet: 'is set', isNotSet: 'is not set', between: 'between' };
@@ -237,7 +245,7 @@ function rulesWords(rules) {
   const one = r => {
     if (r.rules) return `(${r.rules.map(one).join(r.match === 'any' ? ' or ' : ' and ')})`;
     const v = Array.isArray(r.value) ? r.value.join(r.op === 'between' ? '–' : ', ') : r.value;
-    return `${facts.get(r.fact)?.label ?? r.fact} ${OP_WORD[r.op] ?? r.op}${['isSet', 'isNotSet'].includes(r.op) ? '' : ` ${v}`}`;
+    return `${facts.get(r.fact)?.label ?? KNOWN_LABELS[r.fact] ?? r.fact} ${OP_WORD[r.op] ?? r.op}${['isSet', 'isNotSet'].includes(r.op) ? '' : ` ${v}`}`;
   };
   return rules?.rules?.length ? rules.rules.map(one).join(rules.match === 'any' ? ' or ' : ' and ') : '';
 }
@@ -269,7 +277,7 @@ export function waitWords(s) {
 export function stepWords(db, coachId, s) {
   if (s.type === 'wait') return waitWords(s);
   const a = actionOf(s.action);
-  const label = a?.label ?? s.action;
+  const label = a?.label ?? KNOWN_LABELS[s.action] ?? s.action;
   const p = s.params ?? {};
   let detail = '';
   if (s.action === 'message.send') detail = p.text ? `“${clip(p.text)}”` : '';
@@ -1014,14 +1022,14 @@ function buildDemo(db, { coach, clients, byName, today }) {
   const failedAt = at(-12, '09:00');
   add(live.birthday, pick(4), failedAt, 'done', [out(null, failedAt, 'Started · Started to match'), out('s2', failedAt, 'Skipped: outreach paused'), out(null, failedAt, 'Finished')], { finished: failedAt });
   const wel = at(-26, '10:15');
-  add(live.welcome, byName.Tom ?? pick(5), wel, 'done', [out(null, wel, 'Started · Joined'), out('s1', wel, 'Sent'), out('s2', wel, `Waiting until ${fmtWhen(at(-24, '09:00'))}`),
+  add(live.welcome, byName.Leo ?? pick(3), wel, 'done', [out(null, wel, 'Started · Joined'), out('s1', wel, 'Sent'), out('s2', wel, `Waiting until ${fmtWhen(at(-24, '09:00'))}`),
     out('s3', at(-24, '09:00'), 'failed: the form was removed'), out('s4', at(-24, '09:00'), `Waiting until ${fmtWhen(at(-19, '09:00'))}`), out('s5', at(-19, '09:00'), 'Sent'), out(null, at(-19, '09:00'), 'Finished')], { finished: at(-19, '09:00') });
-  // Two waiting right now.
-  const w1 = at(-2, '10:05');
-  add(live.welcome, byName.Rory ?? pick(4), w1, 'active', [out(null, w1, 'Started · Joined'), out('s1', w1, 'Sent'), out('s2', w1, `Waiting until ${fmtWhen(at(0, '09:00'))}`),
-    out('s3', at(0, '09:00'), 'Sent'), out('s4', at(0, '09:00'), `Waiting until ${fmtWhen(at(5, '09:00'))}`)], { stepIndex: 4, nextAt: at(5, '09:00') });
-  const w2 = at(0, '06:20');
-  add(live.quiet, byName.Tom ?? pick(5), w2, 'active', [out(null, w2, 'Started · Started to match'), out('s1', w2, `Waiting until ${fmtWhen(at(1, '08:00'))}`)], { stepIndex: 1, nextAt: at(1, '08:00') });
+  // Two waiting right now: both part-way through the welcome series, asleep until a day still to come.
+  for (const [who, start, wake] of [[byName.Rory ?? pick(4), -2, 5], [byName.Tom ?? pick(5), -4, 3]]) {
+    const s0 = at(start, '10:05');
+    add(live.welcome, who, s0, 'active', [out(null, s0, 'Started · Joined'), out('s1', s0, 'Sent'), out('s2', s0, `Waiting until ${fmtWhen(at(start + 2, '09:00'))}`),
+      out('s3', at(start + 2, '09:00'), 'Sent'), out('s4', at(start + 2, '09:00'), `Waiting until ${fmtWhen(at(wake, '09:00'))}`)], { stepIndex: 4, nextAt: at(wake, '09:00') });
+  }
 
   for (const r of runs) {
     db.prepare(`INSERT INTO automation_runs (id, automation_id, coach_id, client_id, status, step_index, next_at, log, started_at, finished_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)

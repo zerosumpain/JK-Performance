@@ -4,10 +4,10 @@
  * automation" bulk and client actions. The builder is f-auto-builder.js.
  */
 import {
-  api, busy, button, clients as loadClients, fill, go, h, icon, link, registerBulkAction, registerClientAction, registerCommand,
+  api, busy, button, fill, go, h, icon, link, registerBulkAction, registerClientAction, registerCommand,
   registerNav, registerQuickCreate, route, setCrumbs, sparkline, toast,
 } from './core.js';
-import { ago, catalogue, enc, miniFlow, plural, statusPill, triggerIcon } from './f-auto-common.js';
+import { ago, enc, miniFlow, plural, statusPill, triggerIcon } from './f-auto-common.js';
 import { countUp, emptyHero, pageHead, skeleton, slideOver, tabs } from './ui.js';
 
 registerNav({ id: 'automations', label: 'Automations', icon: 'bolt', group: 'engage', order: 30, path: '/automations' });
@@ -247,5 +247,3 @@ route('/automations', async (el, _p, view) => {
   await reload();
 });
 
-// Keep the coach's client list warm for the builder's "Test on…" picker.
-export const warmClients = () => loadClients().catch(() => []);

@@ -244,7 +244,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
     if (t.type === 'event' && whereWords(t.where)) chips.push(chip('filter_alt', whereWords(t.where)));
     if (ev?.aiDerived) chips.push(chip('auto_awesome', 'AI judgement: coach-side steps only', 'ai'));
     if (t.type === 'event' && t.event && !ev) chips.push(chip('hub', 'Not available yet', 'warn'));
-    const kicker = { event: 'When', schedule: 'Every', enters: 'When someone matches', manual: 'When you add someone' }[t.type];
+    const kicker = { event: 'When', schedule: 'On a schedule', enters: 'When someone matches', manual: 'When you add someone' }[t.type];
     return nodeShell({ kind: 'trigger', kicker, glyph: triggerIcon(t), title: triggerWords(t, cat), chips, onOpen: inspectTrigger, sel: selected === 'trigger' });
   }
 
@@ -380,7 +380,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
           const ev = cat.events.find(e => e.type === tr.event);
           const where = h('div', { class: 'au-where' });
           const modes = {};
-          const drawWhere = () => fill(where, (ev?.payload ?? []).filter(k => !/Id$/.test(k)).map(k => {
+          const drawWhere = () => fill(where, (ev?.payload ?? []).filter(k => !/Id$/.test(k) && k !== 'email').map(k => {
             const cur = tr.where?.[k];
             const mode = modes[k] ?? (cur === undefined ? 'any' : cur === true ? 'true' : cur === false ? 'false' : 'is');
             const input = h('input', { type: 'text', value: mode === 'is' && cur !== undefined ? String(cur) : '', placeholder: 'value', 'aria-label': `${k} value`, hidden: mode !== 'is',
@@ -406,7 +406,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
           drawWhere();
           fill(box, h('div', { class: 'field' }, h('label', { for: 'au-ev' }, 'When this happens'), sel),
             ev?.aiDerived ? h('p', { class: 'au-ai-note' }, icon('auto_awesome', 16), 'This comes from an AI judgement. Automations that start from it can only notify you, add a task, tag or draft: never message the client.') : null,
-            ev?.payload?.some(k => !/Id$/.test(k)) ? h('div', { class: 'field' }, h('label', null, 'Only when the event says'), where) : null);
+            ev?.payload?.some(k => !/Id$/.test(k) && k !== 'email') ? h('div', { class: 'field' }, h('label', null, 'Only when the event says'), where) : null);
         } else if (tr.type === 'schedule') {
           const days = h('div', { class: 'au-days', role: 'group', 'aria-label': 'Days' }, DAY_SHORT.map((d, i) => h('button', {
             type: 'button', class: 'au-day' + (tr.days.includes(i + 1) ? ' on' : ''), 'aria-pressed': String(tr.days.includes(i + 1)), 'aria-label': DAY_NAMES[i],
@@ -436,12 +436,12 @@ route('/automations/:id/:tab?', async (el, p, view) => {
   }
 
   function inspectConditions() {
-    inspector('conditions', 'Only if…', body => {
+    inspector('conditions', 'Only if…', (body, close) => {
       if (!a.conditions) a.conditions = { match: 'all', rules: [] };
       const rb = ruleBuilder({ facts: factsForRules(cat), value: a.conditions, tags: tagsForRules(cat), onChange: v => { a.conditions = v; changed(); },
         count: rules => api('POST', '/api/segments/preview', { rules }).then(r => r.count) });
       body.append(h('p', { class: 'small muted' }, 'Checked when a run would start. Anyone who doesn’t match is skipped.'), rb.el,
-        h('button', { type: 'button', class: 'btn small text danger', onclick: () => { a.conditions = null; changed(); document.querySelector('.au-insp .ui-icon-btn')?.click(); } }, icon('delete', 15), 'Remove conditions'));
+        h('button', { type: 'button', class: 'btn small text danger', onclick: () => { a.conditions = null; changed(); close(); } }, icon('delete', 15), 'Remove conditions'));
     });
   }
 
@@ -561,7 +561,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
             h('span', { class: 'au-tt-dot' }, icon(t.kind === 'trigger' ? triggerIcon(a.trigger) : t.kind === 'wait' ? 'hourglass_empty' : actionIcon(a.steps.find(s => s.id === t.stepId)?.action), 15)),
             h('div', { class: 'au-tt-body' },
               h('div', { class: 'au-tt-when t-num' }, whenWords(t.at)),
-              h('div', { class: 'au-tt-what' }, t.description),
+              h('div', { class: 'au-tt-what' }, t.rendered && a.steps.find(s => s.id === t.stepId) ? stepParts(a.steps.find(s => s.id === t.stepId), cat).title : t.description),
               t.rendered ? h('div', { class: 'au-tt-bubble' }, t.rendered) : null,
               t.missing?.length ? h('div', { class: 'au-tt-note warn' }, icon('warning', 13), `Unknown: ${t.missing.map(m => `{${m}}`).join(', ')}`) : null,
               t.note ? h('div', { class: 'au-tt-note' }, icon('schedule', 13), t.note) : null,
@@ -595,7 +595,7 @@ route('/automations/:id/:tab?', async (el, p, view) => {
         { key: 'client', label: 'Client', sort: r => r.client?.name ?? '', render: r => h('span', { class: 'au-run-who' }, h('span', { class: 'avatar', style: { width: '28px', height: '28px', fontSize: '11px' } }, r.client?.initials ?? '?'), r.client?.name ?? 'Unknown') },
         { key: 'startedAt', label: 'Started', sort: true, render: r => h('span', { title: new Date(r.startedAt).toLocaleString('en-GB') }, ago(r.startedAt)) },
         { key: 'status', label: 'Status', sort: true, render: r => runPill(r.status) },
-        { key: 'step', label: 'Where it is', render: r => h('span', { class: 'small' + (r.failed ? ' tone-attention' : '') }, r.current ? `${r.current.waiting ? 'Waiting, then: ' : ''}${r.current.description}` : r.log.at(-1)?.outcome ?? '') },
+        { key: 'step', label: 'Where it is', render: r => h('span', { class: 'small' + (r.failed ? ' tone-attention' : '') }, r.current ? `${r.current.waiting ? 'Waiting, then: ' : ''}${r.current.description}` : `${r.log.at(-1)?.outcome ?? ''}${r.failed && r.status === 'done' ? ' · a step failed' : ''}`) },
         { key: 'nextAt', label: 'Next', sort: true, align: 'right', render: r => (r.nextAt && r.status === 'active' ? whenWords(r.nextAt) : '—') },
       ],
       rows: runs, onRow: openRun, empty: 'No runs match.',

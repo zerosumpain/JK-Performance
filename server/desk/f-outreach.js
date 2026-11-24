@@ -355,8 +355,9 @@ async function draftWizard(el, b, view) {
   };
   const audience = () => (data.mode === 'everyone' ? { everyone: true } : data.mode === 'segment' ? { segmentId: data.segmentId } : data.mode === 'tags' ? { tagIds: data.tagIds } : { clientIds: data.clientIds });
   let saveTimer = null;
+  let settled = false; // sent or deleted: nothing more to save
   const persist = () => api('PUT', `/api/broadcasts/${enc(b.id)}`, { name: data.name.trim() || 'Untitled broadcast', body: data.body, audience: audience() });
-  const persistSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => persist().catch(() => {}), 600); };
+  const persistSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (!settled) persist().catch(() => {}); }, 600); };
   let previewSeq = 0;
   async function refreshPreview() {
     const mine = ++previewSeq;
@@ -487,6 +488,7 @@ async function draftWizard(el, b, view) {
       clearTimeout(saveTimer);
       await persist();
       const r = await api('POST', `/api/broadcasts/${enc(b.id)}/send`, data.when === 'now' ? {} : { sendAt: data.sendAt });
+      settled = true;
       toast(data.when === 'now' ? `Sent to ${plural(r.broadcast.recipients, 'person', 'people')}` : `Scheduled · ${whenWords(data.sendAt)}`);
       go(`/broadcasts/${enc(b.id)}`);
     },
@@ -494,9 +496,10 @@ async function draftWizard(el, b, view) {
   const discard = h('button', { type: 'button', class: 'btn text danger', onclick: async () => {
     if (!(await confirmBox('Delete this draft?', { ok: 'Delete', danger: true }))) return;
     clearTimeout(saveTimer);
+    settled = true;
     await api('DELETE', `/api/broadcasts/${enc(b.id)}`);
     go('/broadcasts');
   } }, icon('delete', 16), 'Delete draft');
   fill(el, pageHead({ eyebrow: 'New broadcast', title: data.name || 'New broadcast', sub: 'Drafts save as you go.', actions: [discard] }), h('div', { class: 'ob-wizard' }, wiz.el));
-  view.onLeave(() => { clearTimeout(saveTimer); persist().catch(() => {}); });
+  view.onLeave(() => { clearTimeout(saveTimer); if (!settled) persist().catch(() => {}); });
 }

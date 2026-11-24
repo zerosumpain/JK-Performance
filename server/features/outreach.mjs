@@ -292,7 +292,7 @@ function broadcastFields(ctx, current = null) {
   const b = ctx.body;
   return {
     name: b.name === undefined && current ? current.name : str(b.name, 'name', { max: 80 }),
-    body: b.body === undefined && current ? current.body : str(b.body, 'body', { max: 4000 }),
+    body: b.body === undefined && current ? current.body : str(b.body ?? '', 'body', { max: 4000, min: 0 }),
     audience: cleanAudience(ctx.db, ctx.user.id, b.audience === undefined && current ? JSON.parse(current.audience) : b.audience ?? {}),
   };
 }
@@ -371,6 +371,7 @@ function sendBroadcast(_req, ctx) {
   if (b.status !== 'draft') fail(409, 'This broadcast has already been sent or scheduled');
   const now = requestNow(ctx);
   const sendAt = ctx.body.sendAt ? sendAtOf(ctx.body.sendAt, now) : null;
+  if (!b.body.trim()) fail(400, 'Write the message first');
   const unknown = unknownVariables(b.body);
   if (unknown.length) fail(400, `Unknown variable ${unknown.map(n => `{${n}}`).join(', ')}`);
   const audience = cleanAudience(ctx.db, ctx.user.id, JSON.parse(b.audience));

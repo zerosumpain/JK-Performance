@@ -140,4 +140,5 @@
   .ob-govern ul{grid-template-columns:minmax(0,1fr)}
   .ob-ghost{max-width:92%}
   .ob-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .ob-kpi-next{font-size:18px;line-height:24px}
 }
