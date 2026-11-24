@@ -748,7 +748,8 @@ function getScore(_req, ctx) {
   const now = requestNow(ctx);
   const today = londonDay(now);
   const s = computeScores(ctx.db, ctx.user.id, [client], today, now).get(client.id);
-  storeScore(ctx.db, ctx.user.id, client.id, today, s); // on demand for one client, stored per day
+  // On demand for one client, stored per day; paused and ended clients are shown but never stored (see nightly).
+  if (!['paused', ...ENDED].includes(lifecycleRow(ctx.db, client.id)?.stage)) storeScore(ctx.db, ctx.user.id, client.id, today, s);
   const before = scoresBefore(ctx.db, [client.id], today).get(client.id);
   const series = ctx.db.prepare('SELECT day, health FROM client_scores WHERE client_id=? AND day>? AND day<=? ORDER BY day').all(client.id, addDays(today, -90), today);
   return { health: s.health, score: s.health, band: s.band, trend: before === undefined ? null : s.health - before, factors: s.factors, series };
@@ -1027,7 +1028,7 @@ function demoBuild(db, ctx) {
   // deleting them cascades whatever any feature wrote for them, so nothing of theirs survives a rebuild twice.
   db.prepare(`DELETE FROM client_notes WHERE coach_id=?`).run(coach.id);
   for (const t of ['client_scores', 'client_lifecycle', 'lifecycle_history']) db.prepare(`DELETE FROM ${t} WHERE coach_id=? OR client_id IN (SELECT id FROM users WHERE coach_id=?)`).run(coach.id, coach.id);
-  db.prepare("DELETE FROM users WHERE apple_sub LIKE 'demo-crm-%'").run();
+  db.prepare("DELETE FROM users WHERE apple_sub LIKE 'demo-crm-%' AND is_demo=1 AND coach_id=?").run(coach.id);
   const extras = {};
   for (const p of DEMO_EXTRA) {
     const id = newId('u');
@@ -1293,7 +1294,7 @@ export const feature = {
       if (row?.churn_suggested_at) {
         out.push({ clientId: c.id, kind: 'churnSuggested', rank: 6, iconKey: 'heart_broken', at: row.churn_suggested_at,
           text: `Looks like ${first(c.name)} has stopped: ${churnWhy(db, coach.id, c, today)}. End coaching or check in?`,
-          action: { label: 'Check in', path: `/retention?panel=end:${cid}` } });
+          action: { label: 'Review', path: '/retention' } });
         continue;
       }
       const drop = intoAtRisk(db, c.id, today);
